@@ -1,0 +1,330 @@
+/* Custom CSS cho Dash App - Phỏng sinh giao diện Streamlit Premium */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap');
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #F8FAFC;
+    color: #0F172A;
+    margin: 0;
+    padding: 0;
+}
+
+/* Sidebar Styling */
+.sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 320px;
+    padding: 2rem 1.5rem;
+    background-color: #F1F5F9;
+    border-right: 1px solid #E2E8F0;
+    overflow-y: auto;
+    z-index: 100;
+}
+
+/* Main Content Area */
+.content {
+    margin-left: 320px;
+    padding: 2.5rem 3rem;
+    max-width: 1400px;
+}
+
+/* Titles */
+.main-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 32px;
+    font-weight: 700;
+    color: #0F172A;
+    margin-bottom: 8px;
+}
+
+.sub-title {
+    font-size: 15px;
+    color: #64748B;
+    margin-bottom: 24px;
+}
+
+.section-header {
+    font-family: 'Outfit', sans-serif;
+    font-size: 20px;
+    font-weight: 600;
+    color: #1E293B;
+    margin-top: 24px;
+    margin-bottom: 16px;
+    border-left: 4px solid #3B82F6;
+    padding-left: 12px;
+}
+
+/* Premium Card Styling (Streamlit-like Glassmorphism) */
+.kpi-card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.kpi-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748B;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.kpi-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: #0F172A;
+    margin-bottom: 8px;
+}
+
+.delta-row {
+    display: flex;
+    align-items: center;
+    font-size: 13px;
+    margin-top: 4px;
+}
+
+.delta-badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    margin-right: 6px;
+}
+
+.delta-badge.positive {
+    color: #10B981;
+    background-color: rgba(16, 185, 129, 0.1);
+}
+
+.delta-badge.negative {
+    color: #EF4444;
+    background-color: rgba(239, 68, 68, 0.1);
+}
+
+.delta-label {
+    color: #94A3B8;
+}
+
+/* Info Box */
+.info-box {
+    background: #F8FAFC;
+    border-radius: 12px;
+    padding: 20px 24px;
+    border: 1px solid #E2E8F0;
+    height: 100%;
+}
+
+.info-box h4 {
+    margin-top: 0;
+    color: #1E293B;
+}
+
+.info-box ul {
+    font-size: 14px;
+    color: #475569;
+    line-height: 1.6;
+    padding-left: 20px;
+    margin-bottom: 0;
+}
+
+/* Tab Navigation Styling */
+.nav-tabs {
+    border-bottom: 2px solid #E2E8F0;
+    margin-bottom: 20px;
+}
+
+.nav-link {
+    font-weight: 500;
+    color: #64748B;
+    border: none !important;
+    border-bottom: 2px solid transparent !important;
+    padding: 10px 16px;
+    margin-right: 8px;
+}
+
+.nav-link.active {
+    color: #3B82F6 !important;
+    border-bottom: 2px solid #3B82F6 !important;
+    background-color: transparent !important;
+}
+
+/* Filters styling */
+.filter-group {
+    margin-bottom: 1.25rem;
+}
+
+.filter-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 6px;
+    display: block;
+}
+
+/* Dash DataTable overrides */
+.dash-spreadsheet-container .dash-spreadsheet-inner {
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #E2E8F0 !important;
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+    .sidebar {
+        position: relative;
+        width: 100%;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid #E2E8F0;
+    }
+    .content {
+        margin-left: 0;
+        padding: 1.5rem;
+    }
+}
+
+/* Custom CSS bổ sung cho phần Upload File */
+#upload-data {
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+#upload-data:hover {
+    border-color: #3B82F6 !important;
+    background-color: #EFF6FF !important;
+}
+#upload-data a {
+    color: #3B82F6;
+    font-weight: 600;
+    text-decoration: none;
+}
+#upload-data a:hover {
+    text-decoration: underline;
+}
+
+/* Shadow nhẹ cho các box trang charts và import */
+.info-box, .kpi-card, .sidebar, 
+div[style*="background: #FFF"], 
+div[style*="background: rgb(255, 255, 255)"] {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
+}
+
+/* Định dạng tab navigation active line mượt mà */
+.nav-link {
+    transition: color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+}
+
+/* Login Page Styling - Sleek & Premium Dark-Light contrast */
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: radial-gradient(circle at top right, #EFF6FF 0%, #DBEAFE 50%, #BFDBFE 100%);
+    padding: 20px;
+}
+
+.login-box {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 20px;
+    width: 100%;
+    max-width: 440px;
+    padding: 40px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.login-header-box {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.login-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 26px;
+    font-weight: 700;
+    color: #1E3A8A;
+    margin-bottom: 6px;
+}
+
+.login-subtitle {
+    font-size: 14px;
+    color: #64748B;
+}
+
+.login-form input {
+    border-radius: 8px;
+    border: 1px solid #CBD5E1;
+    padding: 10px 14px;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.login-form input:focus {
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.btn-login-submit {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: 0.5px;
+    border-radius: 8px;
+    padding: 12px;
+    background-color: #2563EB !important;
+    border: none !important;
+    transition: all 0.2s;
+}
+
+.btn-login-submit:hover {
+    background-color: #1D4ED8 !important;
+    transform: translateY(-1px);
+}
+
+/* User Profile on Sidebar */
+.user-profile-box {
+    background: #E2E8F0;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid #CBD5E1;
+}
+
+.user-profile-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.user-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0F172A;
+}
+
+.user-role {
+    font-size: 10px;
+    color: #475569;
+    font-weight: 500;
+}
+
+.btn-logout-sidebar {
+    font-size: 11px !important;
+    font-weight: 600;
+    padding: 4px 10px !important;
+    border-radius: 6px !important;
+}

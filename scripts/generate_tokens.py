@@ -1,0 +1,61 @@
+import sqlite3
+import uuid
+import pandas as pd
+import os
+import sys
+
+# Đảm bảo có thể import từ config
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config.settings import DB_PATH
+
+def generate_tokens():
+    print(f"Connecting to DB: {DB_PATH}")
+    conn = sqlite3.connect(DB_PATH)
+    
+    # Tạo bảng
+    conn.execute('''
+    CREATE TABLE IF NOT EXISTS access_tokens (
+        token TEXT PRIMARY KEY,
+        level TEXT,
+        value TEXT
+    )
+    ''')
+    
+    # Lấy danh sách
+    df_cum = pd.read_sql_query("SELECT DISTINCT ten_cum FROM dim_buucuc WHERE ten_cum IS NOT NULL AND ten_cum != ''", conn)
+    df_bdx = pd.read_sql_query("SELECT DISTINCT ten_bdx FROM dim_buucuc WHERE ten_bdx IS NOT NULL AND ten_bdx != ''", conn)
+    
+    tokens = []
+    
+    # Token cho Cụm
+    for c in df_cum['ten_cum']:
+        t = uuid.uuid4().hex[:8]
+        tokens.append({'Token': t, 'Level': 'cum', 'Value': c})
+        
+    # Token cho BĐX
+    for b in df_bdx['ten_bdx']:
+        t = uuid.uuid4().hex[:8]
+        tokens.append({'Token': t, 'Level': 'bdx', 'Value': b})
+        
+    # Xóa dữ liệu cũ và chèn mới
+    conn.execute('DELETE FROM access_tokens')
+    
+    batch_data = [(row['Token'], row['Level'], row['Value']) for row in tokens]
+    conn.executemany('INSERT INTO access_tokens (token, level, value) VALUES (?, ?, ?)', batch_data)
+    conn.commit()
+    
+    # Xuất Excel (lưu vào thư mục cùng DB)
+    output_path = os.path.join(os.path.dirname(DB_PATH), 'phan_quyen_url.xlsx')
+    
+    # Tạo URL mẫu cho user dễ hình dung
+    df_out = pd.DataFrame(tokens)
+    df_out['URL Truy Cập'] = 'http://localhost:8501/?token=' + df_out['Token']
+    df_out.to_excel(output_path, index=False)
+    
+    print(f"✅ Đã tạo thành công {len(tokens)} token phân quyền!")
+    print(f"✅ Đã xuất kết quả ra file: {output_path}")
+    
+    conn.close()
+
+if __name__ == "__main__":
+    generate_tokens()

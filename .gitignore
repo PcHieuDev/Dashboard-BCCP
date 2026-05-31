@@ -1,0 +1,27 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Database
+*.db
+*.sqlite
+database/*.db
+database/*.sqlite
+
+# Excel / Data files (ignore raw data, but keep mapping)
+*.xls
+*.xlsx
+
+# Local environment / IDE
+.vscode/
+.idea/
+.venv/
+env/
+venv/
+ENV/
+
+# Scratch & logs
+scratch/
+*.log
+.gemini/
