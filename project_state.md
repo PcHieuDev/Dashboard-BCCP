@@ -60,7 +60,7 @@ E:\OneDrive\z.Database-TTKD\
 ├── database/       (bccp.db)                                   ← DÙNG CHUNG
 ├── etl/            (importer.py, aggregator.py)                ← DÙNG CHUNG
 ├── analytics/      (revenue.py, customer_classifier.py)        ← DÙNG CHUNG
-├── scripts/        (generate_tokens.py, migrate_add_year.py)
+├── scripts/        (generate_tokens.py, migrate_add_year.py, sync_mappings.py)
 ├── dash_app/       ← ĐÂY LÀ APP CHÍNH (đã được modularized hoàn toàn)
 │   ├── app.py              (Khởi chạy & định tuyến tab)
 │   ├── assets/style.css    (CSS style)
@@ -115,5 +115,7 @@ E:\OneDrive\z.Database-TTKD\
 - File `process_directory.py` (nén dữ liệu gốc): `E:\OneDrive\TTKD - Công việc hàng ngày\...\process_directory.py`.
 - **[CẤU HÌNH GIT - 2026-06-01]**: Khởi tạo Git repository cục bộ tại workspace chính `E:\OneDrive\z.Database-TTKD\`, thiết lập `.gitignore` loại trừ các file database, excel và log, cấu hình user identity cục bộ, đổi tên branch mặc định sang `main`, và thực hiện commit đầu tiên nhằm sửa lỗi đồng bộ hóa/checkout worktree của hệ thống Agent.
 - **[CẬP NHẬT TEMPLATE IMPORT & SỬA LỖI UI - 2026-06-01]**: Tạo file Excel mẫu phục vụ điền dữ liệu thủ công tại [template_import.xlsx](file:///e:/OneDrive/z.Database-TTKD/data/template_import.xlsx) với các cột quan trọng bôi màu xanh (STT, CMS, Ma_HD, Buu_Cuc, San_Pham, Ngay_CN, San_Luong, Cuoc_TT_Tong). Sửa lỗi nghiêm trọng trong callback nạp dữ liệu tại [import_callbacks.py](file:///e:/OneDrive/z.Database-TTKD/dash_app/callbacks/import_callbacks.py#L112-L132) do truyền sai tham số và gán sai kiểu trả về (dict sang tuple), giúp tính năng import trên Dashboard chạy ổn định.
+- **[ĐỒNG BỘ DANH MỤC - 2026-06-01]**: Đã tạo script [sync_mappings.py](file:///e:/OneDrive/z.Database-TTKD/scripts/sync_mappings.py) để đồng bộ sản phẩm dịch vụ và bưu cục từ 2 file CSV trong thư mục `data/` vào bảng `dim_spdv` và `dim_buucuc` trong cơ sở dữ liệu SQLite sau khi Sếp chỉnh sửa.
+
 
 
