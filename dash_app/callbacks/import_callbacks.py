@@ -111,7 +111,8 @@ def register_import_callbacks(app):
             
         try:
             # Gọi hàm import dữ liệu từ ETL engine
-            success, row_count, err_msg = import_excel_file(tmp_path, filename)
+            # DB_PATH là database SQLite, tmp_path là đường dẫn tệp Excel tạm
+            res = import_excel_file(str(DB_PATH), tmp_path)
             
             # Xóa file tạm ngay sau khi chạy xong
             try:
@@ -119,13 +120,23 @@ def register_import_callbacks(app):
             except Exception:
                 pass
                 
-            if success:
-                # Xóa cache query ở cả 2 tầng (Query cache & DB cache) do dữ liệu đã cập nhật
-                clear_query_cache()
-                clear_db_cache()
-                return dbc.Alert(f"✅ Nạp dữ liệu thành công! Đã thêm {row_count:,} dòng từ file '{filename}'.", color="success")
-            else:
-                return dbc.Alert(f"❌ Lỗi khi nạp dữ liệu: {err_msg}", color="danger")
+            inserted = res.get('inserted', 0)
+            skipped = res.get('skipped', 0)
+            warnings = res.get('warnings', [])
+            
+            # Xóa cache query ở cả 2 tầng (Query cache & DB cache) do dữ liệu đã cập nhật
+            clear_query_cache()
+            clear_db_cache()
+            
+            msg = f"✅ Nạp dữ liệu thành công! Đã thêm {inserted:,} dòng (bỏ qua {skipped:,} dòng trùng lặp) từ file '{filename}'."
+            if warnings:
+                msg += f" (Cảnh báo: {', '.join(warnings[:3])})"
+            return dbc.Alert(msg, color="success")
                 
         except Exception as e:
+            # Đảm bảo xóa file tạm nếu có lỗi xảy ra
+            try:
+                Path(tmp_path).unlink()
+            except Exception:
+                pass
             return dbc.Alert(f"❌ Lỗi hệ thống khi xử lý file: {str(e)}", color="danger")
