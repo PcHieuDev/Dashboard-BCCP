@@ -114,4 +114,6 @@ E:\OneDrive\z.Database-TTKD\
 - Cột `so_kh` trong kết quả aggregate là `COUNT DISTINCT cms` — bao gồm vãng lai.
 - File `process_directory.py` (nén dữ liệu gốc): `E:\OneDrive\TTKD - Công việc hàng ngày\...\process_directory.py`.
 - **[CẤU HÌNH GIT - 2026-06-01]**: Khởi tạo Git repository cục bộ tại workspace chính `E:\OneDrive\z.Database-TTKD\`, thiết lập `.gitignore` loại trừ các file database, excel và log, cấu hình user identity cục bộ, đổi tên branch mặc định sang `main`, và thực hiện commit đầu tiên nhằm sửa lỗi đồng bộ hóa/checkout worktree của hệ thống Agent.
+- **[CẬP NHẬT TEMPLATE IMPORT & SỬA LỖI UI - 2026-06-01]**: Tạo file Excel mẫu phục vụ điền dữ liệu thủ công tại [template_import.xlsx](file:///e:/OneDrive/z.Database-TTKD/data/template_import.xlsx) với các cột quan trọng bôi màu xanh (STT, CMS, Ma_HD, Buu_Cuc, San_Pham, Ngay_CN, San_Luong, Cuoc_TT_Tong). Sửa lỗi nghiêm trọng trong callback nạp dữ liệu tại [import_callbacks.py](file:///e:/OneDrive/z.Database-TTKD/dash_app/callbacks/import_callbacks.py#L112-L132) do truyền sai tham số và gán sai kiểu trả về (dict sang tuple), giúp tính năng import trên Dashboard chạy ổn định.
+
 
