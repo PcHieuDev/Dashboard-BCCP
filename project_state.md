@@ -113,3 +113,5 @@ E:\OneDrive\z.Database-TTKD\
   - Cấu hình output UTF-8 tiếng Việt hoàn chỉnh cho Windows console.
 - Cột `so_kh` trong kết quả aggregate là `COUNT DISTINCT cms` — bao gồm vãng lai.
 - File `process_directory.py` (nén dữ liệu gốc): `E:\OneDrive\TTKD - Công việc hàng ngày\...\process_directory.py`.
+- **[CẤU HÌNH GIT - 2026-06-01]**: Khởi tạo Git repository cục bộ tại workspace chính `E:\OneDrive\z.Database-TTKD\`, thiết lập `.gitignore` loại trừ các file database, excel và log, cấu hình user identity cục bộ, đổi tên branch mặc định sang `main`, và thực hiện commit đầu tiên nhằm sửa lỗi đồng bộ hóa/checkout worktree của hệ thống Agent.
+
