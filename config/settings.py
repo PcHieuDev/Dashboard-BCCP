@@ -10,9 +10,11 @@ from pathlib import Path
 _CONFIG_DIR = Path(__file__).resolve().parent          # config/
 PROJECT_DIR = _CONFIG_DIR.parent                       # z.Database-TTKD/
 
-# Database SQLite
-DB_DIR = PROJECT_DIR / "database"
-DB_PATH = DB_DIR / "bccp.db"
+# Database SQLite (OneDrive — tự đồng bộ giữa 2 máy)
+# Tách biệt khỏi mã nguồn để Git không track file DB nặng
+DATA_DIR = Path(r"E:\OneDrive\z.Database-TTKD-Data")
+DB_PATH = DATA_DIR / "bccp.db"
+PHAN_QUYEN_PATH = DATA_DIR / "phan_quyen_url.xlsx"
 
 # Thư mục chứa dữ liệu gốc đã gộp theo tháng (absolute path)
 DATA_PATH = Path(r"E:\OneDrive\TTKD - Công việc hàng ngày\0. KHM, tai ban hang thang\chi-tiet-KH-hopdong-loaidichvu\du-lieu-goc-4.2.4-casreport\ket-qua-gop-tung-thang")
