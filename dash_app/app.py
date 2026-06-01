@@ -117,17 +117,17 @@ def load_filter_options():
             options["spdv"] = [{"label": f"{r.iloc[0]} - {r.iloc[1]}", "value": r.iloc[0]} for _, r in df_spdv.iterrows()]
         
         # Load Cụm địa lý
-        df_cum = pd.read_sql_query("SELECT DISTINCT ten_Cum FROM dim_buucuc WHERE ten_Cum IS NOT NULL ORDER BY ten_Cum", conn)
+        df_cum = pd.read_sql_query("SELECT DISTINCT ten_cum FROM dim_buucuc WHERE ten_cum IS NOT NULL ORDER BY ten_cum", conn)
         if not df_cum.empty:
             options["cum"] = df_cum.iloc[:, 0].tolist()
         
         # Load Bưu điện huyện/xã (BDX)
-        df_bdx = pd.read_sql_query("SELECT DISTINCT ten_BDX FROM dim_buucuc WHERE ten_BDX IS NOT NULL ORDER BY ten_BDX", conn)
+        df_bdx = pd.read_sql_query("SELECT DISTINCT ten_bdx FROM dim_buucuc WHERE ten_bdx IS NOT NULL ORDER BY ten_bdx", conn)
         if not df_bdx.empty:
             options["bdx"] = df_bdx.iloc[:, 0].tolist()
         
         # Load Bưu cục chấp nhận
-        df_bc = pd.read_sql_query("SELECT ma_bc, ten_Buu_cuc FROM dim_buucuc ORDER BY ma_bc", conn)
+        df_bc = pd.read_sql_query("SELECT ma_bc, ten_buu_cuc FROM dim_buucuc ORDER BY ma_bc", conn)
         if not df_bc.empty:
             options["buu_cuc"] = [{"label": f"{r.iloc[0]} - {r.iloc[1]}", "value": r.iloc[0]} for _, r in df_bc.iterrows()]
         

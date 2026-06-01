@@ -71,28 +71,28 @@ def register_sidebar_callbacks(app):
         conn = sqlite3.connect(str(DB_PATH))
         try:
             # Lọc danh sách BĐX theo Cụm
-            query_bdx = "SELECT DISTINCT ten_BDX FROM dim_buucuc WHERE ten_BDX IS NOT NULL"
+            query_bdx = "SELECT DISTINCT ten_bdx FROM dim_buucuc WHERE ten_bdx IS NOT NULL"
             params_bdx = []
             if cum_val and cum_val != "Tất cả":
-                query_bdx += " AND ten_Cum = ?"
+                query_bdx += " AND ten_cum = ?"
                 params_bdx.append(cum_val)
-            query_bdx += " ORDER BY ten_BDX"
+            query_bdx += " ORDER BY ten_bdx"
             df_bdx = pd.read_sql_query(query_bdx, conn, params=params_bdx)
-            bdx_opts = [{"label": "Tất cả BĐX", "value": "Tất cả"}] + [{"label": b, "value": b} for b in df_bdx["ten_BDX"].tolist()]
+            bdx_opts = [{"label": "Tất cả BĐX", "value": "Tất cả"}] + [{"label": b, "value": b} for b in df_bdx["ten_bdx"].tolist()]
             
             # Lọc danh sách Bưu cục theo Cụm và BĐX
-            query_bc = "SELECT ma_bc, ten_Buu_cuc FROM dim_buucuc WHERE ma_bc IS NOT NULL"
+            query_bc = "SELECT ma_bc, ten_buu_cuc FROM dim_buucuc WHERE ma_bc IS NOT NULL"
             params_bc = []
             if cum_val and cum_val != "Tất cả":
-                query_bc += " AND ten_Cum = ?"
+                query_bc += " AND ten_cum = ?"
                 params_bc.append(cum_val)
             # Chỉ lọc theo BĐX nếu bdx_val hợp lệ và nằm trong Cụm được chọn
-            if bdx_val and bdx_val != "Tất cả" and bdx_val in df_bdx["ten_BDX"].tolist():
-                query_bc += " AND ten_BDX = ?"
+            if bdx_val and bdx_val != "Tất cả" and bdx_val in df_bdx["ten_bdx"].tolist():
+                query_bc += " AND ten_bdx = ?"
                 params_bc.append(bdx_val)
             query_bc += " ORDER BY ma_bc"
             df_bc = pd.read_sql_query(query_bc, conn, params=params_bc)
-            bc_opts = [{"label": "Tất cả Bưu cục", "value": "Tất cả"}] + [{"label": f"{r['ma_bc']} - {r['ten_Buu_cuc']}", "value": r['ma_bc']} for _, r in df_bc.iterrows()]
+            bc_opts = [{"label": "Tất cả Bưu cục", "value": "Tất cả"}] + [{"label": f"{r['ma_bc']} - {r['ten_buu_cuc']}", "value": r['ma_bc']} for _, r in df_bc.iterrows()]
             
         except Exception as e:
             print(f"Error dynamic filters: {e}")

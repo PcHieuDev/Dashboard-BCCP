@@ -33,9 +33,9 @@ def get_import_history_layout():
         
     conn = sqlite3.connect(str(DB_PATH))
     try:
-        # SELECT đúng tên cột thực tế trong SQLite
+        # Tăng giới hạn lên 50 dòng gần nhất
         df_hist = pd.read_sql_query(
-            "SELECT id, file_name, so_dong_import, created_at, trang_thai, ghi_chu FROM import_log ORDER BY created_at DESC LIMIT 10",
+            "SELECT id, file_name, so_dong_import, created_at, trang_thai, ghi_chu FROM import_log ORDER BY created_at DESC LIMIT 50",
             conn
         )
     except Exception as e:
@@ -74,17 +74,53 @@ def get_import_history_layout():
     table = dash_table.DataTable(
         columns=columns,
         data=df_hist.to_dict('records'),
-        style_table={'overflowX': 'auto'},
+        page_size=10,
+        page_action='native',
+        sort_action='native',
+        filter_action='native',
+        style_table={
+            'overflowX': 'auto',
+            'overflowY': 'auto',
+            'maxHeight': '400px'
+        },
         style_header={
             'backgroundColor': '#F8FAFC',
             'fontWeight': 'bold',
-            'fontSize': '12px'
+            'fontSize': '12px',
+            'position': 'sticky',
+            'top': 0,
+            'zIndex': 999
         },
         style_cell={
-            'padding': '6px 8px',
+            'padding': '8px 10px',
             'fontSize': '12px',
-            'textAlign': 'left'
-        }
+            'textAlign': 'left',
+            'minWidth': '100px', 'width': '150px', 'maxWidth': '350px',
+            'whiteSpace': 'normal',
+            'height': 'auto',
+        },
+        style_data_conditional=[
+            {
+                'if': {'row_index': 'odd'},
+                'backgroundColor': '#F8FAFC'
+            },
+            {
+                'if': {
+                    'filter_query': '{trang_thai} contains "Thành công" || {trang_thai} contains "thành công"',
+                    'column_id': 'trang_thai'
+                },
+                'color': '#059669',
+                'fontWeight': 'bold'
+            },
+            {
+                'if': {
+                    'filter_query': '{trang_thai} contains "Lỗi" || {trang_thai} contains "Thất bại" || {trang_thai} contains "lỗi" || {trang_thai} contains "thất bại"',
+                    'column_id': 'trang_thai'
+                },
+                'color': '#DC2626',
+                'fontWeight': 'bold'
+            }
+        ]
     )
     return table
 
@@ -105,22 +141,66 @@ def register_import_callbacks(app):
             return dash.no_update
         return get_import_history_layout()
 
-    # 2. Callback tiếp nhận file Excel, ghi tạm và import vào DB
+    # 2. Callback hiển thị thông tin file đã chọn và hiện nút Xác nhận
     @app.callback(
-        Output('upload-status-message', 'children'),
+        [Output('selected-file-info', 'children'),
+         Output('btn-confirm-upload', 'style')],
         [Input('upload-data', 'contents')],
         [State('upload-data', 'filename')]
     )
-    def process_uploaded_file(contents, filename):
+    def display_selected_file_info(contents, filename):
         if contents is None:
-            return ""
+            return "", {'display': 'none'}
+            
+        # Hiển thị thông tin file đã chọn một cách trực quan
+        file_info = html.Div([
+            html.Hr(),
+            html.Div([
+                html.Span("📄 File đã chọn sẵn sàng: ", style={'fontWeight': 'bold'}),
+                html.Span(filename, style={'color': '#0F766E', 'fontWeight': 'bold'})
+            ], style={
+                'padding': '12px 15px', 
+                'backgroundColor': '#F0FDFA', 
+                'border': '1px solid #CCFBF1', 
+                'borderRadius': '8px',
+                'fontSize': '13px'
+            })
+        ])
+        
+        btn_style = {
+            'marginTop': '15px', 
+            'display': 'block', 
+            'width': '100%', 
+            'fontWeight': 'bold',
+            'padding': '10px'
+        }
+        return file_info, btn_style
+
+    # 3. Callback xử lý khi bấm nút "Xác nhận nạp dữ liệu", trả về kết quả và reset ô chọn file
+    @app.callback(
+        [Output('upload-status-message', 'children'),
+         Output('upload-data', 'contents'),
+         Output('upload-data', 'filename')],
+        [Input('btn-confirm-upload', 'n_clicks')],
+        [State('upload-data', 'contents'),
+         State('upload-data', 'filename')]
+    )
+    def process_confirmed_upload(n_clicks, contents, filename):
+        # Kiểm tra xem trigger có phải từ việc click nút hay không và có file hay không
+        ctx = dash.callback_context
+        if not ctx.triggered:
+            return dash.no_update, dash.no_update, dash.no_update
+            
+        trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
+        if trigger_id != 'btn-confirm-upload' or n_clicks is None or not contents:
+            return dash.no_update, dash.no_update, dash.no_update
             
         content_type, content_string = contents.split(',')
         decoded = base64.b64decode(content_string)
         
-        # Lấy phần mở rộng của file gốc (.xls hoặc .xlsx)
+        # Lấy phần mở rộng của file gốc (.xls, .xlsx hoặc .csv)
         suffix = Path(filename).suffix
-        if suffix.lower() not in ['.xlsx', '.xls']:
+        if suffix.lower() not in ['.xlsx', '.xls', '.csv']:
             suffix = '.xlsx' # fallback
             
         # Ghi file tạm ra đĩa giữ nguyên định dạng để pandas/xlrd/openpyxl nhận diện đúng
@@ -148,8 +228,8 @@ def register_import_callbacks(app):
             
             msg = f"✅ Nạp dữ liệu thành công! Đã thêm {inserted:,} dòng (bỏ qua {skipped:,} dòng trùng lặp) từ file '{filename}'."
             if warnings:
-                msg += f" (Cảnh báo: {', '.join(warnings[:3])})"
-            return dbc.Alert(msg, color="success")
+                msg += f" (Cảnh báo: {', '.join(warnings[:5])})"
+            return dbc.Alert(msg, color="success", dismissible=True), None, None
                 
         except Exception as e:
             # Đảm bảo xóa file tạm nếu có lỗi xảy ra
@@ -157,4 +237,4 @@ def register_import_callbacks(app):
                 Path(tmp_path).unlink()
             except Exception:
                 pass
-            return dbc.Alert(f"❌ Lỗi hệ thống khi xử lý file: {str(e)}", color="danger")
+            return dbc.Alert(f"❌ Lỗi hệ thống khi xử lý file: {str(e)}", color="danger", dismissible=True), None, None
