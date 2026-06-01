@@ -20,7 +20,7 @@ if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 from config.settings import DB_PATH
-from etl.importer import import_excel_file
+from etl.importer import import_any_excel_file
 from callbacks.utils import clear_query_cache
 from db.connection import clear_db_cache
 
@@ -33,8 +33,9 @@ def get_import_history_layout():
         
     conn = sqlite3.connect(str(DB_PATH))
     try:
+        # SELECT đúng tên cột thực tế trong SQLite
         df_hist = pd.read_sql_query(
-            "SELECT id, file_name, row_count, import_time, nam_du_lieu, status, error_message FROM import_log ORDER BY import_time DESC LIMIT 10",
+            "SELECT id, file_name, so_dong_import, created_at, trang_thai, ghi_chu FROM import_log ORDER BY created_at DESC LIMIT 10",
             conn
         )
     except Exception as e:
@@ -47,15 +48,28 @@ def get_import_history_layout():
         
     columns = [
         {"name": "File", "id": "file_name"},
-        {"name": "Thời gian", "id": "import_time"},
-        {"name": "Số dòng", "id": "row_count"},
-        {"name": "Năm dữ liệu", "id": "nam_du_lieu"},
-        {"name": "Trạng thái", "id": "status"}
+        {"name": "Thời gian nhập", "id": "created_at"},
+        {"name": "Số dòng đã nhập", "id": "so_dong_import"},
+        {"name": "Trạng thái", "id": "trang_thai"},
+        {"name": "Ghi chú/Cảnh báo", "id": "ghi_chu"}
     ]
     
-    # Định dạng các cột để hiển thị đẹp hơn
-    df_hist['import_time'] = df_hist['import_time'].apply(lambda x: datetime.fromisoformat(x).strftime('%d/%m/%Y %H:%M') if x else '')
-    df_hist['row_count'] = df_hist['row_count'].apply(lambda x: f"{x:,}" if pd.notna(x) else '0')
+    # Định dạng cột Thời gian hiển thị đẹp hơn
+    def format_time(x):
+        if not x:
+            return ""
+        try:
+            # SQLite created_at mặc định là YYYY-MM-DD HH:MM:SS
+            dt = datetime.strptime(x, '%Y-%m-%d %H:%M:%S')
+            return dt.strftime('%d/%m/%Y %H:%M')
+        except Exception:
+            try:
+                return datetime.fromisoformat(x).strftime('%d/%m/%Y %H:%M')
+            except Exception:
+                return str(x)
+                
+    df_hist['created_at'] = df_hist['created_at'].apply(format_time)
+    df_hist['so_dong_import'] = df_hist['so_dong_import'].apply(lambda x: f"{x:,}" if pd.notna(x) else '0')
     
     table = dash_table.DataTable(
         columns=columns,
@@ -104,15 +118,19 @@ def register_import_callbacks(app):
         content_type, content_string = contents.split(',')
         decoded = base64.b64decode(content_string)
         
-        # Ghi file tạm ra đĩa
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+        # Lấy phần mở rộng của file gốc (.xls hoặc .xlsx)
+        suffix = Path(filename).suffix
+        if suffix.lower() not in ['.xlsx', '.xls']:
+            suffix = '.xlsx' # fallback
+            
+        # Ghi file tạm ra đĩa giữ nguyên định dạng để pandas/xlrd/openpyxl nhận diện đúng
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             tmp.write(decoded)
             tmp_path = tmp.name
             
         try:
-            # Gọi hàm import dữ liệu từ ETL engine
-            # DB_PATH là database SQLite, tmp_path là đường dẫn tệp Excel tạm
-            res = import_excel_file(str(DB_PATH), tmp_path)
+            # Gọi hàm điều phối thông minh để tự động nhận dạng và nạp file (RAW CAS hay Template)
+            res = import_any_excel_file(str(DB_PATH), tmp_path)
             
             # Xóa file tạm ngay sau khi chạy xong
             try:

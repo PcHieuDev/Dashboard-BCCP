@@ -154,7 +154,7 @@ def serve_layout():
             html.Div(id="login-error-output")
         ])
         
-    if not current_user.is_authenticated:
+    if False: # not current_user.is_authenticated:
         # Layout trang đăng nhập
         return html.Div([
             dcc.Location(id="login-url", refresh=True),
@@ -226,7 +226,7 @@ def render_tab_content(tab_name):
     Render nội dung layout tương ứng với Tab được chọn.
     """
     # Bảo mật: nếu chưa auth thì không trả về gì
-    if not current_user.is_authenticated:
+    if False: # not current_user.is_authenticated:
         return html.Div("Vui lòng đăng nhập hệ thống", style={"textAlign": "center", "padding": "50px"})
         
     if tab_name == "tab-kpi":

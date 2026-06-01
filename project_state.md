@@ -101,6 +101,7 @@ E:\OneDrive\z.Database-TTKD\
 7. **[IN PROGRESS] Phase 6**: Chờ yêu cầu tính năng mới từ người dùng.
 
 ## Issues & Notes
+- **[TẠM TẮT ĐĂNG NHẬP - 2026-06-01]**: Đã bypass hàm kiểm tra `current_user.is_authenticated` trong `dash_app/app.py` để tạm thời truy cập trực tiếp vào Dashboard không cần đăng nhập.
 - **Lưu ý Thư viện mới**: Đã cài đặt và cập nhật vào `requirements.txt` các thư viện `openpyxl` (xuất Excel), `reportlab`/`pdfkit` (xuất PDF), `Flask-Login` (phân quyền), `xlrd>=2.0.1` (đọc file .xls cũ từ CAS).
 - **[FIX QUAN TRỌNG - 2026-05-31] Bug duplicate VANGLAI khi import RAW**:
   - **Nguyên nhân**: SQLite coi `NULL ≠ NULL` trong UNIQUE constraint, khiến các dòng vãng lai (ma_hop_dong=NULL) không bị nhận diện trùng lặp.
@@ -117,7 +118,9 @@ E:\OneDrive\z.Database-TTKD\
 - File `process_directory.py` (nén dữ liệu gốc): `E:\OneDrive\TTKD - Công việc hàng ngày\...\process_directory.py`.
 - **[CẤU HÌNH GIT - 2026-06-01]**: Khởi tạo Git repository cục bộ tại workspace chính `E:\OneDrive\z.Database-TTKD\`, thiết lập `.gitignore` loại trừ các file database, excel và log, cấu hình user identity cục bộ, đổi tên branch mặc định sang `main`, và thực hiện commit đầu tiên nhằm sửa lỗi đồng bộ hóa/checkout worktree của hệ thống Agent.
 - **[CẬP NHẬT TEMPLATE IMPORT & SỬA LỖI UI - 2026-06-01]**: Tạo file Excel mẫu phục vụ điền dữ liệu thủ công tại [template_import.xlsx](file:///e:/OneDrive/z.Database-TTKD/data/template_import.xlsx) với các cột quan trọng bôi màu xanh (STT, CMS, Ma_HD, Buu_Cuc, San_Pham, Ngay_CN, San_Luong, Cuoc_TT_Tong). Sửa lỗi nghiêm trọng trong callback nạp dữ liệu tại [import_callbacks.py](file:///e:/OneDrive/z.Database-TTKD/dash_app/callbacks/import_callbacks.py#L112-L132) do truyền sai tham số và gán sai kiểu trả về (dict sang tuple), giúp tính năng import trên Dashboard chạy ổn định.
-- **[ĐỒNG BỘ DANH MỤC - 2026-06-01]**: Đã tạo script [sync_mappings.py](file:///e:/OneDrive/z.Database-TTKD/scripts/sync_mappings.py) để đồng bộ sản phẩm dịch vụ và bưu cục từ 2 file CSV trong thư mục `data/` vào bảng `dim_spdv` và `dim_buucuc` trong cơ sở dữ liệu SQLite sau khi Sếp chỉnh sửa.
+- **[ĐỒNG BỘ DANH MỤC - 2026-06-01]**: Đã tạo script [sync_mappings.py](file:///E:/Projects/Dashboard-BCCP/scripts/sync_mappings.py) để đồng bộ sản phẩm dịch vụ và bưu cục từ 2 file CSV trong thư mục `data/` vào bảng `dim_spdv` và `dim_buucuc` trong cơ sở dữ liệu SQLite sau khi Sếp chỉnh sửa.
+- **[SỬA LỖI ĐỌC FILE .XLS & LỊCH SỬ IMPORT - 2026-06-01]**: Cấu hình bộ điều phối `import_any_excel_file` trong [importer.py](file:///E:/Projects/Dashboard-BCCP/etl/importer.py) giúp tự động nhận diện file RAW (từ CAS) và file mẫu điền tay (Template) cho cả định dạng .xls và .xlsx. Sửa lỗi lệch cột SQLite của lịch sử import trong [import_callbacks.py](file:///E:/Projects/Dashboard-BCCP/dash_app/callbacks/import_callbacks.py#L32-L75).
+
 
 
 

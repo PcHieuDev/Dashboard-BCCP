@@ -215,6 +215,13 @@ def import_excel_file(db_path, excel_path, thang=None):
     skipped = total_rows - inserted
     wb.close()
     
+    # Kiểm tra thiếu mapping sản phẩm/bưu cục
+    missing = check_missing_mappings(db_path)
+    if missing['missing_products']:
+        warnings.append(f"Mã sản phẩm mới chưa phân nhóm: {', '.join(missing['missing_products'][:3])}")
+    if missing['missing_post_offices']:
+        warnings.append(f"Mã bưu cục mới chưa phân cụm: {', '.join(missing['missing_post_offices'][:3])}")
+        
     # Ghi log import
     ghi_chu = '; '.join(warnings[:5]) if warnings else None
     cursor.execute("""
@@ -437,15 +444,20 @@ def import_raw_excel_file(db_path, excel_path, thang=None):
         cursor.executemany(insert_sql, batch_buffer)
         inserted += cursor.rowcount
         
-    conn.commit()
-    
+    # Kiểm tra thiếu mapping sản phẩm/bưu cục
+    missing = check_missing_mappings(db_path)
+    if missing['missing_products']:
+        warnings.append(f"Mã sản phẩm mới chưa phân nhóm: {', '.join(missing['missing_products'][:3])}")
+    if missing['missing_post_offices']:
+        warnings.append(f"Mã bưu cục mới chưa phân cụm: {', '.join(missing['missing_post_offices'][:3])}")
+
     # Ghi log
     skipped = len(df_grouped) - inserted
     cursor.execute("""
         INSERT INTO import_log (batch_id, file_name, thang_du_lieu, 
                                 so_dong_import, so_dong_trung, trang_thai, ghi_chu)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (batch_id, filename, thang, inserted, skipped, 'SUCCESS_RAW', None))
+    """, (batch_id, filename, thang, inserted, skipped, 'SUCCESS_RAW' if not warnings else 'SUCCESS_RAW_WITH_WARNINGS', '; '.join(warnings[:5]) if warnings else None))
     conn.commit()
     conn.close()
     
@@ -458,3 +470,84 @@ def import_raw_excel_file(db_path, excel_path, thang=None):
         'skipped': skipped,
         'warnings': warnings
     }
+
+def check_missing_mappings(db_path):
+    """
+    Kiểm tra xem có mã sản phẩm hoặc bưu cục nào trong transactions chưa được định nghĩa trong bảng dim.
+    Trả về dict chứa danh sách các mã thiếu.
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    missing_sp = []
+    missing_bc = []
+    
+    try:
+        # Kiểm tra sản phẩm
+        cursor.execute("""
+            SELECT DISTINCT t.san_pham_dv 
+            FROM transactions t 
+            LEFT JOIN dim_spdv d ON t.san_pham_dv = d.ma_spdv 
+            WHERE d.ma_spdv IS NULL AND t.san_pham_dv IS NOT NULL AND t.san_pham_dv != ''
+        """)
+        missing_sp = [r[0] for r in cursor.fetchall()]
+        
+        # Kiểm tra bưu cục
+        cursor.execute("""
+            SELECT DISTINCT t.buu_cuc 
+            FROM transactions t 
+            LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc 
+            WHERE b.ma_bc IS NULL AND t.buu_cuc IS NOT NULL AND t.buu_cuc != ''
+        """)
+        missing_bc = [r[0] for r in cursor.fetchall()]
+    except sqlite3.Error as e:
+        logger.error(f"Lỗi khi kiểm tra danh mục chưa phân loại: {e}")
+    finally:
+        conn.close()
+        
+    return {
+        'missing_products': missing_sp,
+        'missing_post_offices': missing_bc
+    }
+
+def import_any_excel_file(db_path, excel_path, thang=None):
+    """
+    Hàm điều phối thông minh: Tự động phân tích cấu trúc file Excel để nhận diện
+    đây là file dữ liệu thô (RAW từ CAS) hay file mẫu nén/thủ công (Template).
+    Sau đó gọi hàm import tương ứng.
+    """
+    import pandas as pd
+    filename = os.path.basename(excel_path)
+    logger.info(f"Phân tích loại file để import: {filename}")
+    
+    # Xác định engine dựa trên định dạng file
+    engine = "openpyxl" if excel_path.endswith(".xlsx") else "xlrd"
+    
+    try:
+        # Đọc sheet đầu tiên (chỉ lấy 50 dòng đầu để phân tích cấu trúc rất nhanh)
+        xl = pd.ExcelFile(excel_path, engine=engine)
+        sheet_name = xl.sheet_names[0]
+        df_sample = pd.read_excel(excel_path, sheet_name=sheet_name, nrows=50, header=None, engine=engine)
+        
+        # Tìm xem có chứa chuỗi chỉ thị của file RAW CAS không
+        is_raw = False
+        for idx in range(len(df_sample)):
+            val_a = str(df_sample.iloc[idx, 0]).strip() if pd.notna(df_sample.iloc[idx, 0]) else ""
+            if "1. Chi tiết sản lượng phát sinh" in val_a:
+                is_raw = True
+                break
+                
+        if is_raw:
+            logger.info(f"Nhận diện file '{filename}' là dữ liệu thô (RAW) từ CAS. Tiến hành nén và import...")
+            return import_raw_excel_file(db_path, excel_path, thang)
+        else:
+            logger.info(f"Nhận diện file '{filename}' là tệp tin mẫu (Template). Tiến hành import trực tiếp...")
+            # Nếu file template là .xls thì openpyxl hiện tại sẽ bị lỗi.
+            # Ta có thể báo lỗi thân thiện nếu file template là .xls
+            if excel_path.endswith(".xls"):
+                raise ValueError("Tệp mẫu điền tay (Template) phải là định dạng .xlsx (Excel mới). Vui lòng lưu tệp mẫu dưới dạng .xlsx và thử lại.")
+            return import_excel_file(db_path, excel_path, thang)
+            
+    except Exception as e:
+        logger.error(f"Lỗi phân loại file Excel {filename}: {e}")
+        raise

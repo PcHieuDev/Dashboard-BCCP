@@ -182,11 +182,59 @@ def register_alerts_callbacks(app):
                         })
                         
         # ----------------------------------------------------------------------
+        # PHÂN TÍCH 4: CẢNH BÁO THIẾU DANH MỤC MAPPING (SẢN PHẨM / BƯU CỤC MỚI)
+        # ----------------------------------------------------------------------
+        try:
+            import sqlite3
+            from config.settings import DB_PATH
+            conn = sqlite3.connect(str(DB_PATH))
+            cursor = conn.cursor()
+            
+            # Sản phẩm thiếu mapping
+            cursor.execute("""
+                SELECT DISTINCT t.san_pham_dv 
+                FROM transactions t 
+                LEFT JOIN dim_spdv d ON t.san_pham_dv = d.ma_spdv 
+                WHERE d.ma_spdv IS NULL AND t.san_pham_dv IS NOT NULL AND t.san_pham_dv != ''
+            """)
+            missing_sp = [r[0] for r in cursor.fetchall()]
+            
+            # Bưu cục thiếu mapping
+            cursor.execute("""
+                SELECT DISTINCT t.buu_cuc 
+                FROM transactions t 
+                LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc 
+                WHERE b.ma_bc IS NULL AND t.buu_cuc IS NOT NULL AND t.buu_cuc != ''
+            """)
+            missing_bc = [r[0] for r in cursor.fetchall()]
+            conn.close()
+            
+            if missing_sp:
+                alerts.append({
+                    "level": "yellow",
+                    "category": "Chất Lượng Dữ Liệu (Sản Phẩm Mới)",
+                    "target": ", ".join(missing_sp[:5]),
+                    "msg": f"Phát hiện {len(missing_sp)} mã sản phẩm mới chưa được định nghĩa phân nhóm dịch vụ.",
+                    "detail": f"Danh sách mã sản phẩm: {', '.join(missing_sp)}. Doanh thu các sản phẩm này đang tạm hiển thị dưới nhóm 'Chưa phân loại'. Sếp vui lòng cập nhật file mapping-spdv.csv và chạy đồng bộ."
+                })
+                
+            if missing_bc:
+                alerts.append({
+                    "level": "yellow",
+                    "category": "Chất Lượng Dữ Liệu (Bưu Cục Mới)",
+                    "target": ", ".join(missing_bc[:5]),
+                    "msg": f"Phát hiện {len(missing_bc)} mã bưu cục mới chưa được phân Cụm địa lý.",
+                    "detail": f"Danh sách mã bưu cục: {', '.join(missing_bc)}. Doanh thu các bưu cục này đang tạm hiển thị dưới Cụm 'Không rõ Cụm'. Sếp vui lòng cập nhật file mapping-BC-BDX-Cum.csv và chạy đồng bộ."
+                })
+        except Exception as e:
+            pass
+
+        # ----------------------------------------------------------------------
         # RENDERING LIST CARDS
         # ----------------------------------------------------------------------
         if not alerts:
             return html.Div([
-                html.Div("🎉 Không phát hiện điểm sụt giảm doanh thu bất thường nào vượt ngưỡng cảnh báo (>= 15%). Hệ thống đang vận hành ổn định!", 
+                html.Div("🎉 Không phát hiện điểm sụt giảm doanh thu bất thường hay lỗi thiếu danh mục mapping nào. Hệ thống đang vận hành ổn định!", 
                          style={"padding": "25px", "textAlign": "center", "color": "#16A34A", "fontWeight": "bold", "backgroundColor": "#F0FDF4", "borderRadius": "8px", "border": "1px solid #BBF7D0"})
             ])
             
