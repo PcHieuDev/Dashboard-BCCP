@@ -1,0 +1,1 @@
+#Dự án xây dựng Dashboard phục vụ công việc, chi tiết dự án xem tại `project_state.md`
