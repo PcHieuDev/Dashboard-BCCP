@@ -130,18 +130,49 @@ def register_import_callbacks(app):
     Đăng ký các callback liên quan đến nạp dữ liệu với ứng dụng Dash.
     """
     
-    # 1. Callback hiển thị lịch sử nhập liệu (gọi lúc load Tab hoặc sau khi nạp xong)
+    # 1. Callback cập nhật hướng dẫn format file Excel tương ứng theo loại lựa chọn
+    @app.callback(
+        Output("import-format-instructions", "children"),
+        [Input("import-service-type", "value")]
+    )
+    def update_format_instructions(service_type):
+        if service_type == "BCCP":
+            return html.Div([
+                html.B("📋 Định dạng Giao dịch BCCP: "),
+                html.Span("Chấp nhận file Excel RAW (từ CAS) hoặc file mẫu điền tay. Yêu cầu các cột tối thiểu: "),
+                html.Code("STT, CMS, Ma_HD, Buu_Cuc, San_Pham, Ngay_CN, San_Luong, Cuoc_TT_Tong.")
+            ])
+        elif service_type in ["HCC", "TCBC", "PPBL"]:
+            service_names = {
+                "HCC": "Hành chính công (Chi trả lương hưu, BHXH, BTXH, CSHT, ...)",
+                "TCBC": "Tài chính bưu chính (Tiết kiệm, Tín dụng, PTI, BHXH-BHYT, Chuyển tiền, ...)",
+                "PPBL": "Phân phối bán lẻ (Hàng bán sỉ, Hàng tiêu dùng bán lẻ)"
+            }
+            return html.Div([
+                html.B(f"📋 Định dạng Giao dịch {service_type}: "),
+                html.Span(f"Nạp dữ liệu tổng hợp cho nhóm {service_names[service_type]}. Yêu cầu các cột: "),
+                html.Code("Mã bưu cục, Tên dịch vụ con, Sản lượng, Doanh thu, Tháng (dạng T01-T12, tùy chọn).")
+            ])
+        elif service_type == "PLAN":
+            return html.Div([
+                html.B("📋 Định dạng Kế hoạch chỉ tiêu: "),
+                html.Span("File Excel phân bổ kế hoạch cho các bưu cục. Yêu cầu các cột: "),
+                html.Code("Năm, Tháng, Nhóm DV (BCCP/HCC/TCBC/PPBL), Tên DV (nullable), Mã BC, KH Doanh thu, KH Sản lượng.")
+            ])
+        return ""
+
+    # 2. Callback hiển thị lịch sử nhập liệu (lắng nghe URL pathname hoặc sau khi nạp xong)
     @app.callback(
         Output('import-history-container', 'children'),
-        [Input('tabs-navigation', 'value'),
+        [Input('url', 'pathname'),
          Input('upload-status-message', 'children')]
     )
-    def render_import_history(tab_val, upload_msg):
-        if tab_val != "tab-import":
+    def render_import_history(pathname, upload_msg):
+        if pathname != "/import":
             return dash.no_update
         return get_import_history_layout()
 
-    # 2. Callback hiển thị thông tin file đã chọn và hiện nút Xác nhận
+    # 3. Callback hiển thị thông tin file đã chọn và hiện nút Xác nhận
     @app.callback(
         [Output('selected-file-info', 'children'),
          Output('btn-confirm-upload', 'style')],
@@ -176,16 +207,17 @@ def register_import_callbacks(app):
         }
         return file_info, btn_style
 
-    # 3. Callback xử lý khi bấm nút "Xác nhận nạp dữ liệu", trả về kết quả và reset ô chọn file
+    # 4. Callback xử lý khi bấm nút "Xác nhận nạp dữ liệu", nạp vào DB tùy theo service_type và reset ô chọn file
     @app.callback(
         [Output('upload-status-message', 'children'),
          Output('upload-data', 'contents'),
          Output('upload-data', 'filename')],
         [Input('btn-confirm-upload', 'n_clicks')],
         [State('upload-data', 'contents'),
-         State('upload-data', 'filename')]
+         State('upload-data', 'filename'),
+         State('import-service-type', 'value')]
     )
-    def process_confirmed_upload(n_clicks, contents, filename):
+    def process_confirmed_upload(n_clicks, contents, filename, service_type):
         # Kiểm tra xem trigger có phải từ việc click nút hay không và có file hay không
         ctx = dash.callback_context
         if not ctx.triggered:
@@ -203,14 +235,26 @@ def register_import_callbacks(app):
         if suffix.lower() not in ['.xlsx', '.xls', '.csv']:
             suffix = '.xlsx' # fallback
             
-        # Ghi file tạm ra đĩa giữ nguyên định dạng để pandas/xlrd/openpyxl nhận diện đúng
+        # Ghi file tạm ra đĩa
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             tmp.write(decoded)
             tmp_path = tmp.name
             
         try:
-            # Gọi hàm điều phối thông minh để tự động nhận dạng và nạp file (RAW CAS hay Template)
-            res = import_any_excel_file(str(DB_PATH), tmp_path)
+            # Điều phối nạp dữ liệu theo loại dịch vụ được chọn
+            if service_type == "BCCP":
+                res = import_any_excel_file(str(DB_PATH), tmp_path)
+                table_name = "Bưu chính chuyển phát (transactions)"
+            elif service_type in ["HCC", "TCBC", "PPBL"]:
+                from etl.importer import import_service_excel
+                res = import_service_excel(str(DB_PATH), tmp_path, service_type)
+                table_name = f"Giao dịch {service_type} (transactions_{service_type.lower()})"
+            elif service_type == "PLAN":
+                from etl.importer import import_plan_excel
+                res = import_plan_excel(str(DB_PATH), tmp_path)
+                table_name = "Kế hoạch chỉ tiêu (plans)"
+            else:
+                raise ValueError("Loại dịch vụ nạp không hợp lệ.")
             
             # Xóa file tạm ngay sau khi chạy xong
             try:
@@ -222,11 +266,13 @@ def register_import_callbacks(app):
             skipped = res.get('skipped', 0)
             warnings = res.get('warnings', [])
             
-            # Xóa cache query ở cả 2 tầng (Query cache & DB cache) do dữ liệu đã cập nhật
+            # Xóa cache query ở cả 2 tầng do dữ liệu đã cập nhật
             clear_query_cache()
             clear_db_cache()
             
-            msg = f"✅ Nạp dữ liệu thành công! Đã thêm {inserted:,} dòng (bỏ qua {skipped:,} dòng trùng lặp) từ file '{filename}'."
+            msg = f"✅ Nạp dữ liệu vào bảng {table_name} thành công! Đã xử lý {inserted:,} dòng thực tế từ file '{filename}'."
+            if skipped > 0:
+                msg += f" (Bỏ qua/Cập nhật {skipped:,} dòng)."
             if warnings:
                 msg += f" (Cảnh báo: {', '.join(warnings[:5])})"
             return dbc.Alert(msg, color="success", dismissible=True), None, None

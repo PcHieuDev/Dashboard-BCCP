@@ -13,7 +13,7 @@ PROJECT_DIR = _CONFIG_DIR.parent                       # z.Database-TTKD/
 # Database SQLite (OneDrive — tự đồng bộ giữa 2 máy)
 # Tách biệt khỏi mã nguồn để Git không track file DB nặng
 DATA_DIR = Path(r"E:\OneDrive\z.Database-TTKD-Data")
-DB_PATH = DATA_DIR / "bccp.db"
+DB_PATH = DATA_DIR / "dashboard.db"
 PHAN_QUYEN_PATH = DATA_DIR / "phan_quyen_url.xlsx"
 
 # Thư mục chứa dữ liệu gốc đã gộp theo tháng (absolute path)
@@ -66,3 +66,22 @@ ABNORMAL_CMS = [
 
 # Cột doanh thu chính để tính toán
 REVENUE_COLUMN = "cuoc_tt_tong"
+
+# ==============================================================================
+# CẤU HÌNH ĐA DỊCH VỤ (MULTI-SERVICE)
+# ==============================================================================
+SERVICE_GROUPS = ["BCCP", "Hành chính công", "Tài chính Bưu chính", "Phân phối bán lẻ"]
+
+SERVICE_COLORS = {
+    "BCCP": "#3B82F6",              # Xanh dương
+    "Hành chính công": "#10B981",   # Xanh lá
+    "Tài chính Bưu chính": "#F59E0B", # Vàng cam
+    "Phân phối bán lẻ": "#8B5CF6"   # Tím
+}
+
+SERVICE_TABLES = {
+    "BCCP": "transactions",
+    "Hành chính công": "transactions_hcc",
+    "Tài chính Bưu chính": "transactions_tcbc",
+    "Phân phối bán lẻ": "transactions_ppbl"
+}

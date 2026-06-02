@@ -128,3 +128,97 @@ def register_sidebar_callbacks(app):
         else:  # Tháng
             df = f"Tháng {month_val:02d}/{year}"
         return html.Span(["Báo cáo doanh thu thời kỳ ", html.B(df), f" ({period})"])
+
+    # 5. Callback ẩn/hiện bộ lọc và highlight menu item theo URL pathname
+    @app.callback(
+        [Output("sidebar-filters-container", "style"),
+         Output("sidebar-accordion", "active_item"),
+         Output("nav-global-overview", "className"),
+         Output("nav-bccp-kpi", "className"),
+         Output("nav-bccp-revenue", "className"),
+         Output("nav-bccp-customer", "className"),
+         Output("nav-bccp-charts", "className"),
+         Output("nav-bccp-alerts", "className"),
+         Output("nav-hcc-overview", "className"),
+         Output("nav-hcc-revenue", "className"),
+         Output("nav-tcbc-overview", "className"),
+         Output("nav-tcbc-revenue", "className"),
+         Output("nav-ppbl-overview", "className"),
+         Output("nav-ppbl-revenue", "className")],
+        [Input("url", "pathname")]
+    )
+    def update_sidebar_state(pathname):
+        # Mặc định tất cả các class là 'sidebar-menu-item'
+        classes = {
+            "global": "sidebar-menu-item",
+            "bccp-kpi": "sidebar-menu-item",
+            "bccp-rev": "sidebar-menu-item",
+            "bccp-cust": "sidebar-menu-item",
+            "bccp-chart": "sidebar-menu-item",
+            "bccp-alert": "sidebar-menu-item",
+            "hcc-over": "sidebar-menu-item",
+            "hcc-rev": "sidebar-menu-item",
+            "tcbc-over": "sidebar-menu-item",
+            "tcbc-rev": "sidebar-menu-item",
+            "ppbl-over": "sidebar-menu-item",
+            "ppbl-rev": "sidebar-menu-item"
+        }
+        
+        # Ẩn hiện bộ lọc: Chỉ hiện cho Tổng quan chung và các trang BCCP
+        show_filters = (pathname == "/" or pathname == "" or (pathname and pathname.startswith("/bccp")))
+        filter_style = {"display": "block"} if show_filters else {"display": "none"}
+        
+        # Xác định active accordion item
+        active_accordion = "menu-bccp" # Default open BCCP
+        if pathname:
+            if pathname.startswith("/bccp"):
+                active_accordion = "menu-bccp"
+            elif pathname.startswith("/hcc"):
+                active_accordion = "menu-hcc"
+            elif pathname.startswith("/tcbc"):
+                active_accordion = "menu-tcbc"
+            elif pathname.startswith("/ppbl"):
+                active_accordion = "menu-ppbl"
+            elif pathname == "/" or pathname == "":
+                active_accordion = None
+                
+        # Highlight active menu link
+        if not pathname or pathname == "/":
+            classes["global"] = "sidebar-menu-item active"
+        elif pathname == "/bccp/kpi":
+            classes["bccp-kpi"] = "sidebar-menu-item active active-bccp"
+        elif pathname == "/bccp/revenue":
+            classes["bccp-rev"] = "sidebar-menu-item active active-bccp"
+        elif pathname == "/bccp/customer":
+            classes["bccp-cust"] = "sidebar-menu-item active active-bccp"
+        elif pathname == "/bccp/charts":
+            classes["bccp-chart"] = "sidebar-menu-item active active-bccp"
+        elif pathname == "/bccp/alerts":
+            classes["bccp-alert"] = "sidebar-menu-item active active-bccp"
+        elif pathname == "/hcc":
+            classes["hcc-over"] = "sidebar-menu-item active active-hcc"
+            classes["hcc-rev"] = "sidebar-menu-item active active-hcc"
+        elif pathname == "/tcbc":
+            classes["tcbc-over"] = "sidebar-menu-item active active-tcbc"
+            classes["tcbc-rev"] = "sidebar-menu-item active active-tcbc"
+        elif pathname == "/ppbl":
+            classes["ppbl-over"] = "sidebar-menu-item active active-ppbl"
+            classes["ppbl-rev"] = "sidebar-menu-item active active-ppbl"
+            
+        return (
+            filter_style,
+            active_accordion,
+            classes["global"],
+            classes["bccp-kpi"],
+            classes["bccp-rev"],
+            classes["bccp-cust"],
+            classes["bccp-chart"],
+            classes["bccp-alert"],
+            classes["hcc-over"],
+            classes["hcc-rev"],
+            classes["tcbc-over"],
+            classes["tcbc-rev"],
+            classes["ppbl-over"],
+            classes["ppbl-rev"]
+        )
+
