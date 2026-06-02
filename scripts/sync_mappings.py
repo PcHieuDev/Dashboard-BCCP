@@ -21,12 +21,12 @@ if str(project_root) not in sys.path:
 from config.settings import DB_PATH, MAPPING_PATH, MAPPING_GEOGRAPHY_PATH
 
 def sync_spdv(conn):
-    """Đồng bộ mapping sản phẩm dịch vụ từ CSV vào bảng dim_spdv."""
+    """Đồng bộ mapping sản phẩm dịch vụ từ CSV vào bảng dim_dichvu và dim_spdv."""
     if not MAPPING_PATH.exists():
         print(f"⚠️  Không tìm thấy file mapping sản phẩm tại: {MAPPING_PATH}")
         return 0
 
-    # Đọc CSV mapping (thử nhiều encoding phòng trường hợp Excel lưu dạng ANSI/CP1252)
+    # Đọc CSV mapping (thử nhiều encoding)
     df = None
     for enc in ["utf-8-sig", "utf-8", "cp1252", "latin-1"]:
         try:
@@ -42,7 +42,7 @@ def sync_spdv(conn):
     # Chuẩn hóa tên cột
     df.columns = [c.strip().lower() for c in df.columns]
     
-    expected_cols = ["ma_spdv", "ten_spdv", "nhom_dich_vu"]
+    expected_cols = ["nhom_chinh", "ma_spdv", "ten_spdv", "nhom_dich_vu"]
     for col in expected_cols:
         if col not in df.columns:
             print(f"❌ Lỗi: Cột '{col}' không tồn tại trong file CSV mapping sản phẩm.")
@@ -53,22 +53,35 @@ def sync_spdv(conn):
     if "ghi_chu" not in df.columns:
         df["ghi_chu"] = None
 
-    # Ghi đè vào DB
+    # Ghi vào cả dim_dichvu mới và dim_spdv cũ
     cursor = conn.cursor()
     rows_synced = 0
     for _, row in df.iterrows():
         ma_spdv = str(row["ma_spdv"]).strip()
         if not ma_spdv or pd.isna(row["ma_spdv"]):
             continue
+            
+        nhom_chinh = str(row["nhom_chinh"]).strip()
+        ten_spdv = str(row["ten_spdv"]).strip()
+        nhom_dich_vu = str(row["nhom_dich_vu"]).strip()
+        
+        # 1. Đồng bộ vào dim_dichvu (bảng đa dịch vụ mới)
+        cursor.execute(
+            """INSERT OR REPLACE INTO dim_dichvu (nhom_chinh, ma_dich_vu, ten_dich_vu, nhom_dich_vu)
+               VALUES (?, ?, ?, ?)""",
+            (nhom_chinh, ma_spdv, ten_spdv, nhom_dich_vu),
+        )
+        
+        # 2. Đồng bộ vào dim_spdv (bảng cũ để đảm bảo tương thích ngược)
         cursor.execute(
             """INSERT OR REPLACE INTO dim_spdv (ma_spdv, ten_spdv, nhom_dich_vu, ghi_chu)
                VALUES (?, ?, ?, ?)""",
-            (ma_spdv, str(row["ten_spdv"]).strip(), str(row["nhom_dich_vu"]).strip(), row.get("ghi_chu")),
+            (ma_spdv, ten_spdv, nhom_dich_vu, row.get("ghi_chu")),
         )
         rows_synced += 1
 
     conn.commit()
-    print(f"✅ Đã đồng bộ thành công {rows_synced} sản phẩm vào bảng dim_spdv.")
+    print(f"✅ Đã đồng bộ thành công {rows_synced} sản phẩm vào bảng dim_dichvu và dim_spdv.")
     return rows_synced
 
 def sync_buucuc(conn):
