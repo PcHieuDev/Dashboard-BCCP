@@ -255,6 +255,21 @@ def resolve_filters_and_query(year, period, date_range_start, date_range_end, we
     """
     Chuyển đổi các thông số bộ lọc từ UI sang các đối tượng Date và thực hiện truy vấn qua Cache.
     """
+    # Chuẩn hóa compare_mode nếu là list/tuple (từ checklist)
+    if isinstance(compare_mode, (list, tuple)):
+        has_prev = 'prev_period' in compare_mode
+        has_yoy = 'yoy' in compare_mode
+        if has_prev and has_yoy:
+            compare_mode_str = 'both'
+        elif has_prev:
+            compare_mode_str = 'prev_period'
+        elif has_yoy:
+            compare_mode_str = 'yoy'
+        else:
+            compare_mode_str = 'none'
+    else:
+        compare_mode_str = compare_mode if compare_mode else 'none'
+
     date_column = 'ngay_chap_nhan'
     if period == "Ngày":
         date_from = date.fromisoformat(date_range_start) if date_range_start else date(year, 1, 1)
@@ -306,7 +321,7 @@ def resolve_filters_and_query(year, period, date_range_start, date_range_end, we
         compare_prev,
         period,
         year,
-        compare_mode
+        compare_mode_str
     )
     
     return date_from, date_to, date_column, df

@@ -17,14 +17,42 @@ def create_import_page_layout():
         html.Div("📥 Nhập dữ liệu mới vào hệ thống", className="section-header"),
         
         dbc.Row([
-            # Cột bên trái: Drag-drop File Excel để Import
+            # Cột bên trái: Chọn loại và Upload File Excel để Import
             dbc.Col([
                 html.Div([
+                    # Dropdown chọn loại dữ liệu
+                    html.Div([
+                        html.Label("Loại dữ liệu nạp", className="filter-label"),
+                        dcc.Dropdown(
+                            id="import-service-type",
+                            options=[
+                                {"label": "Giao dịch Bưu chính chuyển phát (BCCP)", "value": "BCCP"},
+                                {"label": "Giao dịch Hành chính công (HCC)", "value": "HCC"},
+                                {"label": "Giao dịch Tài chính Bưu chính (TCBC)", "value": "TCBC"},
+                                {"label": "Giao dịch Phân phối bán lẻ (PPBL)", "value": "PPBL"},
+                                {"label": "Kế hoạch chỉ tiêu doanh thu (Plans)", "value": "PLAN"}
+                            ],
+                            value="BCCP",
+                            clearable=False,
+                            style={"marginBottom": "15px"}
+                        ),
+                        html.Div(id="import-format-instructions", style={
+                            "fontSize": "13px",
+                            "color": "#475569",
+                            "backgroundColor": "#F8FAFC",
+                            "padding": "12px 14px",
+                            "borderRadius": "8px",
+                            "border": "1px solid #E2E8F0",
+                            "marginBottom": "15px"
+                        })
+                    ]),
+                    
+                    # Upload component
                     dcc.Upload(
                         id='upload-data',
                         children=html.Div([
                             'Kéo thả hoặc ',
-                            html.A('Chọn file Excel (.xlsx)')
+                            html.A('Chọn file Excel (.xlsx, .xls)')
                         ]),
                         style={
                             'width': '100%',

@@ -551,3 +551,188 @@ def import_any_excel_file(db_path, excel_path, thang=None):
     except Exception as e:
         logger.error(f"Lỗi phân loại file Excel {filename}: {e}")
         raise
+
+def import_service_excel(db_path, excel_path, service_type, thang=None):
+    """
+    Import file Excel dữ liệu tổng hợp cho các dịch vụ mới (HCC, TCBC, PPBL).
+    Format mong đợi: STT | Mã bưu cục | Tên dịch vụ | Sản lượng | Doanh thu
+    """
+    import pandas as pd
+    filename = os.path.basename(excel_path)
+    logger.info(f"Bắt đầu import {service_type}: {filename}")
+    
+    if thang is None:
+        thang = _detect_month(filename)
+        if thang is None:
+            thang = "T01"
+            logger.warning(f"Không phát hiện được tháng cho file: {filename}, fallback sang T01")
+            
+    # Lấy năm từ batch hoặc lấy mặc định năm nay
+    nam_du_lieu = datetime.now().year
+            
+    batch_id = datetime.now().strftime('%Y%m%d_%H%M%S') + f'_{service_type}_' + filename
+    table_name = f"transactions_{service_type.lower()}"
+    
+    try:
+        engine = "openpyxl" if str(excel_path).endswith(".xlsx") else "xlrd"
+        df = pd.read_excel(excel_path, engine=engine)
+        
+        # Nếu DataFrame không có đủ 5 cột thì lấy theo thứ tự: Mã BC, Tên DV, Sản lượng, Doanh thu
+        if len(df.columns) < 5:
+            return {'batch_id': batch_id, 'file': filename, 'thang': thang, 'total_rows': 0, 'inserted': 0, 'skipped': 0, 'warnings': [f"File không đủ 5 cột cơ bản (STT, Mã BC, Dịch vụ, SL, DT). Số cột: {len(df.columns)}"]}
+            
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        insert_sql = f"""
+        INSERT OR IGNORE INTO {table_name} 
+        (thang_du_lieu, nam_du_lieu, ma_buu_cuc, ten_dich_vu, san_luong, doanh_thu, import_batch)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """
+        
+        batch_buffer = []
+        inserted = 0
+        total_rows = 0
+        warnings = []
+        
+        for idx, row in df.iterrows():
+            stt_val = row.iloc[0]
+            if pd.isna(stt_val) and idx > 0:
+                continue # Skip empty rows
+                
+            total_rows += 1
+            ma_bc = clean_str_field(row.iloc[1])
+            ten_dv = clean_str_field(row.iloc[2])
+            sl = _safe_int(row.iloc[3])
+            dt = _safe_float(row.iloc[4])
+            
+            if not ma_bc:
+                warnings.append(f"Dòng {idx+2}: Thiếu mã bưu cục")
+                
+            batch_buffer.append((thang, nam_du_lieu, ma_bc, ten_dv, sl, dt, batch_id))
+            
+            if len(batch_buffer) >= BATCH_SIZE:
+                cursor.executemany(insert_sql, batch_buffer)
+                inserted += cursor.rowcount
+                batch_buffer = []
+                
+        if batch_buffer:
+            cursor.executemany(insert_sql, batch_buffer)
+            inserted += cursor.rowcount
+            
+        skipped = total_rows - inserted
+        
+        # Ghi log
+        cursor.execute("""
+            INSERT INTO import_log (batch_id, file_name, thang_du_lieu, 
+                                    so_dong_import, so_dong_trung, trang_thai, ghi_chu)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (batch_id, filename, thang, inserted, skipped, 'SUCCESS' if not warnings else 'SUCCESS_WITH_WARNINGS', '; '.join(warnings[:5]) if warnings else None))
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            'batch_id': batch_id,
+            'file': filename,
+            'thang': thang,
+            'total_rows': total_rows,
+            'inserted': inserted,
+            'skipped': skipped,
+            'warnings': warnings
+        }
+    except Exception as e:
+        logger.error(f"Lỗi khi import {service_type}: {e}")
+        return {'batch_id': batch_id, 'file': filename, 'thang': thang, 'total_rows': 0, 'inserted': 0, 'skipped': 0, 'warnings': [str(e)]}
+
+
+def import_plan_excel(db_path, excel_path):
+    """
+    Import file Excel Kế hoạch vào bảng plans.
+    Format mong đợi: Năm | Tháng | Nhóm DV | Tên DV | Mã BC | KH Doanh thu | KH Sản lượng
+    """
+    import pandas as pd
+    filename = os.path.basename(excel_path)
+    logger.info(f"Bắt đầu import Kế hoạch: {filename}")
+    
+    batch_id = datetime.now().strftime('%Y%m%d_%H%M%S') + '_PLAN_' + filename
+    
+    try:
+        engine = "openpyxl" if str(excel_path).endswith(".xlsx") else "xlrd"
+        df = pd.read_excel(excel_path, engine=engine)
+        
+        if len(df.columns) < 6:
+            return {'batch_id': batch_id, 'file': filename, 'thang': 'N/A', 'total_rows': 0, 'inserted': 0, 'skipped': 0, 'warnings': [f"File Kế hoạch không đủ số cột cơ bản. Số cột: {len(df.columns)}"]}
+            
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        insert_sql = """
+        INSERT OR REPLACE INTO plans 
+        (nam, thang, nhom_dich_vu, ten_dich_vu, ma_buu_cuc, ke_hoach_doanh_thu, ke_hoach_san_luong)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """
+        
+        batch_buffer = []
+        replaced = 0
+        total_rows = 0
+        warnings = []
+        
+        valid_groups = {'BCCP', 'HCC', 'TCBC', 'PPBL', 'Hành chính công', 'Tài chính Bưu chính', 'Phân phối bán lẻ'}
+        
+        for idx, row in df.iterrows():
+            nam = _safe_int(row.iloc[0])
+            thang = _safe_int(row.iloc[1])
+            if nam == 0 or thang == 0:
+                continue # Bỏ qua dòng trống
+                
+            total_rows += 1
+            nhom_dv = clean_str_field(row.iloc[2])
+            ten_dv = clean_str_field(row.iloc[3]) if len(df.columns) > 3 and pd.notna(row.iloc[3]) else None
+            ma_bc = clean_str_field(row.iloc[4]) if len(df.columns) > 4 else None
+            kh_dt = _safe_float(row.iloc[5]) if len(df.columns) > 5 else 0.0
+            kh_sl = _safe_int(row.iloc[6]) if len(df.columns) > 6 else 0
+            
+            if nhom_dv not in valid_groups:
+                warnings.append(f"Dòng {idx+2}: Nhóm DV không hợp lệ ('{nhom_dv}')")
+                continue
+                
+            if thang < 1 or thang > 12:
+                warnings.append(f"Dòng {idx+2}: Tháng không hợp lệ ('{thang}')")
+                continue
+                
+            batch_buffer.append((nam, thang, nhom_dv, ten_dv, ma_bc, kh_dt, kh_sl))
+            
+            if len(batch_buffer) >= BATCH_SIZE:
+                cursor.executemany(insert_sql, batch_buffer)
+                replaced += cursor.rowcount
+                batch_buffer = []
+                
+        if batch_buffer:
+            cursor.executemany(insert_sql, batch_buffer)
+            replaced += cursor.rowcount
+            
+        skipped = total_rows - replaced
+        
+        # Ghi log
+        cursor.execute("""
+            INSERT INTO import_log (batch_id, file_name, thang_du_lieu, 
+                                    so_dong_import, so_dong_trung, trang_thai, ghi_chu)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (batch_id, filename, 'PLAN', replaced, skipped, 'SUCCESS' if not warnings else 'SUCCESS_WITH_WARNINGS', '; '.join(warnings[:5]) if warnings else None))
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            'batch_id': batch_id,
+            'file': filename,
+            'thang': 'PLAN',
+            'total_rows': total_rows,
+            'inserted': replaced,
+            'skipped': skipped,
+            'warnings': warnings
+        }
+    except Exception as e:
+        logger.error(f"Lỗi khi import Kế hoạch: {e}")
+        return {'batch_id': batch_id, 'file': filename, 'thang': 'N/A', 'total_rows': 0, 'inserted': 0, 'skipped': 0, 'warnings': [str(e)]}

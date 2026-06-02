@@ -328,3 +328,155 @@ div[style*="background: rgb(255, 255, 255)"] {
     padding: 4px 10px !important;
     border-radius: 6px !important;
 }
+
+/* ==========================================================================
+   Multi-Service Dashboard Upgrades (TIP-006 CSS & Color Tokens)
+   ========================================================================== */
+
+:root {
+    --color-bccp: #2196F3;
+    --color-hcc: #4CAF50;
+    --color-tcbc: #FF9800;
+    --color-ppbl: #9C27B0;
+}
+
+/* Sidebar Accordion Custom Styling */
+.sidebar-accordion .accordion-item {
+    background-color: transparent !important;
+    border: none !important;
+    margin-bottom: 4px;
+}
+
+.sidebar-accordion .accordion-button {
+    background-color: transparent !important;
+    color: #475569 !important;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 10px 12px !important;
+    box-shadow: none !important;
+    border-radius: 8px !important;
+    transition: all 0.2s;
+}
+
+.sidebar-accordion .accordion-button:not(.collapsed) {
+    color: #0F172A !important;
+    background-color: #E2E8F0 !important;
+}
+
+.sidebar-accordion .accordion-button::after {
+    background-size: 12px !important;
+    width: 12px !important;
+    height: 12px !important;
+}
+
+.sidebar-accordion .accordion-body {
+    padding: 4px 0 4px 16px !important;
+}
+
+/* Sidebar Menu Items */
+.sidebar-menu-item {
+    display: block;
+    padding: 8px 12px;
+    color: #64748B;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 6px;
+    margin-bottom: 2px;
+    transition: all 0.2s;
+    border-left: 3px solid transparent;
+}
+
+.sidebar-menu-item:hover {
+    color: #0F172A;
+    background-color: #E2E8F0;
+    text-decoration: none;
+}
+
+.sidebar-menu-item.active {
+    color: #3B82F6;
+    background-color: #EFF6FF;
+    border-left-color: #3B82F6;
+    font-weight: 600;
+}
+
+/* Specific color states for active items of other services */
+.sidebar-menu-item.active.active-bccp {
+    color: var(--color-bccp);
+    background-color: rgba(33, 150, 243, 0.1);
+    border-left-color: var(--color-bccp);
+}
+.sidebar-menu-item.active.active-hcc {
+    color: var(--color-hcc);
+    background-color: rgba(76, 175, 80, 0.1);
+    border-left-color: var(--color-hcc);
+}
+.sidebar-menu-item.active.active-tcbc {
+    color: var(--color-tcbc);
+    background-color: rgba(255, 152, 0, 0.1);
+    border-left-color: var(--color-tcbc);
+}
+.sidebar-menu-item.active.active-ppbl {
+    color: var(--color-ppbl);
+    background-color: rgba(156, 39, 176, 0.1);
+    border-left-color: var(--color-ppbl);
+}
+
+/* Header Import Button */
+.header-import-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background-color: #3B82F6;
+    color: white !important;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    text-decoration: none;
+    transition: all 0.2s;
+    border: none;
+}
+
+.header-import-btn:hover {
+    background-color: #2563EB;
+    color: white !important;
+    text-decoration: none;
+    transform: translateY(-1px);
+}
+
+/* Empty State Styling */
+.empty-state-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 40px;
+    background-color: #FFFFFF;
+    border-radius: 12px;
+    border: 1px dashed #CBD5E1;
+    text-align: center;
+    margin-top: 24px;
+}
+
+.empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    color: #94A3B8;
+}
+
+.empty-state-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 20px;
+    font-weight: 600;
+    color: #1E293B;
+    margin-bottom: 8px;
+}
+
+.empty-state-desc {
+    font-size: 14px;
+    color: #64748B;
+    max-width: 400px;
+    margin-bottom: 20px;
+}
+

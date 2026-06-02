@@ -18,6 +18,23 @@ def create_alerts_page_layout():
             ], className="section-header", style={"borderLeftColor": "#EF4444", "marginTop": 0}),
         ]),
         
+        # Dropdown chọn nhóm dịch vụ
+        html.Div([
+            html.Label("Nhóm dịch vụ phân tích", className="filter-label"),
+            dcc.Dropdown(
+                id="alerts-nhom-dv-select",
+                options=[
+                    {"label": "Bưu chính chuyển phát (BCCP)", "value": "BCCP"},
+                    {"label": "Hành chính công (HCC)", "value": "HCC"},
+                    {"label": "Tài chính Bưu chính (TCBC)", "value": "TCBC"},
+                    {"label": "Phân phối bán lẻ (PPBL)", "value": "PPBL"}
+                ],
+                value="BCCP",
+                clearable=False,
+                style={"width": "100%", "marginBottom": "20px"}
+            )
+        ], style={"maxWidth": "400px"}),
+        
         # Chú thích ngưỡng cảnh báo
         dbc.Card([
             dbc.CardBody([

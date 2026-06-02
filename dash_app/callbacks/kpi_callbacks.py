@@ -73,6 +73,19 @@ def register_kpi_callbacks(app):
         if tab_val != "tab-kpi":
             return [dash.no_update] * 28
 
+        # Chuẩn hóa compare_mode từ list thành string để tương thích ngược với trang KPI cũ
+        if isinstance(compare_mode, (list, tuple)):
+            has_prev = 'prev_period' in compare_mode
+            has_yoy = 'yoy' in compare_mode
+            if has_prev and has_yoy:
+                compare_mode = 'both'
+            elif has_prev:
+                compare_mode = 'prev_period'
+            elif has_yoy:
+                compare_mode = 'yoy'
+            else:
+                compare_mode = 'none'
+
         # 1. Truy vấn dữ liệu kỳ hiện tại
         date_from, date_to, date_column, df_cur = resolve_filters_and_query(
             year, period, start_date, end_date, week_idx, month_val, compare_mode,

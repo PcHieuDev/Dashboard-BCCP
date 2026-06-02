@@ -38,6 +38,8 @@ from callbacks.customer_callbacks import register_customer_callbacks
 from callbacks.import_callbacks import register_import_callbacks
 from callbacks.charts_callbacks import register_charts_callbacks
 from callbacks.alerts_callbacks import register_alerts_callbacks
+from callbacks.global_callbacks import register_global_callbacks
+from callbacks.service_callbacks import register_service_callbacks
 
 # Cấu hình UTF-8 cho Windows output để hiển thị log tiếng Việt chính xác
 if sys.platform.startswith('win'):
@@ -106,13 +108,13 @@ def load_filter_options():
         if not df_years.empty:
             options["years"] = df_years.iloc[:, 0].tolist()
             
-        # Load Nhóm dịch vụ
-        df_nhom = pd.read_sql_query("SELECT DISTINCT nhom_dich_vu FROM dim_spdv WHERE nhom_dich_vu IS NOT NULL", conn)
+        # Load Nhóm dịch vụ (chỉ thuộc BCCP cho sidebar)
+        df_nhom = pd.read_sql_query("SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = 'BCCP' AND nhom_dich_vu IS NOT NULL", conn)
         if not df_nhom.empty:
             options["nhom_dv"] = df_nhom.iloc[:, 0].tolist()
         
-        # Load Sản phẩm dịch vụ chi tiết
-        df_spdv = pd.read_sql_query("SELECT ma_spdv, ten_spdv FROM dim_spdv WHERE ma_spdv IS NOT NULL", conn)
+        # Load Sản phẩm dịch vụ chi tiết (chỉ thuộc BCCP cho sidebar)
+        df_spdv = pd.read_sql_query("SELECT ma_dich_vu, ten_dich_vu FROM dim_dichvu WHERE nhom_chinh = 'BCCP' AND ma_dich_vu IS NOT NULL", conn)
         if not df_spdv.empty:
             options["spdv"] = [{"label": f"{r.iloc[0]} - {r.iloc[1]}", "value": r.iloc[0]} for _, r in df_spdv.iterrows()]
         
@@ -181,8 +183,14 @@ def serve_layout():
     
     # Layout trang Dashboard sau khi đăng nhập thành công
     return html.Div([
+        # Location định tuyến chính
+        dcc.Location(id="url", refresh=False),
+        
         # Location để nhận tín hiệu đăng xuất
         dcc.Location(id="sidebar-logout-url", refresh=True),
+        
+        # Input tabs-navigation ẩn để tương thích ngược với các callback cũ
+        dcc.Input(id="tabs-navigation", type="text", style={"display": "none"}, value="tab-kpi"),
         
         # Sidebar lọc dữ liệu
         create_sidebar_layout(FILTER_OPTS),
@@ -191,22 +199,16 @@ def serve_layout():
         html.Div([
             # Header Tiêu đề
             html.Div([
-                html.H1("📊 Dashboard Doanh thu BCCP (Dash App)", className="main-title"),
-                html.Div(id="header-sub-title", className="sub-title")
-            ]),
-            
-            # Thanh điều hướng Tab chính
-            dcc.Tabs(id="tabs-navigation", value="tab-kpi", children=[
-                dcc.Tab(label="📈 TỔNG QUAN KPI", value="tab-kpi", className="nav-link", selected_className="nav-link active"),
-                dcc.Tab(label="📊 DOANH THU CHI TIẾT", value="tab-revenue", className="nav-link", selected_className="nav-link active"),
-                dcc.Tab(label="🔍 CHI TIẾT KHÁCH HÀNG", value="tab-customer", className="nav-link", selected_className="nav-link active"),
-                dcc.Tab(label="📈 BIỂU ĐỒ TRỰC QUAN", value="tab-charts", className="nav-link", selected_className="nav-link active"),
-                dcc.Tab(label="🚨 CẢNH BÁO DOANH THU", value="tab-alerts", className="nav-link", selected_className="nav-link active"),
-                dcc.Tab(label="📥 NHẬP DỮ LIỆU", value="tab-import", className="nav-link", selected_className="nav-link active")
-            ]),
+                html.Div([
+                    html.H1("📊 Dashboard Điều hành Doanh thu", className="main-title", id="main-title-text"),
+                    html.Div(id="header-sub-title", className="sub-title")
+                ], style={"flex": "1"}),
+                # Nút Import
+                dcc.Link("📥 Nhập dữ liệu", href="/import", className="header-import-btn", id="btn-goto-import")
+            ], style={"display": "flex", "justify-content": "space-between", "align-items": "center", "margin-bottom": "20px"}),
             
             # Vùng chứa layout động của từng trang
-            html.Div(id="tabs-content", style={"paddingTop": "20px"})
+            html.Div(id="page-content", style={"paddingTop": "10px"})
             
         ], className="content")
     ])
@@ -215,34 +217,99 @@ def serve_layout():
 app.layout = serve_layout
 
 # --------------------------------------------------------------------------
-# CALLBACK ĐIỀU HƯỚNG TAB CHÍNH
+# CALLBACK ĐỒNG BỘ URL PATHNAME VỚI TABS-NAVIGATION ẨN (TƯƠNG THÍCH NGƯỢC)
 # --------------------------------------------------------------------------
 @app.callback(
-    Output("tabs-content", "children"),
-    [Input("tabs-navigation", "value")]
+    Output("tabs-navigation", "value"),
+    [Input("url", "pathname")]
 )
-def render_tab_content(tab_name):
+def sync_url_to_tabs_navigation(pathname):
     """
-    Render nội dung layout tương ứng với Tab được chọn.
+    Đồng bộ URL pathname với value của tabs-navigation ảo để kích hoạt 
+    các callback cũ của BCCP mà không phải sửa mã nguồn của chúng.
+    """
+    if pathname == "/bccp/kpi":
+        return "tab-kpi"
+    elif pathname == "/bccp/revenue":
+        return "tab-revenue"
+    elif pathname == "/bccp/customer":
+        return "tab-customer"
+    elif pathname == "/bccp/charts":
+        return "tab-charts"
+    elif pathname == "/bccp/alerts":
+        return "tab-alerts"
+    elif pathname == "/import":
+        return "tab-import"
+    return "tab-kpi" # Default
+
+# --------------------------------------------------------------------------
+# CALLBACK ĐỊNH TUYẾN TRANG CHÍNH (URL ROUTING)
+# --------------------------------------------------------------------------
+@app.callback(
+    [Output("page-content", "children"),
+     Output("main-title-text", "children")],
+    [Input("url", "pathname")]
+)
+def render_page(pathname):
+    """
+    Định tuyến và trả về layout trang phù hợp dựa theo URL pathname.
     """
     # Bảo mật: nếu chưa auth thì không trả về gì
     if False: # not current_user.is_authenticated:
-        return html.Div("Vui lòng đăng nhập hệ thống", style={"textAlign": "center", "padding": "50px"})
+        return html.Div("Vui lòng đăng nhập hệ thống", style={"textAlign": "center", "padding": "50px"}), "🔑 Hệ thống điều hành"
         
-    if tab_name == "tab-kpi":
-        return create_kpi_page_layout()
-    elif tab_name == "tab-revenue":
-        return create_revenue_detail_layout()
-    elif tab_name == "tab-customer":
-        return create_customer_detail_layout()
-    elif tab_name == "tab-charts":
-        return create_charts_page_layout()
-    elif tab_name == "tab-alerts":
-        from pages.alerts import create_alerts_page_layout
-        return create_alerts_page_layout()
-    elif tab_name == "tab-import":
-        return create_import_page_layout()
-    return html.Div("Trang không tồn tại", style={"textAlign": "center", "padding": "20px"})
+    if not pathname or pathname == "/":
+        try:
+            from pages.global_overview import create_global_overview_layout
+            return create_global_overview_layout(), "📊 Tổng quan điều hành doanh thu"
+        except ImportError:
+            return html.Div("Trang Tổng quan chung đang được xây dựng...", className="empty-state-container"), "📊 Tổng quan điều hành doanh thu"
+            
+    elif pathname == "/bccp/kpi":
+        return create_kpi_page_layout(), "📊 Bưu chính chuyển phát - KPI"
+    elif pathname == "/bccp/revenue":
+        return create_revenue_detail_layout(), "📊 Bưu chính chuyển phát - Doanh thu"
+    elif pathname == "/bccp/customer":
+        return create_customer_detail_layout(), "📊 Bưu chính chuyển phát - Khách hàng"
+    elif pathname == "/bccp/charts":
+        return create_charts_page_layout(), "📊 Bưu chính chuyển phát - Biểu đồ"
+    elif pathname == "/bccp/alerts":
+        try:
+            from pages.alerts import create_alerts_page_layout
+            return create_alerts_page_layout(), "📊 Bưu chính chuyển phát - Cảnh báo"
+        except Exception as e:
+            print(f"Lỗi load trang alerts: {e}")
+            return html.Div("Trang cảnh báo doanh thu đang được xây dựng...", className="empty-state-container"), "📊 Bưu chính chuyển phát - Cảnh báo"
+            
+    elif pathname == "/hcc":
+        try:
+            from pages.service_overview import create_service_page_layout
+            return create_service_page_layout("HCC"), "🏢 Hành chính công"
+        except ImportError:
+            return html.Div("Trang Hành chính công đang được xây dựng...", className="empty-state-container"), "🏢 Hành chính công"
+            
+    elif pathname == "/tcbc":
+        try:
+            from pages.service_overview import create_service_page_layout
+            return create_service_page_layout("TCBC"), "💰 Tài chính Bưu chính"
+        except ImportError:
+            return html.Div("Trang Tài chính Bưu chính đang được xây dựng...", className="empty-state-container"), "💰 Tài chính Bưu chính"
+            
+    elif pathname == "/ppbl":
+        try:
+            from pages.service_overview import create_service_page_layout
+            return create_service_page_layout("PPBL"), "🛍️ Phân phối bán lẻ"
+        except ImportError:
+            return html.Div("Trang Phân phối bán lẻ đang được xây dựng...", className="empty-state-container"), "🛍️ Phân phối bán lẻ"
+            
+    elif pathname == "/import":
+        return create_import_page_layout(), "📥 Nhập dữ liệu hệ thống"
+        
+    return html.Div([
+        html.Div("⚠️", className="empty-state-icon"),
+        html.Div("Trang không tồn tại", className="empty-state-title"),
+        html.Div("Đường dẫn bạn truy cập không hợp lệ. Vui lòng chọn dịch vụ ở menu bên trái.", className="empty-state-desc")
+    ], className="empty-state-container"), "⚠️ Trang không tồn tại"
 
 # --------------------------------------------------------------------------
 # CALLBACK XỬ LÝ ĐĂNG NHẬP / ĐĂNG XUẤT
@@ -291,6 +358,8 @@ register_customer_callbacks(app)
 register_import_callbacks(app)
 register_charts_callbacks(app)
 register_alerts_callbacks(app)
+register_global_callbacks(app)
+register_service_callbacks(app)
 
 # --------------------------------------------------------------------------
 # CHẠY ỨNG DỤNG
