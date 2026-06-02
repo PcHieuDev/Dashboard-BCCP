@@ -14,6 +14,9 @@ def create_import_page_layout():
         html.Div: Layout trang nhập liệu.
     """
     return html.Div([
+        # Store để lưu trạng thái nạp dữ liệu (phục vụ cập nhật bảng lịch sử không gây crash JS)
+        dcc.Store(id='import-status-store', data=0),
+        
         html.Div("📥 Nhập dữ liệu mới vào hệ thống", className="section-header"),
         
         dbc.Row([

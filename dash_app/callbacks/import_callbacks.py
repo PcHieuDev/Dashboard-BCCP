@@ -33,9 +33,10 @@ def get_import_history_layout():
         
     conn = sqlite3.connect(str(DB_PATH))
     try:
-        # Tăng giới hạn lên 50 dòng gần nhất
+        # Tăng giới hạn lên 50 dòng gần nhất, chuyển đổi created_at sang giờ địa phương (localtime)
+        # Sử dụng alias created_at_local để tránh xung đột với tên cột gốc của bảng
         df_hist = pd.read_sql_query(
-            "SELECT id, file_name, so_dong_import, created_at, trang_thai, ghi_chu FROM import_log ORDER BY created_at DESC LIMIT 50",
+            "SELECT id, file_name, so_dong_import, datetime(created_at, 'localtime') as created_at_local, trang_thai, ghi_chu FROM import_log ORDER BY created_at DESC LIMIT 50",
             conn
         )
     except Exception as e:
@@ -48,7 +49,7 @@ def get_import_history_layout():
         
     columns = [
         {"name": "File", "id": "file_name"},
-        {"name": "Thời gian nhập", "id": "created_at"},
+        {"name": "Thời gian nhập", "id": "created_at_local"},
         {"name": "Số dòng đã nhập", "id": "so_dong_import"},
         {"name": "Trạng thái", "id": "trang_thai"},
         {"name": "Ghi chú/Cảnh báo", "id": "ghi_chu"}
@@ -82,7 +83,7 @@ def get_import_history_layout():
         return str(val)
         
     df_hist['trang_thai'] = df_hist['trang_thai'].apply(format_trang_thai)
-    df_hist['created_at'] = df_hist['created_at'].apply(format_time)
+    df_hist['created_at_local'] = df_hist['created_at_local'].apply(format_time)
     df_hist['so_dong_import'] = df_hist['so_dong_import'].apply(lambda x: f"{x:,}" if pd.notna(x) else '0')
     
     table = dash_table.DataTable(
@@ -195,13 +196,13 @@ def register_import_callbacks(app):
             ])
         return ""
 
-    # 2. Callback hiển thị lịch sử nhập liệu (lắng nghe URL pathname hoặc sau khi nạp xong)
+    # 2. Callback hiển thị lịch sử nhập liệu (lắng nghe URL pathname hoặc sau khi nạp xong qua Store)
     @app.callback(
         Output('import-history-container', 'children'),
         [Input('url', 'pathname'),
-         Input('upload-status-message', 'children')]
+         Input('import-status-store', 'data')]
     )
-    def render_import_history(pathname, upload_msg):
+    def render_import_history(pathname, import_status):
         if pathname != "/import":
             return dash.no_update
         return get_import_history_layout()
@@ -245,7 +246,8 @@ def register_import_callbacks(app):
     @app.callback(
         [Output('upload-status-message', 'children'),
          Output('upload-data', 'contents'),
-         Output('upload-data', 'filename')],
+         Output('upload-data', 'filename'),
+         Output('import-status-store', 'data')],
         [Input('btn-confirm-upload', 'n_clicks')],
         [State('upload-data', 'contents'),
          State('upload-data', 'filename'),
@@ -255,11 +257,11 @@ def register_import_callbacks(app):
         # Kiểm tra xem trigger có phải từ việc click nút hay không và có file hay không
         ctx = dash.callback_context
         if not ctx.triggered:
-            return dash.no_update, dash.no_update, dash.no_update
+            return dash.no_update, dash.no_update, dash.no_update, dash.no_update
             
         trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
         if trigger_id != 'btn-confirm-upload' or n_clicks is None or not contents:
-            return dash.no_update, dash.no_update, dash.no_update
+            return dash.no_update, dash.no_update, dash.no_update, dash.no_update
             
         content_type, content_string = contents.split(',')
         decoded = base64.b64decode(content_string)
@@ -313,7 +315,7 @@ def register_import_callbacks(app):
                 msg += f" (Bỏ qua/Cập nhật {skipped:,} dòng)."
             if warnings:
                 msg += f" (Cảnh báo: {', '.join(warnings[:5])})"
-            return dbc.Alert(msg, color="success", dismissible=True), None, None
+            return dbc.Alert(msg, color="success", dismissable=True), None, None, int(datetime.now().timestamp())
                 
         except Exception as e:
             # Đảm bảo xóa file tạm nếu có lỗi xảy ra
@@ -321,7 +323,7 @@ def register_import_callbacks(app):
                 Path(tmp_path).unlink()
             except Exception:
                 pass
-            return dbc.Alert(f"❌ Lỗi hệ thống khi xử lý file: {str(e)}", color="danger", dismissible=True), None, None
+            return dbc.Alert(f"❌ Lỗi hệ thống khi xử lý file: {str(e)}", color="danger", dismissable=True), None, None, int(datetime.now().timestamp())
 
     # 5. Callback xử lý kéo thả tải file CSV mapping mới
     @app.callback(
@@ -423,12 +425,12 @@ def register_import_callbacks(app):
                 match = re.search(r"Đồng bộ thành công (\d+) sản phẩm", res.stdout)
                 num_svcs = match.group(1) if match else "các"
                 
-                return dbc.Alert(f"✅ Đồng bộ thành công! Đã cập nhật {num_svcs} dịch vụ vào danh mục.", color="success", dismissible=True)
+                return dbc.Alert(f"✅ Đồng bộ thành công! Đã cập nhật {num_svcs} dịch vụ vào danh mục.", color="success", dismissable=True)
             else:
                 stderr_msg = res.stderr.strip() if res.stderr else "Lỗi không xác định."
-                return dbc.Alert(f"❌ Lỗi đồng bộ: {stderr_msg}", color="danger", dismissible=True)
+                return dbc.Alert(f"❌ Lỗi đồng bộ: {stderr_msg}", color="danger", dismissable=True)
                 
         except subprocess.TimeoutExpired:
-            return dbc.Alert("❌ Lỗi: Quá trình đồng bộ danh mục bị quá thời gian chờ (timeout > 30s)!", color="danger", dismissible=True)
+            return dbc.Alert("❌ Lỗi: Quá trình đồng bộ danh mục bị quá thời gian chờ (timeout > 30s)!", color="danger", dismissable=True)
         except Exception as e:
-            return dbc.Alert(f"❌ Lỗi thực thi đồng bộ: {str(e)}", color="danger", dismissible=True)
+            return dbc.Alert(f"❌ Lỗi thực thi đồng bộ: {str(e)}", color="danger", dismissable=True)
