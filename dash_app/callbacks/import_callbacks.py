@@ -68,6 +68,20 @@ def get_import_history_layout():
             except Exception:
                 return str(x)
                 
+    # Định dạng trạng thái hiển thị bằng tiếng Việt trực quan
+    def format_trang_thai(val):
+        if not val:
+            return ""
+        val_upper = str(val).upper()
+        if "SUCCESS" in val_upper:
+            if "WARNING" in val_upper:
+                return "Thành công (Cảnh báo)"
+            return "Thành công"
+        if "FAIL" in val_upper or "ERROR" in val_upper:
+            return "Thất bại/Lỗi"
+        return str(val)
+        
+    df_hist['trang_thai'] = df_hist['trang_thai'].apply(format_trang_thai)
     df_hist['created_at'] = df_hist['created_at'].apply(format_time)
     df_hist['so_dong_import'] = df_hist['so_dong_import'].apply(lambda x: f"{x:,}" if pd.notna(x) else '0')
     
@@ -106,7 +120,7 @@ def get_import_history_layout():
             },
             {
                 'if': {
-                    'filter_query': '{trang_thai} contains "Thành công" || {trang_thai} contains "thành công"',
+                    'filter_query': '{trang_thai} contains "Thành công"',
                     'column_id': 'trang_thai'
                 },
                 'color': '#059669',
@@ -114,7 +128,15 @@ def get_import_history_layout():
             },
             {
                 'if': {
-                    'filter_query': '{trang_thai} contains "Lỗi" || {trang_thai} contains "Thất bại" || {trang_thai} contains "lỗi" || {trang_thai} contains "thất bại"',
+                    'filter_query': '{trang_thai} contains "Thất bại"',
+                    'column_id': 'trang_thai'
+                },
+                'color': '#DC2626',
+                'fontWeight': 'bold'
+            },
+            {
+                'if': {
+                    'filter_query': '{trang_thai} contains "Lỗi"',
                     'column_id': 'trang_thai'
                 },
                 'color': '#DC2626',
@@ -142,6 +164,18 @@ def register_import_callbacks(app):
                 html.Span("Chấp nhận file Excel RAW (từ CAS) hoặc file mẫu điền tay. Yêu cầu các cột tối thiểu: "),
                 html.Code("STT, CMS, Ma_HD, Buu_Cuc, San_Pham, Ngay_CN, San_Luong, Cuoc_TT_Tong.")
             ])
+        elif service_type == "PHBC":
+            return dbc.Alert([
+                html.Strong("📰 Phát hành báo chí (PHBC)"),
+                html.Br(),
+                "Yêu cầu các cột: ",
+                html.Code("ma_buu_cuc"), ", ",
+                html.Code("thang_du_lieu"), " (số 1-12), ",
+                html.Code("nam_du_lieu"), ", ",
+                html.Code("doanh_thu"),
+                html.Br(),
+                html.Small("Dữ liệu sẽ được nạp vào bảng transactions_phbc.")
+            ], color="warning", className="mt-2")
         elif service_type in ["HCC", "TCBC", "PPBL"]:
             service_names = {
                 "HCC": "Hành chính công (Chi trả lương hưu, BHXH, BTXH, CSHT, ...)",
@@ -245,6 +279,10 @@ def register_import_callbacks(app):
             if service_type == "BCCP":
                 res = import_any_excel_file(str(DB_PATH), tmp_path)
                 table_name = "Bưu chính chuyển phát (transactions)"
+            elif service_type == "PHBC":
+                from etl.importer import import_phbc_excel
+                res = import_phbc_excel(str(DB_PATH), tmp_path)
+                table_name = "Phát hành báo chí (transactions_phbc)"
             elif service_type in ["HCC", "TCBC", "PPBL"]:
                 from etl.importer import import_service_excel
                 res = import_service_excel(str(DB_PATH), tmp_path, service_type)
@@ -284,3 +322,113 @@ def register_import_callbacks(app):
             except Exception:
                 pass
             return dbc.Alert(f"❌ Lỗi hệ thống khi xử lý file: {str(e)}", color="danger", dismissible=True), None, None
+
+    # 5. Callback xử lý kéo thả tải file CSV mapping mới
+    @app.callback(
+        [Output("csv-file-info", "children"),
+         Output("btn-sync-mapping", "disabled")],
+        [Input("upload-csv-mapping", "contents")],
+        [State("upload-csv-mapping", "filename")],
+        prevent_initial_call=True
+    )
+    def process_csv_upload(contents, filename):
+        if contents is None:
+            return "", True
+            
+        if not filename.lower().endswith('.csv'):
+            return dbc.Alert("❌ Chỉ chấp nhận tệp định dạng CSV (.csv)!", color="danger"), True
+            
+        try:
+            content_type, content_string = contents.split(',')
+            decoded = base64.b64decode(content_string)
+            
+            # Đọc thử file CSV để kiểm tra cấu trúc cột
+            import io
+            df_test = None
+            for enc in ["utf-8-sig", "utf-8", "cp1252", "latin-1"]:
+                try:
+                    df_test = pd.read_csv(io.BytesIO(decoded), encoding=enc)
+                    break
+                except Exception:
+                    continue
+                    
+            if df_test is None:
+                return dbc.Alert("❌ Không thể đọc tệp CSV. Vui lòng kiểm tra mã hóa (encoding)!", color="danger"), True
+                
+            # Chuẩn hóa tên cột
+            df_test.columns = [c.strip().lower() for c in df_test.columns]
+            
+            if "nhom_chinh" not in df_test.columns:
+                return dbc.Alert("❌ Tệp CSV thiếu cột bắt buộc 'nhom_chinh' làm cột đầu tiên!", color="danger"), True
+                
+            # Ghi đè vào data/mapping-spdv.csv
+            dest_path = project_root / "data" / "mapping-spdv.csv"
+            with open(dest_path, "wb") as f:
+                f.write(decoded)
+                
+            num_rows = len(df_test)
+            success_msg = html.Div([
+                html.Span(f"✅ Đã tải lên: ", style={"fontWeight": "bold"}),
+                html.Span(f"{filename} ({num_rows} dòng). Sẵn sàng đồng bộ.", style={"color": "#0F766E", "fontWeight": "bold"})
+            ], style={
+                'padding': '8px 12px', 
+                'backgroundColor': '#F0FDFA', 
+                'border': '1px solid #CCFBF1', 
+                'borderRadius': '6px',
+                'fontSize': '13px'
+            })
+            
+            return success_msg, False
+        except Exception as e:
+            return dbc.Alert(f"❌ Lỗi xử lý tệp: {str(e)}", color="danger"), True
+
+    # 6. Callback bấm nút "Đồng bộ danh mục Dịch vụ"
+    @app.callback(
+        Output("sync-status-message", "children"),
+        [Input("btn-sync-mapping", "n_clicks")],
+        prevent_initial_call=True
+    )
+    def process_sync_mapping(n_clicks):
+        if n_clicks is None:
+            return dash.no_update
+            
+        import subprocess
+        import sys
+        
+        script_path = str(project_root / "scripts" / "sync_mappings.py")
+        try:
+            # Chạy đồng bộ qua subprocess
+            res = subprocess.run(
+                [sys.executable, script_path],
+                capture_output=True,
+                text=True,
+                cwd=str(project_root),
+                timeout=30
+            )
+            
+            if res.returncode == 0:
+                # Xóa cache query
+                from callbacks.utils import clear_query_cache
+                from db.connection import clear_db_cache
+                try:
+                    from analytics.global_metrics import clear_global_metrics_cache
+                    clear_global_metrics_cache()
+                except Exception:
+                    pass
+                clear_query_cache()
+                clear_db_cache()
+                
+                # Tìm số lượng dịch vụ đã đồng bộ trong stdout
+                import re
+                match = re.search(r"Đồng bộ thành công (\d+) sản phẩm", res.stdout)
+                num_svcs = match.group(1) if match else "các"
+                
+                return dbc.Alert(f"✅ Đồng bộ thành công! Đã cập nhật {num_svcs} dịch vụ vào danh mục.", color="success", dismissible=True)
+            else:
+                stderr_msg = res.stderr.strip() if res.stderr else "Lỗi không xác định."
+                return dbc.Alert(f"❌ Lỗi đồng bộ: {stderr_msg}", color="danger", dismissible=True)
+                
+        except subprocess.TimeoutExpired:
+            return dbc.Alert("❌ Lỗi: Quá trình đồng bộ danh mục bị quá thời gian chờ (timeout > 30s)!", color="danger", dismissible=True)
+        except Exception as e:
+            return dbc.Alert(f"❌ Lỗi thực thi đồng bộ: {str(e)}", color="danger", dismissible=True)

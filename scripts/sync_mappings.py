@@ -53,8 +53,37 @@ def sync_spdv(conn):
     if "ghi_chu" not in df.columns:
         df["ghi_chu"] = None
 
-    # Ghi vào cả dim_dichvu mới và dim_spdv cũ
+    # 1. Tự động backup bảng dim_dichvu hiện tại ra file CSV
+    import datetime
+    try:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_dir = MAPPING_PATH.parent
+        backup_file = backup_dir / f"dim_dichvu_backup_{timestamp}.csv"
+        
+        # Đọc dữ liệu hiện tại
+        df_backup = pd.read_sql_query("SELECT * FROM dim_dichvu", conn)
+        df_backup.to_csv(backup_file, index=False, encoding="utf-8-sig")
+        print(f"💾 Đã tạo file backup bảng dim_dichvu tại: {backup_file}")
+    except Exception as e:
+        print(f"⚠️ Cảnh báo: Không thể backup bảng dim_dichvu: {e}")
+
     cursor = conn.cursor()
+
+    # 2. Xóa các dòng BCCP và mã HCC (HCC001-HCC004) để thực hiện nạp mới (TRUNCATE)
+    # Giữ lại các dòng seed data cho HCC (không phải dạng mã HCC001...), TCBC, PPBL
+    try:
+        cursor.execute("""
+            DELETE FROM dim_dichvu 
+            WHERE nhom_chinh = 'BCCP' AND ma_dich_vu != 'PHBC_DEFAULT'
+               OR (nhom_chinh = 'HCC' AND ma_dich_vu LIKE 'HCC%')
+        """)
+        conn.commit()
+        print("🧹 Đã làm sạch các dòng BCCP và mã HCC cũ trong bảng dim_dichvu.")
+    except Exception as e:
+        print(f"❌ Lỗi khi làm sạch dữ liệu cũ trong dim_dichvu: {e}")
+        return 0
+
+    # 3. Ghi vào cả dim_dichvu mới và dim_spdv cũ
     rows_synced = 0
     for _, row in df.iterrows():
         ma_spdv = str(row["ma_spdv"]).strip()
@@ -143,8 +172,10 @@ def clear_caches():
     try:
         from callbacks.utils import clear_query_cache
         from db.connection import clear_db_cache
+        from analytics.global_metrics import clear_global_metrics_cache
         clear_query_cache()
         clear_db_cache()
+        clear_global_metrics_cache()
         print("🧹 Đã làm sạch bộ nhớ cache của Dashboard.")
     except Exception:
         # Nếu đang chạy độc lập ngoài app thì bỏ qua cache clear

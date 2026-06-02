@@ -61,7 +61,6 @@ def create_revenue_detail_layout():
         dbc.Row([
             dbc.Col([
                 dbc.Button("📥 Xuất Excel", id="revenue-btn-export-excel", color="success", className="me-2", size="sm"),
-                dbc.Button("📄 Xuất PDF", id="revenue-btn-export-pdf", color="danger", size="sm"),
                 dcc.Download(id="revenue-download")
             ], width=12, style={"textAlign": "right"})
         ], style={"marginBottom": "15px"}),

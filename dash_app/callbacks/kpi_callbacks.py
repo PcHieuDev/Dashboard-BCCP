@@ -7,6 +7,7 @@ import sqlite3
 import pandas as pd
 import dash
 from dash import Output, Input, html
+
 import sys
 from pathlib import Path
 
@@ -24,33 +25,46 @@ from callbacks.utils import (
     resolve_filters_and_query
 )
 
+def _get_phbc_revenue(db_path, year, month):
+    """Query doanh thu PHBC từ bảng transactions_phbc. Trả về 0 nếu bảng chưa tồn tại."""
+    try:
+        if not year or not month: return 0.0
+        conn = sqlite3.connect(str(db_path))
+        thang = f"T{month:02d}"
+        df = pd.read_sql_query(
+            "SELECT SUM(doanh_thu) as dt FROM transactions_phbc WHERE nam_du_lieu=? AND thang_du_lieu=?",
+            conn, params=[year, thang]
+        )
+        conn.close()
+        return float(df.iloc[0]['dt'] or 0)
+    except Exception:
+        return 0.0
+
 def register_kpi_callbacks(app):
     """
     Đăng ký callback cập nhật 7 thẻ KPI với ứng dụng Dash.
     """
     
+
+    # ── Callback: Cards chi tiết cấu phần BCCP + Khách hàng ──────────────
     @app.callback(
-        [# Card 1: Tổng Doanh thu
-         Output("kpi-tong-value", "children"), Output("kpi-tong-sparkline", "children"),
-         Output("kpi-tong-delta-prev", "children"), Output("kpi-tong-delta-yoy", "children"),
-         # Card 2: Doanh thu BCCP
-         Output("kpi-bccp-value", "children"), Output("kpi-bccp-sparkline", "children"),
-         Output("kpi-bccp-delta-prev", "children"), Output("kpi-bccp-delta-yoy", "children"),
-         # Output 3: Doanh thu Hành chính công
-         Output("kpi-hcc-value", "children"), Output("kpi-hcc-sparkline", "children"),
-         Output("kpi-hcc-delta-prev", "children"), Output("kpi-hcc-delta-yoy", "children"),
-         # Card 4: Bưu chính Truyền thống
+
+        [# Card: Phát hành báo chí
+         Output("kpi-phbc-value", "children"), Output("kpi-phbc-sparkline", "children"),
+         Output("kpi-phbc-delta-prev", "children"), Output("kpi-phbc-delta-yoy", "children"),
+         # Card: Bưu chính Truyền thống
          Output("kpi-tt-value", "children"), Output("kpi-tt-sparkline", "children"),
          Output("kpi-tt-delta-prev", "children"), Output("kpi-tt-delta-yoy", "children"),
-         # Card 5: Bưu chính TMĐT
+         # Card: Bưu chính TMĐT
          Output("kpi-tmdt-value", "children"), Output("kpi-tmdt-sparkline", "children"),
          Output("kpi-tmdt-delta-prev", "children"), Output("kpi-tmdt-delta-yoy", "children"),
-         # Card 6: Bưu chính Quốc tế
+         # Card: Bưu chính Quốc tế
          Output("kpi-qt-value", "children"), Output("kpi-qt-sparkline", "children"),
          Output("kpi-qt-delta-prev", "children"), Output("kpi-qt-delta-yoy", "children"),
-         # Card 7: Khách hàng
+         # Card: Khách hàng
          Output("kpi-kh-value", "children"), Output("kpi-kh-sparkline", "children"),
          Output("kpi-kh-delta-prev", "children"), Output("kpi-kh-delta-yoy", "children")],
+
         [Input("tabs-navigation", "value"),
          Input("sidebar-year", "value"),
          Input("sidebar-period", "value"),
@@ -60,7 +74,6 @@ def register_kpi_callbacks(app):
          Input("sidebar-month-select", "value"),
          Input("sidebar-compare-mode", "value"),
          Input("sidebar-nhom-dv", "value"),
-         Input("sidebar-spdv", "value"),
          Input("sidebar-cum", "value"),
          Input("sidebar-bdx", "value"),
          Input("sidebar-buu-cuc", "value"),
@@ -68,10 +81,12 @@ def register_kpi_callbacks(app):
          Input("sidebar-hop-dong", "value")]
     )
     def update_kpi_cards(tab_val, year, period, start_date, end_date, week_idx, month_val, compare_mode,
-                         nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong):
+                         nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         # Chỉ xử lý khi đang ở Tab Tổng quan KPI
-        if tab_val != "tab-kpi":
-            return [dash.no_update] * 28
+        if tab_val != "tab-kpi" or tab_val is None:
+            return [dash.no_update] * 20
+
+        spdv = None
 
         # Chuẩn hóa compare_mode từ list thành string để tương thích ngược với trang KPI cũ
         if isinstance(compare_mode, (list, tuple)):
@@ -177,15 +192,19 @@ def register_kpi_callbacks(app):
         tot_prev = df_prev['cuoc_tt_tong'].sum() if not df_prev.empty else 0.0
         tot_yoy = df_yoy['cuoc_tt_tong'].sum() if not df_yoy.empty else 0.0
         
-        # 2. Doanh thu Hành chính công
-        hcc_cur = get_revenue_by_nhom(df_cur, 'Hành chính công')
-        hcc_prev = get_revenue_by_nhom(df_prev, 'Hành chính công')
-        hcc_yoy = get_revenue_by_nhom(df_yoy, 'Hành chính công')
+        # 2. Doanh thu PHBC
+        pyear = year - 1 if year and month_val == 1 else year
+        pmonth = 12 if month_val == 1 else (month_val - 1 if month_val else None)
+        yoy_year = year - 1 if year else None
         
-        # 3. Doanh thu BCCP = Tổng - HCC
-        bccp_cur = tot_cur - hcc_cur
-        bccp_prev = tot_prev - hcc_prev
-        bccp_yoy = tot_yoy - hcc_yoy
+        phbc_cur = _get_phbc_revenue(DB_PATH, year, month_val)
+        phbc_prev = _get_phbc_revenue(DB_PATH, pyear, pmonth)
+        phbc_yoy = _get_phbc_revenue(DB_PATH, yoy_year, month_val)
+        
+        # 3. Doanh thu BCCP = Tổng
+        bccp_cur = tot_cur
+        bccp_prev = tot_prev
+        bccp_yoy = tot_yoy
         
         # 4. Các cấu phần BCCP
         tt_cur = get_revenue_by_nhom(df_cur, 'Truyền thống')
@@ -218,8 +237,8 @@ def register_kpi_callbacks(app):
             return filtered.sort_values('ngay')[metric].tolist()
 
         y_tot = get_trend_series(df_trend)
-        y_bccp = get_trend_series(df_trend[df_trend['nhom_dv'] != 'Hành chính công']) if not df_trend.empty and 'nhom_dv' in df_trend.columns else []
-        y_hcc = get_trend_series(df_trend, 'Hành chính công')
+        y_bccp = get_trend_series(df_trend)
+        y_phbc = []
         y_tt = get_trend_series(df_trend, 'Truyền thống')
         y_tmdt = get_trend_series(df_trend, 'TMĐT')
         y_qt = get_trend_series(df_trend, 'Quốc tế')
@@ -259,21 +278,18 @@ def register_kpi_callbacks(app):
                 
             return display_now, spark_svg, delta_p_div, delta_y_div
 
-        # Render output cho từng thẻ KPI
-        tong_n, tong_s, tong_p, tong_y = render_card_outputs(tot_cur, tot_prev, tot_yoy, y_tot, "#3B82F6")
-        bccp_n, bccp_s, bccp_p, bccp_y = render_card_outputs(bccp_cur, bccp_prev, bccp_yoy, y_bccp, "#10B981")
-        hcc_n, hcc_s, hcc_p, hcc_y = render_card_outputs(hcc_cur, hcc_prev, hcc_yoy, y_hcc, "#F59E0B")
-        tt_n, tt_s, tt_p, tt_y = render_card_outputs(tt_cur, tt_prev, tt_yoy, y_tt, "#64748B")
+        # Render output cho các thẻ KPI chi tiết
+        phbc_n, phbc_s, phbc_p, phbc_y = render_card_outputs(phbc_cur, phbc_prev, phbc_yoy, y_phbc, "#F97316")
+        tt_n, tt_s, tt_p, tt_y     = render_card_outputs(tt_cur,   tt_prev,   tt_yoy,   y_tt,   "#64748B")
         tmdt_n, tmdt_s, tmdt_p, tmdt_y = render_card_outputs(tmdt_cur, tmdt_prev, tmdt_yoy, y_tmdt, "#8B5CF6")
-        qt_n, qt_s, qt_p, qt_y = render_card_outputs(qt_cur, qt_prev, qt_yoy, y_qt, "#0EA5E9")
-        kh_n, kh_s, kh_p, kh_y = render_card_outputs(kh_cur, kh_prev, kh_yoy, y_kh, "#14B8A6", is_count_card=True)
-        
+        qt_n, qt_s, qt_p, qt_y     = render_card_outputs(qt_cur,   qt_prev,   qt_yoy,   y_qt,   "#0EA5E9")
+        kh_n, kh_s, kh_p, kh_y    = render_card_outputs(kh_cur,   kh_prev,   kh_yoy,   y_kh,   "#14B8A6", is_count_card=True)
+
         return [
-            tong_n, tong_s, tong_p, tong_y,
-            bccp_n, bccp_s, bccp_p, bccp_y,
-            hcc_n, hcc_s, hcc_p, hcc_y,
-            tt_n, tt_s, tt_p, tt_y,
+            phbc_n, phbc_s, phbc_p, phbc_y,
+            tt_n,   tt_s,   tt_p,   tt_y,
             tmdt_n, tmdt_s, tmdt_p, tmdt_y,
-            qt_n, qt_s, qt_p, qt_y,
-            kh_n, kh_s, kh_p, kh_y
+            qt_n,   qt_s,   qt_p,   qt_y,
+            kh_n,   kh_s,   kh_p,   kh_y,
         ]
+

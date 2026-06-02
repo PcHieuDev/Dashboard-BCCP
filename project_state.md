@@ -105,7 +105,22 @@ E:\OneDrive\z.Database-TTKD\
    - `[x]` TIP-009 -> TIP-011 (Analytics, Global Overview, Service Page) ✅
    - `[x]` TIP-012 & TIP-013 (Import & Alerts Mở rộng) ✅
    - `[x]` TIP-014 (Kiểm thử liên thông & Nghiệm thu) ✅
-8. **[IN PROGRESS] Phase 6**: Chờ yêu cầu tính năng mới từ người dùng.
+8. **[DONE ✅] Phase 6 — Bug Fix & UI Nâng cấp**: VERIFY PASS (02/06/2026)
+9. **[DONE ✅] Phase 7 — Routing Fix + Sidebar Filter + PHBC**:
+   - **Trạng thái**: Đã thi công hoàn tất TIP-006 đến TIP-010.
+   - [x] TIP-006 (P0): Fix `sync_url_to_tabs_navigation` default → `None` (routing bug)
+   - [x] TIP-007 (P0): Sidebar filter ẩn/hiện nhóm bộ lọc BCCP theo URL
+   - [x] TIP-009 (P1): Tạo bảng `transactions_phbc` + hàm `import_phbc_excel`
+   - [x] TIP-008 (P1): Thay HCC card → PHBC card trong `/bccp` KPI
+   - [x] TIP-010 (P1): Import UI thêm option PHBC
+
+   - TIP-001 (DONE): ETL — CSV nhom_chinh + sync_mappings backup
+   - TIP-002 (DONE): Backend — Fix ten_cum + cache 5p + format "-"
+   - TIP-003 (DONE): Frontend — Trang chủ DataTable YTD 4 màu
+   - TIP-004 (DONE): Frontend — HCC Revenue + Routing /bccp + Xóa PDF
+   - TIP-005 (DONE): Frontend — Import UI (Upload CSV + nút Đồng bộ)
+   - FIX-001 (DONE): Fix ten_Cum (case) còn sót trong global/alerts/service callbacks
+
 
 ## Issues & Notes
 - **[SỬA LỖI QA REPORT - 2026-06-02]**: Khắc phục triệt để 3 lỗi trong báo cáo nghiệm thu QA:

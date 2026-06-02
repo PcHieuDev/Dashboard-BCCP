@@ -108,7 +108,8 @@ def render_revenue_datatable(df, groupby_cols, compare_opt):
             continue
         if 'pct_change' in col:
             # Định dạng phần trăm (+12.3% hoặc -4.5%)
-            df_display[col] = df_display[col].apply(lambda x: f"{x:+.1f}%" if pd.notna(x) and x != 0 else "-")
+            import numpy as np
+            df_display[col] = df_display[col].apply(lambda x: f"{x:+.1f}%" if pd.notna(x) and x != 0 and np.isfinite(x) else "-")
         elif col in ('san_luong', 'san_luong_prev', 'san_luong_yoy', 'so_kh', 'so_kh_prev', 'so_kh_yoy'):
             # Định dạng số nguyên
             df_display[col] = df_display[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "0")

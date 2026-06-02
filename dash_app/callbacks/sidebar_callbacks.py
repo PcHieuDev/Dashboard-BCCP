@@ -144,7 +144,8 @@ def register_sidebar_callbacks(app):
          Output("nav-tcbc-overview", "className"),
          Output("nav-tcbc-revenue", "className"),
          Output("nav-ppbl-overview", "className"),
-         Output("nav-ppbl-revenue", "className")],
+         Output("nav-ppbl-revenue", "className"),
+         Output("bccp-extra-filters", "style")],
         [Input("url", "pathname")]
     )
     def update_sidebar_state(pathname):
@@ -168,6 +169,8 @@ def register_sidebar_callbacks(app):
         show_filters = (pathname == "/" or pathname == "" or (pathname and pathname.startswith("/bccp")))
         filter_style = {"display": "block"} if show_filters else {"display": "none"}
         
+        bccp_filter_style = {"display": "block"} if (pathname and pathname.startswith("/bccp")) else {"display": "none"}
+        
         # Xác định active accordion item
         active_accordion = "menu-bccp" # Default open BCCP
         if pathname:
@@ -185,7 +188,7 @@ def register_sidebar_callbacks(app):
         # Highlight active menu link
         if not pathname or pathname == "/":
             classes["global"] = "sidebar-menu-item active"
-        elif pathname == "/bccp/kpi":
+        elif pathname == "/bccp":
             classes["bccp-kpi"] = "sidebar-menu-item active active-bccp"
         elif pathname == "/bccp/revenue":
             classes["bccp-rev"] = "sidebar-menu-item active active-bccp"
@@ -197,6 +200,7 @@ def register_sidebar_callbacks(app):
             classes["bccp-alert"] = "sidebar-menu-item active active-bccp"
         elif pathname == "/hcc":
             classes["hcc-over"] = "sidebar-menu-item active active-hcc"
+        elif pathname == "/hcc/revenue":
             classes["hcc-rev"] = "sidebar-menu-item active active-hcc"
         elif pathname == "/tcbc":
             classes["tcbc-over"] = "sidebar-menu-item active active-tcbc"
@@ -219,6 +223,7 @@ def register_sidebar_callbacks(app):
             classes["tcbc-over"],
             classes["tcbc-rev"],
             classes["ppbl-over"],
-            classes["ppbl-rev"]
+            classes["ppbl-rev"],
+            bccp_filter_style
         )
 

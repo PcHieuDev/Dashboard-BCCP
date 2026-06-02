@@ -35,7 +35,6 @@ def register_customer_callbacks(app):
          Input("sidebar-week-select", "value"),
          Input("sidebar-month-select", "value"),
          Input("sidebar-nhom-dv", "value"),
-         Input("sidebar-spdv", "value"),
          Input("sidebar-cum", "value"),
          Input("sidebar-bdx", "value"),
          Input("sidebar-buu-cuc", "value"),
@@ -43,10 +42,11 @@ def register_customer_callbacks(app):
          Input("sidebar-hop-dong", "value")]
     )
     def update_customer_table(tab_val, year, period, start_date, end_date, week_idx, month_val,
-                              nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong):
+                              nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         # Chỉ chạy khi đang ở Tab Chi tiết Khách hàng
-        if tab_val != "tab-customer":
+        if tab_val != "tab-customer" or tab_val is None:
             return dash.no_update
+        spdv = None
             
         # 1. Truy vấn dữ liệu qua Cache
         _, _, _, df = resolve_filters_and_query_customer(
@@ -129,7 +129,6 @@ def register_customer_callbacks(app):
          State("sidebar-week-select", "value"),
          State("sidebar-month-select", "value"),
          State("sidebar-nhom-dv", "value"),
-         State("sidebar-spdv", "value"),
          State("sidebar-cum", "value"),
          State("sidebar-bdx", "value"),
          State("sidebar-buu-cuc", "value"),
@@ -138,10 +137,11 @@ def register_customer_callbacks(app):
         prevent_initial_call=True
     )
     def export_customer_table(n_clicks, tab_val, year, period, start_date, end_date, week_idx, month_val,
-                              nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong):
+                              nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         ctx = dash.callback_context
-        if not ctx.triggered or tab_val != "tab-customer":
+        if not ctx.triggered or tab_val != "tab-customer" or tab_val is None:
             return dash.no_update
+        spdv = None
             
         # 1. Truy vấn toàn bộ dữ liệu
         _, _, _, df = resolve_filters_and_query_customer(

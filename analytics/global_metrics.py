@@ -5,6 +5,7 @@ Hỗ trợ tính toán lũy kế YTD, tỷ lệ hoàn thành kế hoạch, phân
 """
 
 import sys
+import time
 import sqlite3
 import pandas as pd
 from pathlib import Path
@@ -15,6 +16,31 @@ if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 from config.settings import DB_PATH
+
+class TTLDictCache:
+    def __init__(self, ttl=300):
+        self.ttl = ttl
+        self.cache = {}
+    
+    def get(self, key):
+        if key in self.cache:
+            val, expiry = self.cache[key]
+            if expiry > time.time():
+                return val
+            else:
+                del self.cache[key]
+        return None
+    
+    def set(self, key, value):
+        self.cache[key] = (value, time.time() + self.ttl)
+        
+    def clear(self):
+        self.cache.clear()
+
+_revenue_by_cum_cache = TTLDictCache(ttl=300)
+
+def clear_global_metrics_cache():
+    _revenue_by_cum_cache.clear()
 
 def _get_thang_list(thang_den):
     """Tạo danh sách string 'T01', 'T02'... từ 1 đến thang_den"""
@@ -85,11 +111,11 @@ def get_total_revenue_by_service(db_path, nam, thang=None, cum=None):
         sql_tcbc += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_bc"
         sql_ppbl += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_bc"
         
-        where_t.append("b.ten_Cum = :cum")
-        where_hcc_cp.append("b.ten_Cum = :cum")
-        where_hcc_new.append("b.ten_Cum = :cum")
-        where_tcbc.append("b.ten_Cum = :cum")
-        where_ppbl.append("b.ten_Cum = :cum")
+        where_t.append("b.ten_cum = :cum")
+        where_hcc_cp.append("b.ten_cum = :cum")
+        where_hcc_new.append("b.ten_cum = :cum")
+        where_tcbc.append("b.ten_cum = :cum")
+        where_ppbl.append("b.ten_cum = :cum")
         params["cum"] = cum
         
     sql_bccp += " WHERE " + " AND ".join(where_t)
@@ -161,11 +187,11 @@ def get_ytd_revenue(db_path, nam, thang_den, cum=None):
         sql_tcbc += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_bc"
         sql_ppbl += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_bc"
         
-        where_t.append("b.ten_Cum = :cum")
-        where_hcc_cp.append("b.ten_Cum = :cum")
-        where_hcc_new.append("b.ten_Cum = :cum")
-        where_tcbc.append("b.ten_Cum = :cum")
-        where_ppbl.append("b.ten_Cum = :cum")
+        where_t.append("b.ten_cum = :cum")
+        where_hcc_cp.append("b.ten_cum = :cum")
+        where_hcc_new.append("b.ten_cum = :cum")
+        where_tcbc.append("b.ten_cum = :cum")
+        where_ppbl.append("b.ten_cum = :cum")
         params["cum"] = cum
         
     sql_bccp += " WHERE " + " AND ".join(where_t)
@@ -198,7 +224,7 @@ def get_ytd_plan(db_path, nam, thang_den, cum=None):
     
     if cum and cum != "Tất cả":
         sql += " INNER JOIN dim_buucuc b ON plans.ma_buu_cuc = b.ma_bc"
-        where.append("b.ten_Cum = :cum")
+        where.append("b.ten_cum = :cum")
         params["cum"] = cum
         
     sql += " WHERE " + " AND ".join(where) + " GROUP BY nhom_dich_vu"
@@ -231,11 +257,11 @@ def get_ytd_completion_rate(db_path, nam, thang_den, cum=None):
     
     rate = {}
     for k in rev:
-        p_val = plan.get(k, 0.0)
-        if p_val > 0:
+        p_val = plan.get(k)
+        if p_val is not None and p_val > 0:
             rate[k] = (rev[k] * 100.0 / p_val)
         else:
-            rate[k] = 0.0
+            rate[k] = "-"
             
     return rate
 
@@ -244,14 +270,20 @@ def get_revenue_by_cum(db_path, nam, thang=None):
     Lấy doanh thu phân rã theo Cụm cho cả 4 nhóm dịch vụ.
     Trả về DataFrame có cấu trúc:
     Cụm | BCCP | HCC | TCBC | PPBL | Tổng cộng
+    Sử dụng in-memory TTL caching.
     """
+    key = (str(db_path), nam, thang)
+    cached_df = _revenue_by_cum_cache.get(key)
+    if cached_df is not None:
+        return cached_df.copy()
+
     thang_str = f"T{thang:02d}" if thang else None
     
     # Khởi tạo bảng Cụm từ danh mục địa lý để đảm bảo đủ 18 cụm
     conn = sqlite3.connect(str(db_path))
     try:
-        df_cums = pd.read_sql_query("SELECT DISTINCT ten_Cum FROM dim_buucuc WHERE ten_Cum IS NOT NULL ORDER BY ten_Cum", conn)
-        cums = df_cums["ten_Cum"].tolist()
+        df_cums = pd.read_sql_query("SELECT DISTINCT ten_cum FROM dim_buucuc WHERE ten_cum IS NOT NULL ORDER BY ten_cum", conn)
+        cums = df_cums["ten_cum"].tolist()
     except Exception as e:
         print(f"Lỗi load danh mục Cụm: {e}")
         cums = []
@@ -263,7 +295,7 @@ def get_revenue_by_cum(db_path, nam, thang=None):
     
     # Truy vấn doanh thu BCCP & HCC chuyển phát từ transactions
     sql_trans = """
-        SELECT b.ten_Cum, d.nhom_chinh, SUM(t.cuoc_tt_tong) as dt
+        SELECT b.ten_cum, d.nhom_chinh, SUM(t.cuoc_tt_tong) as dt
         FROM transactions t
         INNER JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
         INNER JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
@@ -273,14 +305,14 @@ def get_revenue_by_cum(db_path, nam, thang=None):
     if thang_str:
         sql_trans += " AND t.thang_du_lieu = :thang"
         params["thang"] = thang_str
-    sql_trans += " GROUP BY b.ten_Cum, d.nhom_chinh"
+    sql_trans += " GROUP BY b.ten_cum, d.nhom_chinh"
     
     conn = sqlite3.connect(str(db_path))
     try:
         # 1. Điền BCCP & HCC (chuyển phát)
         df_trans = pd.read_sql_query(sql_trans, conn, params=params)
         for _, row in df_trans.iterrows():
-            c = row["ten_Cum"]
+            c = row["ten_cum"]
             nc = row["nhom_chinh"]
             val = row["dt"] or 0.0
             if c in cum_data and nc in ["BCCP", "HCC"]:
@@ -288,7 +320,7 @@ def get_revenue_by_cum(db_path, nam, thang=None):
                 
         # 2. Điền HCC mới
         sql_hcc = """
-            SELECT b.ten_Cum, SUM(t.doanh_thu) as dt
+            SELECT b.ten_cum, SUM(t.doanh_thu) as dt
             FROM transactions_hcc t
             INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_bc
             WHERE t.nam_du_lieu = :nam
@@ -297,18 +329,18 @@ def get_revenue_by_cum(db_path, nam, thang=None):
         if thang_str:
             sql_hcc += " AND t.thang_du_lieu = :thang"
             params_hcc["thang"] = thang_str
-        sql_hcc += " GROUP BY b.ten_Cum"
+        sql_hcc += " GROUP BY b.ten_cum"
         
         df_hcc = pd.read_sql_query(sql_hcc, conn, params=params_hcc)
         for _, row in df_hcc.iterrows():
-            c = row["ten_Cum"]
+            c = row["ten_cum"]
             val = row["dt"] or 0.0
             if c in cum_data:
                 cum_data[c]["HCC"] += val
                 
         # 3. Điền TCBC
         sql_tcbc = """
-            SELECT b.ten_Cum, SUM(t.doanh_thu) as dt
+            SELECT b.ten_cum, SUM(t.doanh_thu) as dt
             FROM transactions_tcbc t
             INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_bc
             WHERE t.nam_du_lieu = :nam
@@ -317,18 +349,18 @@ def get_revenue_by_cum(db_path, nam, thang=None):
         if thang_str:
             sql_tcbc += " AND t.thang_du_lieu = :thang"
             params_tc["thang"] = thang_str
-        sql_tcbc += " GROUP BY b.ten_Cum"
+        sql_tcbc += " GROUP BY b.ten_cum"
         
         df_tc = pd.read_sql_query(sql_tcbc, conn, params=params_tc)
         for _, row in df_tc.iterrows():
-            c = row["ten_Cum"]
+            c = row["ten_cum"]
             val = row["dt"] or 0.0
             if c in cum_data:
                 cum_data[c]["TCBC"] += val
                 
         # 4. Điền PPBL
         sql_ppbl = """
-            SELECT b.ten_Cum, SUM(t.doanh_thu) as dt
+            SELECT b.ten_cum, SUM(t.doanh_thu) as dt
             FROM transactions_ppbl t
             INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_bc
             WHERE t.nam_du_lieu = :nam
@@ -337,11 +369,11 @@ def get_revenue_by_cum(db_path, nam, thang=None):
         if thang_str:
             sql_ppbl += " AND t.thang_du_lieu = :thang"
             params_pp["thang"] = thang_str
-        sql_ppbl += " GROUP BY b.ten_Cum"
+        sql_ppbl += " GROUP BY b.ten_cum"
         
         df_pp = pd.read_sql_query(sql_ppbl, conn, params=params_pp)
         for _, row in df_pp.iterrows():
-            c = row["ten_Cum"]
+            c = row["ten_cum"]
             val = row["dt"] or 0.0
             if c in cum_data:
                 cum_data[c]["PPBL"] += val
@@ -367,4 +399,7 @@ def get_revenue_by_cum(db_path, nam, thang=None):
     df_res = pd.DataFrame(result_rows)
     if df_res.empty:
         df_res = pd.DataFrame(columns=["Cụm", "BCCP", "HCC", "TCBC", "PPBL", "Tổng cộng"])
+        
+    # Lưu vào cache
+    _revenue_by_cum_cache.set(key, df_res)
     return df_res

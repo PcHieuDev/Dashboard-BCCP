@@ -736,3 +736,112 @@ def import_plan_excel(db_path, excel_path):
     except Exception as e:
         logger.error(f"Lỗi khi import Kế hoạch: {e}")
         return {'batch_id': batch_id, 'file': filename, 'thang': 'N/A', 'total_rows': 0, 'inserted': 0, 'skipped': 0, 'warnings': [str(e)]}
+
+def import_phbc_excel(db_path, excel_path, import_batch=None):
+    """
+    Import file Excel dữ liệu Phát hành báo chí (PHBC).
+    """
+    import pandas as pd
+    filename = os.path.basename(excel_path)
+    logger.info(f"Bắt đầu import PHBC: {filename}")
+    
+    batch_id = import_batch or (datetime.now().strftime('%Y%m%d_%H%M%S') + '_PHBC_' + filename)
+    
+    try:
+        engine = "openpyxl" if str(excel_path).endswith(".xlsx") else "xlrd"
+        df = pd.read_excel(excel_path, engine=engine)
+        
+        # Xác định cột dựa vào tên
+        cols = [str(c).lower().strip() for c in df.columns]
+        
+        bc_idx, dt_idx, thang_idx, nam_idx = None, None, None, None
+        
+        for i, c in enumerate(cols):
+            if 'bưu cục' in c or 'buu_cuc' in c or 'buu cuc' in c or 'ma_bc' in c or 'mã bc' in c or 'bc' in c:
+                if bc_idx is None: bc_idx = i
+            if 'doanh thu' in c or 'doanh_thu' in c or 'dt' in c:
+                if dt_idx is None: dt_idx = i
+            if 'tháng' in c or 'thang' in c:
+                if thang_idx is None: thang_idx = i
+            if 'năm' in c or 'nam' in c or 'year' in c:
+                if nam_idx is None: nam_idx = i
+                
+        if None in (bc_idx, dt_idx, thang_idx, nam_idx):
+            warnings = [f"File PHBC thiếu cột. Các cột: {', '.join(df.columns)}"]
+            return {'batch_id': batch_id, 'file': filename, 'thang': 'N/A', 'total_rows': 0, 'inserted': 0, 'skipped': 0, 'warnings': warnings}
+            
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        insert_sql = """
+        INSERT OR REPLACE INTO transactions_phbc 
+        (thang_du_lieu, nam_du_lieu, ma_buu_cuc, doanh_thu, import_batch)
+        VALUES (?, ?, ?, ?, ?)
+        """
+        
+        batch_buffer = []
+        inserted = 0
+        total_rows = 0
+        warnings = []
+        first_thang = "T01"
+        
+        for idx, row in df.iterrows():
+            total_rows += 1
+            bc_val = str(row.iloc[bc_idx]).strip().upper() if pd.notna(row.iloc[bc_idx]) else ""
+            dt_val = _safe_float(row.iloc[dt_idx])
+            thang_val = str(row.iloc[thang_idx]).strip() if pd.notna(row.iloc[thang_idx]) else ""
+            nam_val = _safe_int(row.iloc[nam_idx])
+            
+            if not bc_val:
+                continue
+                
+            if thang_val.startswith("T"):
+                pass
+            else:
+                try:
+                    thang_num = int(float(thang_val))
+                    thang_val = f"T{thang_num:02d}"
+                except ValueError:
+                    warnings.append(f"Dòng {idx+2}: Tháng không hợp lệ ('{thang_val}')")
+                    continue
+                    
+            if total_rows == 1:
+                first_thang = thang_val
+                
+            if nam_val == 0:
+                nam_val = datetime.now().year
+                
+            batch_buffer.append((thang_val, nam_val, bc_val, dt_val, batch_id))
+            
+            if len(batch_buffer) >= BATCH_SIZE:
+                cursor.executemany(insert_sql, batch_buffer)
+                inserted += cursor.rowcount
+                batch_buffer = []
+                
+        if batch_buffer:
+            cursor.executemany(insert_sql, batch_buffer)
+            inserted += cursor.rowcount
+            
+        skipped = total_rows - inserted
+        
+        cursor.execute("""
+            INSERT INTO import_log (batch_id, file_name, thang_du_lieu, 
+                                    so_dong_import, so_dong_trung, trang_thai, ghi_chu)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (batch_id, filename, first_thang, inserted, skipped, 'SUCCESS' if not warnings else 'SUCCESS_WITH_WARNINGS', '; '.join(warnings[:5]) if warnings else None))
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            'batch_id': batch_id,
+            'file': filename,
+            'thang': first_thang,
+            'total_rows': total_rows,
+            'inserted': inserted,
+            'skipped': skipped,
+            'warnings': warnings
+        }
+    except Exception as e:
+        logger.error(f"Lỗi khi import PHBC: {e}")
+        return {'batch_id': batch_id, 'file': filename, 'thang': 'N/A', 'total_rows': 0, 'inserted': 0, 'skipped': 0, 'warnings': [str(e)]}

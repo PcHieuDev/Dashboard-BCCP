@@ -111,12 +111,12 @@ def query_revenue(
         
     # Lọc theo Cụm
     if cum and cum != "Tất cả":
-        query_parts.append("AND b.ten_Cum = ?")
+        query_parts.append("AND b.ten_cum = ?")
         params.append(cum)
         
     # Lọc theo BĐX
     if bdx and bdx != "Tất cả":
-        query_parts.append("AND b.ten_BDX = ?")
+        query_parts.append("AND b.ten_bdx = ?")
         params.append(bdx)
         
     # Lọc theo Bưu cục
@@ -536,12 +536,12 @@ def query_customer_detail_pivot(
         
     # Lọc theo Cụm
     if cum and cum != "Tất cả":
-        query_parts.append("AND b.ten_Cum = ?")
+        query_parts.append("AND b.ten_cum = ?")
         params.append(cum)
         
     # Lọc theo BĐX
     if bdx and bdx != "Tất cả":
-        query_parts.append("AND b.ten_BDX = ?")
+        query_parts.append("AND b.ten_bdx = ?")
         params.append(bdx)
         
     # Lọc theo Bưu cục

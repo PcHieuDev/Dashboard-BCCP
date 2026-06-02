@@ -51,8 +51,8 @@ def register_service_callbacks(app):
             years_opts = [{"label": str(y), "value": y} for y in df_years["nam_du_lieu"].tolist()] if not df_years.empty else [{"label": "2026", "value": 2026}]
             
             # Lấy danh sách cụm
-            df_cums = pd.read_sql_query("SELECT DISTINCT ten_Cum FROM dim_buucuc WHERE ten_Cum IS NOT NULL ORDER BY ten_Cum", conn)
-            cums = df_cums["ten_Cum"].tolist()
+            df_cums = pd.read_sql_query("SELECT DISTINCT ten_cum FROM dim_buucuc WHERE ten_cum IS NOT NULL ORDER BY ten_cum", conn)
+            cums = df_cums["ten_cum"].tolist()
         except Exception as e:
             print(f"Lỗi load filter trong service_callbacks: {e}")
             years_opts = [{"label": "2026", "value": 2026}]
@@ -166,13 +166,13 @@ def register_service_callbacks(app):
         # 1. Đọc danh sách bưu cục từ dim_buucuc
         conn = sqlite3.connect(str(DB_PATH))
         try:
-            df_buucuc = pd.read_sql_query("SELECT ma_bc, ten_Buu_cuc, ten_Cum FROM dim_buucuc", conn)
+            df_buucuc = pd.read_sql_query("SELECT ma_bc, ten_buu_cuc, ten_cum FROM dim_buucuc", conn)
             # Load danh mục sản phẩm của dịch vụ này từ dim_dichvu để pivot đủ cột
             df_sub_services = pd.read_sql_query("SELECT DISTINCT ten_dich_vu FROM dim_dichvu WHERE nhom_chinh = :st", conn, params={"st": service_type})
             sub_services = df_sub_services["ten_dich_vu"].tolist()
         except Exception as e:
             print(f"Lỗi đọc danh mục buucuc: {e}")
-            df_buucuc = pd.DataFrame(columns=["ma_bc", "ten_Buu_cuc", "ten_Cum"])
+            df_buucuc = pd.DataFrame(columns=["ma_bc", "ten_buu_cuc", "ten_cum"])
             sub_services = []
         finally:
             conn.close()
@@ -185,19 +185,19 @@ def register_service_callbacks(app):
         # 2. Xử lý theo bộ lọc cụm
         if cum == "Tất cả":
             # Group by Cụm & Dịch vụ con
-            df_grouped = df_merged.groupby(["ten_Cum", "ten_dich_vu"])["doanh_thu"].sum().reset_index()
+            df_grouped = df_merged.groupby(["ten_cum", "ten_dich_vu"])["doanh_thu"].sum().reset_index()
             # Pivot table
-            df_pivot = df_grouped.pivot(index="ten_Cum", columns="ten_dich_vu", values="doanh_thu").fillna(0.0)
-            df_pivot = df_pivot.reset_index().rename(columns={"ten_Cum": "Địa bàn"})
+            df_pivot = df_grouped.pivot(index="ten_cum", columns="ten_dich_vu", values="doanh_thu").fillna(0.0)
+            df_pivot = df_pivot.reset_index().rename(columns={"ten_cum": "Địa bàn"})
             title_col = "Địa bàn"
         else:
             # Lọc riêng cụm đó
-            df_cum_filtered = df_merged[df_merged["ten_Cum"] == cum]
+            df_cum_filtered = df_merged[df_merged["ten_cum"] == cum]
             if df_cum_filtered.empty:
                 return pd.DataFrame(), sub_services
             # Group by Bưu cục (Mã BC + Tên BC) & Dịch vụ con
-            df_grouped = df_cum_filtered.groupby(["ma_bc", "ten_Buu_cuc", "ten_dich_vu"])["doanh_thu"].sum().reset_index()
-            df_grouped["BuuCuc"] = df_grouped["ma_bc"] + " - " + df_grouped["ten_Buu_cuc"]
+            df_grouped = df_cum_filtered.groupby(["ma_bc", "ten_buu_cuc", "ten_dich_vu"])["doanh_thu"].sum().reset_index()
+            df_grouped["BuuCuc"] = df_grouped["ma_bc"] + " - " + df_grouped["ten_buu_cuc"]
             # Pivot table
             df_pivot = df_grouped.pivot(index="BuuCuc", columns="ten_dich_vu", values="doanh_thu").fillna(0.0)
             df_pivot = df_pivot.reset_index().rename(columns={"BuuCuc": "Bưu cục"})
@@ -273,7 +273,7 @@ def register_service_callbacks(app):
                 SELECT SUM(p.ke_hoach_doanh_thu) 
                 FROM plans p
                 INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_bc
-                WHERE p.nam = :nam AND p.thang = :thang AND p.nhom_dich_vu = :nt AND b.ten_Cum = :cum
+                WHERE p.nam = :nam AND p.thang = :thang AND p.nhom_dich_vu = :nt AND b.ten_cum = :cum
             """
             params_plan["cum"] = cum
             

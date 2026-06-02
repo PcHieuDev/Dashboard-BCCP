@@ -59,7 +59,7 @@ def create_sidebar_layout(filter_opts):
         dbc.Accordion([
             # Bưu chính chuyển phát (BCCP)
             dbc.AccordionItem([
-                dcc.Link("📈 KPI tổng hợp", href="/bccp/kpi", id="nav-bccp-kpi", className="sidebar-menu-item"),
+                dcc.Link("📈 KPI tổng hợp", href="/bccp", id="nav-bccp-kpi", className="sidebar-menu-item"),
                 dcc.Link("📊 Doanh thu chi tiết", href="/bccp/revenue", id="nav-bccp-revenue", className="sidebar-menu-item"),
                 dcc.Link("🔍 Chi tiết khách hàng", href="/bccp/customer", id="nav-bccp-customer", className="sidebar-menu-item"),
                 dcc.Link("📈 Biểu đồ trực quan", href="/bccp/charts", id="nav-bccp-charts", className="sidebar-menu-item"),
@@ -69,7 +69,7 @@ def create_sidebar_layout(filter_opts):
             # Hành chính công (HCC)
             dbc.AccordionItem([
                 dcc.Link("📊 Tổng quan & Chi tiết", href="/hcc", id="nav-hcc-overview", className="sidebar-menu-item"),
-                dcc.Link("📊 Doanh thu chi tiết", href="/hcc", id="nav-hcc-revenue", className="sidebar-menu-item", style={"display": "none"}),
+                dcc.Link("📊 Báo cáo doanh thu", href="/hcc/revenue", id="nav-hcc-revenue", className="sidebar-menu-item"),
             ], title="🏢 Hành chính công", item_id="menu-hcc"),
             
             # Tài chính Bưu chính (TCBC)
@@ -178,29 +178,7 @@ def create_sidebar_layout(filter_opts):
             html.Hr(),
             
             html.Div([
-                html.H3("🔍 Bộ lọc chiều", className="section-header"),
-                
-                # Lọc Nhóm Dịch vụ
-                html.Div([
-                    html.Label("Nhóm dịch vụ", className="filter-label"),
-                    dcc.Dropdown(
-                        id="sidebar-nhom-dv",
-                        options=[{"label": n, "value": n} for n in filter_opts["nhom_dv"]],
-                        multi=True,
-                        placeholder="Tất cả dịch vụ"
-                    )
-                ], className="filter-group"),
-                
-                # Lọc Dịch vụ Chi tiết
-                html.Div([
-                    html.Label("Dịch vụ chi tiết", className="filter-label"),
-                    dcc.Dropdown(
-                        id="sidebar-spdv",
-                        options=filter_opts["spdv"],
-                        multi=True,
-                        placeholder="Tất cả mã SPDV"
-                    )
-                ], className="filter-group"),
+                html.H3("🗺️ Bộ lọc chiều", className="section-header"),
                 
                 # Lọc Cụm (Có phân quyền)
                 html.Div([
@@ -233,6 +211,22 @@ def create_sidebar_layout(filter_opts):
                         options=[{"label": "Tất cả Bưu cục", "value": "Tất cả"}] + filter_opts["buu_cuc"],
                         value="Tất cả",
                         clearable=False
+                    )
+                ], className="filter-group"),
+            ]),
+            
+            # Bộ lọc dịch vụ BCCP (chỉ hiện khi ở /bccp*)
+            html.Div(id="bccp-extra-filters", style={"display": "none"}, children=[
+                html.H3("📋 Bộ lọc dịch vụ BCCP", className="section-header"),
+                
+                # Lọc Nhóm Dịch vụ
+                html.Div([
+                    html.Label("Nhóm dịch vụ", className="filter-label"),
+                    dcc.Dropdown(
+                        id="sidebar-nhom-dv",
+                        options=[{"label": n, "value": n} for n in filter_opts["nhom_dv"]],
+                        multi=True,
+                        placeholder="Tất cả dịch vụ"
                     )
                 ], className="filter-group"),
                 

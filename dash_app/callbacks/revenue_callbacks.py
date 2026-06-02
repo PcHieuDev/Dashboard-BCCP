@@ -36,7 +36,6 @@ def register_revenue_callbacks(app):
          Input("sidebar-week-select", "value"),
          Input("sidebar-month-select", "value"),
          Input("sidebar-nhom-dv", "value"),
-         Input("sidebar-spdv", "value"),
          Input("sidebar-cum", "value"),
          Input("sidebar-bdx", "value"),
          Input("sidebar-buu-cuc", "value"),
@@ -44,10 +43,11 @@ def register_revenue_callbacks(app):
          Input("sidebar-hop-dong", "value")]
     )
     def update_revenue_table(tab_val, g1, g2, compare_opt, year, period, start_date, end_date, week_idx, month_val,
-                             nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong):
+                             nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         # Chỉ chạy khi đang ở Tab Doanh thu chi tiết
-        if tab_val != "tab-revenue":
+        if tab_val != "tab-revenue" or tab_val is None:
             return dash.no_update
+        spdv = None
             
         g2_actual = None if g2 == "None" else g2
         compare_prev = compare_opt != "none"
@@ -70,8 +70,7 @@ def register_revenue_callbacks(app):
 
     @app.callback(
         Output("revenue-download", "data"),
-        [Input("revenue-btn-export-excel", "n_clicks"),
-         Input("revenue-btn-export-pdf", "n_clicks")],
+        [Input("revenue-btn-export-excel", "n_clicks")],
         [State("tabs-navigation", "value"),
          State("revenue-g1", "value"),
          State("revenue-g2", "value"),
@@ -83,7 +82,6 @@ def register_revenue_callbacks(app):
          State("sidebar-week-select", "value"),
          State("sidebar-month-select", "value"),
          State("sidebar-nhom-dv", "value"),
-         State("sidebar-spdv", "value"),
          State("sidebar-cum", "value"),
          State("sidebar-bdx", "value"),
          State("sidebar-buu-cuc", "value"),
@@ -91,14 +89,15 @@ def register_revenue_callbacks(app):
          State("sidebar-hop-dong", "value")],
         prevent_initial_call=True
     )
-    def export_revenue_table(btn_excel, btn_pdf, tab_val, g1, g2, compare_opt, year, period, start_date, end_date, week_idx, month_val,
-                             nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong):
+    def export_revenue_table(btn_excel, tab_val, g1, g2, compare_opt, year, period, start_date, end_date, week_idx, month_val,
+                             nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         ctx = dash.callback_context
-        if not ctx.triggered or tab_val != "tab-revenue":
+        if not ctx.triggered or tab_val != "tab-revenue" or tab_val is None:
             return dash.no_update
+        spdv = None
             
         trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
-        if trigger_id not in ("revenue-btn-export-excel", "revenue-btn-export-pdf"):
+        if trigger_id != "revenue-btn-export-excel":
             return dash.no_update
             
         g2_actual = None if g2 == "None" else g2
@@ -134,12 +133,6 @@ def register_revenue_callbacks(app):
             excel_bytes = generate_excel_report(df, groupby_cols, compare_opt, filter_info)
             filename = f"BaoCaoDoanhThu_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
             return dcc.send_bytes(excel_bytes, filename)
-            
-        elif trigger_id == "revenue-btn-export-pdf":
-            from callbacks.export_helpers import generate_pdf_report
-            pdf_bytes = generate_pdf_report(df, groupby_cols, compare_opt, filter_info)
-            filename = f"BaoCaoDoanhThu_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-            return dcc.send_bytes(pdf_bytes, filename)
             
         return dash.no_update
 

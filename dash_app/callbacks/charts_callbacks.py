@@ -34,7 +34,6 @@ def register_charts_callbacks(app):
          Input("sidebar-week-select", "value"),
          Input("sidebar-month-select", "value"),
          Input("sidebar-nhom-dv", "value"),
-         Input("sidebar-spdv", "value"),
          Input("sidebar-cum", "value"),
          Input("sidebar-bdx", "value"),
          Input("sidebar-buu-cuc", "value"),
@@ -42,9 +41,10 @@ def register_charts_callbacks(app):
          Input("sidebar-hop-dong", "value")]
     )
     def update_trend_chart(tab_val, year, period, start_date, end_date, week_idx, month_val,
-                           nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong):
-        if tab_val != "tab-charts":
+                           nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
+        if tab_val != "tab-charts" or tab_val is None:
             return dash.no_update
+        spdv = None
             
         # Truy vấn dữ liệu group by theo 'ngay' để vẽ xu hướng thời gian
         _, _, _, df = resolve_filters_and_query(
@@ -96,7 +96,6 @@ def register_charts_callbacks(app):
          Input("sidebar-week-select", "value"),
          Input("sidebar-month-select", "value"),
          Input("sidebar-nhom-dv", "value"),
-         Input("sidebar-spdv", "value"),
          Input("sidebar-cum", "value"),
          Input("sidebar-bdx", "value"),
          Input("sidebar-buu-cuc", "value"),
@@ -104,9 +103,10 @@ def register_charts_callbacks(app):
          Input("sidebar-hop-dong", "value")]
     )
     def update_pie_chart(tab_val, year, period, start_date, end_date, week_idx, month_val,
-                         nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong):
-        if tab_val != "tab-charts":
+                         nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
+        if tab_val != "tab-charts" or tab_val is None:
             return dash.no_update
+        spdv = None
             
         # Truy vấn dữ liệu group by theo 'nhom_dv'
         _, _, _, df = resolve_filters_and_query(
@@ -151,7 +151,6 @@ def register_charts_callbacks(app):
          Input("sidebar-week-select", "value"),
          Input("sidebar-month-select", "value"),
          Input("sidebar-nhom-dv", "value"),
-         Input("sidebar-spdv", "value"),
          Input("sidebar-cum", "value"),
          Input("sidebar-bdx", "value"),
          Input("sidebar-buu-cuc", "value"),
@@ -159,9 +158,10 @@ def register_charts_callbacks(app):
          Input("sidebar-hop-dong", "value")]
     )
     def update_bar_chart(tab_val, year, period, start_date, end_date, week_idx, month_val,
-                         nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong):
-        if tab_val != "tab-charts":
+                         nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
+        if tab_val != "tab-charts" or tab_val is None:
             return dash.no_update
+        spdv = None
             
         # Truy vấn dữ liệu group by theo 'cum'
         _, _, _, df = resolve_filters_and_query(

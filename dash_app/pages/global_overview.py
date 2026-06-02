@@ -41,11 +41,11 @@ def create_global_overview_layout():
                 ], className="info-box", style={"height": "100%", "padding": "15px"})
             ], lg=4, md=12, className="mb-3"),
             
-            # Biểu đồ thanh ngang YTD bên phải
+            # Bảng doanh thu YTD bên phải (DataTable YTD)
             dbc.Col([
                 html.Div([
                     html.Div("📈 Doanh thu Thực tế vs Kế hoạch lũy kế (YTD)", className="section-header"),
-                    dcc.Graph(id="global-ytd-chart", config={"displayModeBar": False})
+                    dbc.Spinner(html.Div(id="ytd-table-container"))
                 ], className="info-box", style={"height": "100%", "padding": "15px"})
             ], lg=8, md=12, className="mb-3")
         ], className="g-3", style={"marginTop": "10px"}),

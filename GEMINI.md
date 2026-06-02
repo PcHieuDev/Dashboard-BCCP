@@ -15,18 +15,15 @@ Dashboard doanh thu bưu chính chuyển phát (BCCP) hỗ trợ bộ lọc đa 
   - Phase 5A (Migrate tính năng): Xong.
   - Phase 5B (Export Excel/PDF, phân quyền, cảnh báo): Xong.
   - Phase 5D (Chi tiết Khách hàng CMS): Xong.
-- **Phase 6 (Cải tiến UI/UX & Sửa lỗi)**: Đang hoàn thành.
+- **Phase 6 (Cải tiến UI/UX & Sửa lỗi)**: Đã hoàn thành toàn bộ 5 TIPs.
   - Cập nhật logic CMS gộp "Bán mới" & "Tái bán" thành "KHM/Tái bán".
   - Tạo file template import dữ liệu tay `data/template_import.xlsx`.
   - Cải tiến giao diện Import: Tách luồng thành 2 bước (Chọn file -> Hiện thông tin -> Bấm Xác nhận nạp), hiển thị vòng xoay Spinner trong lúc nạp và tự động làm sạch ô upload.
   - Nâng cấp bảng Lịch sử: Lấy 50 dòng, bật phân trang, sắp xếp, lọc native, cuộn 4 chiều (max-height: 400px), highlight trạng thái xanh/đỏ.
-  - Sửa lỗi bộ lọc BĐX (Bưu điện Huyện/Xã) không hoạt động do KeyError tên cột viết hoa/viết thường giữa SQLite và Pandas.
+  - Sửa lỗi crash JS phía client khiến giao diện không hiển thị Alert khi nạp thành công (do cú pháp `||` không hợp lệ trong `style_data_conditional` của DataTable).
 - **Đường dẫn Workspace hoạt động**:
   - Mã nguồn: `E:\Projects\Dashboard-BCCP`
   - Cơ sở dữ liệu: `E:\OneDrive\z.Database-TTKD-Data\bccp.db`
-- **Cloudflare Tunnel (Truy cập từ xa)**:
-  - Tên miền: `dashboard.bdna.io.vn` trỏ về `http://localhost:8050`
-  - Trạng thái: Đã cài đặt dịch vụ Windows Service cho `cloudflared` tại `C:\Users\Duong\cloudflared\cloudflared.exe` để tự động chạy khi bật máy.
 
 ## Key Decisions & Architecture
 - **Mã nguồn tách biệt khỏi OneDrive**: Tránh xung đột đồng bộ OneDrive khi chạy cơ sở dữ liệu và code. Code chính nằm tại `E:\Projects\Dashboard-BCCP`.
@@ -41,11 +38,10 @@ Dashboard doanh thu bưu chính chuyển phát (BCCP) hỗ trợ bộ lọc đa 
   - `scripts/sync_mappings.py` (Script đồng bộ danh mục sản phẩm/bưu cục từ CSV vào DB)
 
 ## Pending Tasks
-1. **[PENDING] TIP-005**: Khởi động lại dashboard, test chức năng nạp file `.xls` CAS ngày 29.05, kiểm tra Spinner và bảng lịch sử phân trang mới.
+1. **[PENDING] Nghiệm thu thực tế**: Sếp chạy lại dashboard và verify chức năng import mới.
 2. **[PENDING] Phase 5C**: Thiết lập deploy server nội bộ và chuyển sang PostgreSQL.
 
 ## Issues & Notes
 - **Lỗi `File is not a zip file`**: Đã được sửa bằng cách dùng `xlrd` đọc các file `.xls` cũ từ hệ thống CAS. Người dùng cần khởi động lại Dashboard (chạy lại file `run_dashboard.bat`) để code mới này có hiệu lực trên giao diện.
-- **Lỗi bộ lọc BĐX (Bưu điện Huyện/Xã)**: Bộ lọc địa lý động bị crash và luôn trả về mặc định do sự không khớp chữ hoa/thường trong tên cột (`ten_BDX` vs `ten_bdx`) giữa SQLite và Pandas. Đã khắc phục bằng cách đồng bộ sang viết thường toàn bộ ở `sidebar_callbacks.py` và `app.py`. Sếp chỉ cần khởi động lại ứng dụng.
-- **Lỗi `ModuleNotFoundError: No module named 'pandas'`**: Đã được sửa trong file `run_dashboard.bat` bằng cách sử dụng `py -3.13 app.py` để đảm bảo hệ thống luôn gọi đúng phiên bản Python 3.13 (đã cài đủ thư viện) thay vì gọi phiên bản mặc định của Windows.
+- **Lỗi không hiển thị Alert khi nạp thành công**: Đã sửa triệt để bằng cách dịch trạng thái thô sang tiếng Việt (`SUCCESS_RAW` -> `"Thành công"`) và chuyển điều kiện highlight màu trong DataTable thành các luật đơn riêng biệt để tránh crash JS client.
 - **Bypass Login**: Hiện tại đang bypass authentication trong `app.py` để phát triển tiện lợi hơn. Cần kích hoạt lại khi deploy chính thức.

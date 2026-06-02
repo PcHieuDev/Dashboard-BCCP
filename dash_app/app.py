@@ -29,6 +29,7 @@ from pages.revenue_detail import create_revenue_detail_layout
 from pages.customer_detail import create_customer_detail_layout
 from pages.charts import create_charts_page_layout
 from pages.import_data import create_import_page_layout
+from pages.hcc_revenue import create_hcc_revenue_layout
 
 # Import các Callbacks đăng ký
 from callbacks.sidebar_callbacks import register_sidebar_callbacks
@@ -40,6 +41,7 @@ from callbacks.charts_callbacks import register_charts_callbacks
 from callbacks.alerts_callbacks import register_alerts_callbacks
 from callbacks.global_callbacks import register_global_callbacks
 from callbacks.service_callbacks import register_service_callbacks
+from callbacks.hcc_revenue_callbacks import register_hcc_revenue_callbacks
 
 # Cấu hình UTF-8 cho Windows output để hiển thị log tiếng Việt chính xác
 if sys.platform.startswith('win'):
@@ -228,7 +230,7 @@ def sync_url_to_tabs_navigation(pathname):
     Đồng bộ URL pathname với value của tabs-navigation ảo để kích hoạt 
     các callback cũ của BCCP mà không phải sửa mã nguồn của chúng.
     """
-    if pathname == "/bccp/kpi":
+    if pathname == "/bccp":
         return "tab-kpi"
     elif pathname == "/bccp/revenue":
         return "tab-revenue"
@@ -240,7 +242,7 @@ def sync_url_to_tabs_navigation(pathname):
         return "tab-alerts"
     elif pathname == "/import":
         return "tab-import"
-    return "tab-kpi" # Default
+    return None # Default
 
 # --------------------------------------------------------------------------
 # CALLBACK ĐỊNH TUYẾN TRANG CHÍNH (URL ROUTING)
@@ -265,7 +267,7 @@ def render_page(pathname):
         except ImportError:
             return html.Div("Trang Tổng quan chung đang được xây dựng...", className="empty-state-container"), "📊 Tổng quan điều hành doanh thu"
             
-    elif pathname == "/bccp/kpi":
+    elif pathname == "/bccp":
         return create_kpi_page_layout(), "📊 Bưu chính chuyển phát - KPI"
     elif pathname == "/bccp/revenue":
         return create_revenue_detail_layout(), "📊 Bưu chính chuyển phát - Doanh thu"
@@ -287,6 +289,13 @@ def render_page(pathname):
             return create_service_page_layout("HCC"), "🏢 Hành chính công"
         except ImportError:
             return html.Div("Trang Hành chính công đang được xây dựng...", className="empty-state-container"), "🏢 Hành chính công"
+            
+    elif pathname == "/hcc/revenue":
+        try:
+            return create_hcc_revenue_layout(), "🏛️ Hành chính công - Báo cáo doanh thu"
+        except Exception as e:
+            print(f"Lỗi load trang hcc_revenue: {e}")
+            return html.Div("Trang báo cáo doanh thu HCC đang được xây dựng...", className="empty-state-container"), "🏛️ Hành chính công - Báo cáo doanh thu"
             
     elif pathname == "/tcbc":
         try:
@@ -360,6 +369,7 @@ register_charts_callbacks(app)
 register_alerts_callbacks(app)
 register_global_callbacks(app)
 register_service_callbacks(app)
+register_hcc_revenue_callbacks(app)
 
 # --------------------------------------------------------------------------
 # CHẠY ỨNG DỤNG

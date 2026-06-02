@@ -34,7 +34,6 @@ def register_alerts_callbacks(app):
          Input("sidebar-week-select", "value"),
          Input("sidebar-month-select", "value"),
          Input("sidebar-nhom-dv", "value"),
-         Input("sidebar-spdv", "value"),
          Input("sidebar-cum", "value"),
          Input("sidebar-bdx", "value"),
          Input("sidebar-buu-cuc", "value"),
@@ -42,10 +41,11 @@ def register_alerts_callbacks(app):
          Input("sidebar-hop-dong", "value")]
     )
     def update_alerts_list(tab_val, selected_service, year, period, start_date, end_date, week_idx, month_val,
-                           nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong):
+                           nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         # Chỉ chạy khi đang ở Tab Cảnh báo
-        if tab_val != "tab-alerts":
+        if tab_val != "tab-alerts" or tab_val is None:
             return dash.no_update
+        spdv = None
             
         alerts = []
         
@@ -63,7 +63,7 @@ def register_alerts_callbacks(app):
             # Xây dựng SQL lấy doanh thu theo Cụm kỳ hiện tại và kỳ trước
             if selected_service == "HCC":
                 sql_cur = """
-SELECT b.ten_Cum, SUM(t_inner.dt) as dt
+SELECT b.ten_cum, SUM(t_inner.dt) as dt
 FROM (
     SELECT t.buu_cuc as ma_bc, SUM(t.cuoc_tt_tong) as dt
     FROM transactions t
@@ -77,17 +77,17 @@ FROM (
     GROUP BY ma_buu_cuc
 ) t_inner
 INNER JOIN dim_buucuc b ON t_inner.ma_bc = b.ma_bc
-GROUP BY b.ten_Cum
+GROUP BY b.ten_cum
 """
                 sql_prev = sql_cur.replace(":nam", ":pnam").replace(":thang", ":pthang")
             else:
                 table_name = f"transactions_{selected_service.lower()}"
                 sql_cur = f"""
-SELECT b.ten_Cum, SUM(t.doanh_thu) as dt
+SELECT b.ten_cum, SUM(t.doanh_thu) as dt
 FROM {table_name} t
 INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_bc
 WHERE t.nam_du_lieu = :nam AND t.thang_du_lieu = :thang
-GROUP BY b.ten_Cum
+GROUP BY b.ten_cum
 """
                 sql_prev = sql_cur.replace(":nam", ":pnam").replace(":thang", ":pthang")
                 
@@ -116,10 +116,10 @@ GROUP BY b.ten_Cum
                 
             # So sánh sụt giảm theo từng Cụm
             if not df_cur.empty and not df_prev.empty:
-                df_merged = pd.merge(df_cur, df_prev, on="ten_Cum", how="outer", suffixes=("_cur", "_prev")).fillna(0.0)
+                df_merged = pd.merge(df_cur, df_prev, on="ten_cum", how="outer", suffixes=("_cur", "_prev")).fillna(0.0)
                 
                 for _, r in df_merged.iterrows():
-                    c_name = r["ten_Cum"]
+                    c_name = r["ten_cum"]
                     val_now = r["dt_cur"]
                     val_prev = r["dt_prev"]
                     
