@@ -32,10 +32,10 @@ def run_migration():
     )
     """)
 
-    # 2. Migrate data từ dim_spdv (BCCP)
+    # 2. Migrate data từ dim_spdv (BCCP & HCC)
     cursor.execute("""
     INSERT OR IGNORE INTO dim_dichvu (nhom_chinh, ma_dich_vu, ten_dich_vu, nhom_dich_vu)
-    SELECT 'BCCP', ma_spdv, ten_spdv, nhom_dich_vu
+    SELECT CASE WHEN ma_spdv LIKE 'HCC%' THEN 'HCC' ELSE 'BCCP' END, ma_spdv, ten_spdv, nhom_dich_vu
     FROM dim_spdv
     """)
 
