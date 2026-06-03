@@ -124,9 +124,23 @@ Builder started: 2026-06-02T18:03:00+07:00
 
 ---
 
+## TIP-bccp-001: Data Layer — Bảng new_customers + Calculator
+- Status: DONE
+- Started: 2026-06-04T00:55:00+07:00
+- Completed: 2026-06-04T01:05:00+07:00
+- Files: 1 created, 0 modified
+- Tests: 4/4 passed
+- Commit: `feat(bccp): TIP-bccp-001 — Data Layer: new_customers table & calculator`
+- Commit hash: N/A
+- Issues: None
+- Notes: Tạo bảng `new_customers` và viết script `new_customer_calculator.py` tự động tính toán. Đã nạp thành công 1863 dòng dữ liệu khách hàng mới lịch sử từ T10/2025 đến T06/2026 không lỗi.
+
+---
+
 ## SUMMARY
-- Total TIPs: 10
-- Total FIXs: 1
-- DONE: 11
+- Branch: feat/bccp-upgrade
+- Total Phase 8 TIPs: 7
+- DONE: 1
 - BLOCKED: 0
-- Overall: READY FOR VERIFY
+- Overall: IN PROGRESS
+
