@@ -137,10 +137,24 @@ Builder started: 2026-06-02T18:03:00+07:00
 
 ---
 
+## TIP-bccp-002: ETL Trigger — Auto-calc new_customers khi import BCCP
+- Status: DONE
+- Started: 2026-06-04T01:06:00+07:00
+- Completed: 2026-06-04T01:12:00+07:00
+- Files: 0 created, 1 modified
+- Tests: 3/3 passed
+- Commit: `feat(bccp): TIP-bccp-002 — ETL: Auto-calc new_customers on BCCP import`
+- Commit hash: N/A
+- Issues: None
+- Notes: Sửa file `import_callbacks.py` để tích hợp trigger tự động tính toán KH bán mới sau khi import file BCCP thành công. Dữ liệu Alert thành công hiển thị số lượng KH mới được thêm.
+
+---
+
 ## SUMMARY
 - Branch: feat/bccp-upgrade
 - Total Phase 8 TIPs: 7
-- DONE: 1
+- DONE: 2
 - BLOCKED: 0
 - Overall: IN PROGRESS
+
 

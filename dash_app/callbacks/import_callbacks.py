@@ -281,6 +281,30 @@ def register_import_callbacks(app):
             if service_type == "BCCP":
                 res = import_any_excel_file(str(DB_PATH), tmp_path)
                 table_name = "Bưu chính chuyển phát (transactions)"
+                
+                # TIP-bccp-002: Tự động tính toán danh sách KH bán mới
+                try:
+                    thang_str = res.get('thang')
+                    batch_id = res.get('batch_id')
+                    if thang_str and batch_id:
+                        thang = int(thang_str[1:])
+                        # Truy vấn nam_du_lieu từ bảng transactions vừa import
+                        conn_tmp = sqlite3.connect(str(DB_PATH))
+                        cursor_tmp = conn_tmp.cursor()
+                        cursor_tmp.execute(
+                            "SELECT DISTINCT nam_du_lieu FROM transactions WHERE thang_du_lieu = ? AND import_batch = ? LIMIT 1",
+                            (thang_str, batch_id)
+                        )
+                        row_nam = cursor_tmp.fetchone()
+                        conn_tmp.close()
+                        
+                        if row_nam and row_nam[0]:
+                            nam = int(row_nam[0])
+                            from analytics.new_customer_calculator import calculate_new_customers
+                            num_new_cust = calculate_new_customers(str(DB_PATH), nam, thang)
+                            res['new_customers_count'] = num_new_cust
+                except Exception as ex:
+                    print(f"Lỗi khi tự động tính toán KH bán mới: {ex}")
             elif service_type == "PHBC":
                 from etl.importer import import_phbc_excel
                 res = import_phbc_excel(str(DB_PATH), tmp_path)
@@ -313,6 +337,8 @@ def register_import_callbacks(app):
             msg = f"✅ Nạp dữ liệu vào bảng {table_name} thành công! Đã xử lý {inserted:,} dòng thực tế từ file '{filename}'."
             if skipped > 0:
                 msg += f" (Bỏ qua/Cập nhật {skipped:,} dòng)."
+            if 'new_customers_count' in res:
+                msg += f" Đã cập nhật danh sách KH bán mới ({res['new_customers_count']:,} khách hàng)."
             if warnings:
                 msg += f" (Cảnh báo: {', '.join(warnings[:5])})"
             return dbc.Alert(msg, color="success", dismissable=True), None, None, int(datetime.now().timestamp())
