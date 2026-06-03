@@ -1,22 +1,21 @@
 @echo off
-chcp 65001 > nul
 echo ====================================================
-echo   ĐỒNG BỘ TOÀN BỘ CÁC NHÁNH LÊN GITHUB (PUSH ALL)
+echo   DONG BO TOAN BO CAC NHANH LEN GITHUB (PUSH ALL)
 echo ====================================================
 echo.
-echo Đường dẫn thư mục hiện tại: %~dp0
+echo Duong dan thu muc hien tai: %~dp0
 cd /d "%~dp0"
 
 echo.
-echo Đang đẩy tất cả các nhánh cục bộ lên GitHub...
+echo Dang day tat ca cac nhanh cuc bo len GitHub...
 git push origin --all
 
 echo.
-echo Đang đẩy tất cả các thẻ (tags) lên GitHub...
+echo Dang day tat ca cac the (tags) len GitHub...
 git push origin --tags
 
 echo.
 echo ====================================================
-echo ĐỒNG BỘ LÊN GITHUB THÀNH CÔNG!
+echo DONG BO LEN GITHUB THANH CONG!
 echo ====================================================
 pause
