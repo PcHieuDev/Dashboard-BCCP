@@ -71,6 +71,9 @@ E:\OneDrive\z.Database-TTKD\
 │   ├── pages/              (kpi_page.py, revenue_detail.py, customer_detail.py, import_data.py, charts.py, alerts.py)
 │   ├── db/                 (connection.py, auth.py)
 │   └── requirements.txt
+├── dong_bo_len_github.bat  ← Đẩy tất cả các nhánh lên GitHub
+├── tai_toan_bo_ve_may.bat  ← Tải và cập nhật tất cả các nhánh từ GitHub về máy
+├── run_dashboard.bat
 └── project_state.md
 ```
 
