@@ -27,7 +27,6 @@ from components.sidebar import create_sidebar_layout
 from pages.kpi_page import create_kpi_page_layout
 from pages.revenue_detail import create_revenue_detail_layout
 from pages.customer_detail import create_customer_detail_layout
-from pages.charts import create_charts_page_layout
 from pages.import_data import create_import_page_layout
 from pages.hcc_revenue import create_hcc_revenue_layout
 
@@ -37,7 +36,6 @@ from callbacks.kpi_callbacks import register_kpi_callbacks
 from callbacks.revenue_callbacks import register_revenue_callbacks
 from callbacks.customer_callbacks import register_customer_callbacks
 from callbacks.import_callbacks import register_import_callbacks
-from callbacks.charts_callbacks import register_charts_callbacks
 from callbacks.alerts_callbacks import register_alerts_callbacks
 from callbacks.global_callbacks import register_global_callbacks
 from callbacks.service_callbacks import register_service_callbacks
@@ -274,7 +272,7 @@ def render_page(pathname):
     elif pathname == "/bccp/customer":
         return create_customer_detail_layout(), "📊 Bưu chính chuyển phát - Khách hàng"
     elif pathname == "/bccp/charts":
-        return create_charts_page_layout(), "📊 Bưu chính chuyển phát - Biểu đồ"
+        return create_kpi_page_layout(), "📊 Bưu chính chuyển phát - KPI"
     elif pathname == "/bccp/alerts":
         try:
             from pages.alerts import create_alerts_page_layout
@@ -365,7 +363,6 @@ register_kpi_callbacks(app)
 register_revenue_callbacks(app)
 register_customer_callbacks(app)
 register_import_callbacks(app)
-register_charts_callbacks(app)
 register_alerts_callbacks(app)
 register_global_callbacks(app)
 register_service_callbacks(app)

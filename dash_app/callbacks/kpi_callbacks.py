@@ -7,6 +7,7 @@ import sqlite3
 import pandas as pd
 import dash
 from dash import Output, Input, html
+import plotly.graph_objects as go
 
 import sys
 from pathlib import Path
@@ -46,9 +47,8 @@ def register_kpi_callbacks(app):
     """
     
 
-    # ── Callback: Cards chi tiết cấu phần BCCP + Khách hàng ──────────────
+    # ── Callback: Cards chi tiết cấu phần BCCP + Khách hàng + Biểu đồ ──────────
     @app.callback(
-
         [# Card: Phát hành báo chí
          Output("kpi-phbc-value", "children"), Output("kpi-phbc-sparkline", "children"),
          Output("kpi-phbc-delta-prev", "children"), Output("kpi-phbc-delta-yoy", "children"),
@@ -63,7 +63,11 @@ def register_kpi_callbacks(app):
          Output("kpi-qt-delta-prev", "children"), Output("kpi-qt-delta-yoy", "children"),
          # Card: Khách hàng
          Output("kpi-kh-value", "children"), Output("kpi-kh-sparkline", "children"),
-         Output("kpi-kh-delta-prev", "children"), Output("kpi-kh-delta-yoy", "children")],
+         Output("kpi-kh-delta-prev", "children"), Output("kpi-kh-delta-yoy", "children"),
+         # 3 Biểu đồ trực quan
+         Output("chart-service-pie", "figure"),
+         Output("chart-revenue-trend", "figure"),
+         Output("chart-cluster-bar", "figure")],
 
         [Input("tabs-navigation", "value"),
          Input("sidebar-year", "value"),
@@ -84,7 +88,7 @@ def register_kpi_callbacks(app):
                          nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         # Chỉ xử lý khi đang ở Tab Tổng quan KPI
         if tab_val != "tab-kpi" or tab_val is None:
-            return [dash.no_update] * 20
+            return [dash.no_update] * 23
 
         spdv = None
 
@@ -285,11 +289,99 @@ def register_kpi_callbacks(app):
         qt_n, qt_s, qt_p, qt_y     = render_card_outputs(qt_cur,   qt_prev,   qt_yoy,   y_qt,   "#0EA5E9")
         kh_n, kh_s, kh_p, kh_y    = render_card_outputs(kh_cur,   kh_prev,   kh_yoy,   y_kh,   "#14B8A6", is_count_card=True)
 
+        # ── Vẽ biểu đồ 1: Cơ cấu dịch vụ (Donut Chart) ──────────────────
+        fig_pie = go.Figure()
+        if not df_cur.empty and 'nhom_dv' in df_cur.columns:
+            pie_colors = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#64748B']
+            fig_pie.add_trace(go.Pie(
+                labels=df_cur['nhom_dv'],
+                values=df_cur['cuoc_tt_tong'],
+                hole=.4,
+                marker=dict(colors=pie_colors),
+                textinfo='percent+label',
+                hovertemplate="Nhóm %{label}: %{value:,.0f} đ (%{percent})<extra></extra>"
+            ))
+            fig_pie.update_layout(
+                margin=dict(l=20, r=20, t=10, b=10),
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5)
+            )
+        else:
+            fig_pie.update_layout(title="Không có dữ liệu cơ cấu")
+
+        # ── Vẽ biểu đồ 2: Xu hướng theo ngày (Line Chart) ───────────────
+        fig_trend = go.Figure()
+        if not df_trend.empty and 'ngay' in df_trend.columns:
+            df_trend_daily = df_trend.groupby('ngay')['cuoc_tt_tong'].sum().reset_index()
+            df_sorted = df_trend_daily.sort_values('ngay')
+            df_sorted['ngay_display'] = df_sorted['ngay'].apply(lambda x: pd.to_datetime(x).strftime('%d/%m') if pd.notna(x) else '')
+            
+            fig_trend.add_trace(go.Scatter(
+                x=df_sorted['ngay_display'],
+                y=df_sorted['cuoc_tt_tong'],
+                mode='lines+markers',
+                name='Doanh thu TT',
+                line=dict(color='#3B82F6', width=3),
+                marker=dict(size=6, color='#1D4ED8'),
+                hovertemplate="Ngày %{x}: %{y:,.0f} đ<extra></extra>"
+            ))
+            fig_trend.update_layout(
+                margin=dict(l=40, r=20, t=15, b=20),
+                hovermode="x unified",
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=True, gridcolor="#F1F5F9"),
+                yaxis=dict(showgrid=True, gridcolor="#F1F5F9", tickformat=",.0f")
+            )
+        else:
+            fig_trend.update_layout(title="Không có dữ liệu xu hướng")
+
+        # ── Vẽ biểu đồ 3: So sánh doanh thu giữa các Cụm (Bar Chart) ─────
+        # Truy vấn riêng group by theo Cụm địa lý
+        conn_tmp = sqlite3.connect(str(DB_PATH))
+        try:
+            cum_f = None if cum == "Tất cả" else cum
+            bdx_f = None if bdx == "Tất cả" else bdx
+            bc_f = None if buu_cuc == "Tất cả" else buu_cuc
+            hd_f = None if hop_dong == "Tất cả" else hop_dong
+            df_cluster = query_revenue(
+                conn=conn_tmp, date_from=date_from, date_to=date_to, date_column=date_column,
+                nhom_dv=nhom_dv, dich_vu=spdv, cum=cum_f, bdx=bdx_f, buu_cuc=bc_f, loai_kh=loai_kh, hop_dong=hd_f,
+                group_by_primary='cum', compare_prev=False
+            )
+        except Exception as e:
+            print(f"Error querying cluster KPI: {e}")
+            df_cluster = pd.DataFrame()
+        finally:
+            conn_tmp.close()
+
+        fig_bar = go.Figure()
+        if not df_cluster.empty and 'cum' in df_cluster.columns:
+            df_bar_filtered = df_cluster[df_cluster['cum'] != 'Chưa phân loại'].sort_values('cuoc_tt_tong', ascending=True)
+            fig_bar.add_trace(go.Bar(
+                x=df_bar_filtered['cuoc_tt_tong'],
+                y=df_bar_filtered['cum'],
+                orientation='h',
+                marker_color='#10B981',
+                hovertemplate="Cụm %{y}: %{x:,.0f} đ<extra></extra>"
+            ))
+            fig_bar.update_layout(
+                margin=dict(l=100, r=20, t=15, b=20),
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=True, gridcolor="#F1F5F9"),
+                yaxis=dict(showgrid=False)
+            )
+        else:
+            fig_bar.update_layout(title="Không có dữ liệu so sánh Cụm")
+
         return [
             phbc_n, phbc_s, phbc_p, phbc_y,
             tt_n,   tt_s,   tt_p,   tt_y,
             tmdt_n, tmdt_s, tmdt_p, tmdt_y,
             qt_n,   qt_s,   qt_p,   qt_y,
             kh_n,   kh_s,   kh_p,   kh_y,
+            fig_pie, fig_trend, fig_bar
         ]
 

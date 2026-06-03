@@ -150,11 +150,25 @@ Builder started: 2026-06-02T18:03:00+07:00
 
 ---
 
+## TIP-bccp-003: Gộp Charts vào trang /bccp
+- Status: DONE
+- Started: 2026-06-04T01:13:00+07:00
+- Completed: 2026-06-04T01:22:00+07:00
+- Files: 0 created, 3 modified, 2 deleted
+- Tests: 2/2 passed
+- Commit: `feat(bccp): TIP-bccp-003 — UI: Merge charts page into /bccp KPI page`
+- Commit hash: N/A
+- Issues: None
+- Notes: Gộp layout của 3 biểu đồ vào `kpi_page.py` (Donut col-4, Line col-8, Bar col-12). Gộp logic vẽ biểu đồ vào callback của `kpi_callbacks.py` để tối ưu hiệu năng. Xóa file charts.py và charts_callbacks.py, cập nhật app.py.
+
+---
+
 ## SUMMARY
 - Branch: feat/bccp-upgrade
 - Total Phase 8 TIPs: 7
-- DONE: 2
+- DONE: 3
 - BLOCKED: 0
 - Overall: IN PROGRESS
+
 
 
