@@ -177,11 +177,51 @@ Builder started: 2026-06-02T18:03:00+07:00
 ---
 
 ## SUMMARY
+## TIP-bccp-005: Trang Khách hàng mới (/bccp/new-customer)
+- Status: DONE
+- Started: 2026-06-04T01:36:00+07:00
+- Completed: 2026-06-04T02:00:00+07:00
+- Files: 2 created, 0 modified
+- Tests: 4/4 passed
+- Commit: `feat(bccp): TIP-bccp-005 — UI: Create new-customer page & callbacks`
+- Commit hash: N/A
+- Issues: None
+- Notes: Tạo trang và callbacks Khách hàng mới, hỗ trợ cascade dropdown BĐX và xuất báo cáo Excel in-memory.
+
+---
+
+## TIP-bccp-006: Trang KHHH Retention (/bccp/retention)
+- Status: DONE
+- Started: 2026-06-04T02:01:00+07:00
+- Completed: 2026-06-04T02:05:00+07:00
+- Files: 2 created, 0 modified
+- Tests: 4/4 passed
+- Commit: `feat(bccp): TIP-bccp-006 — UI: Create retention page & callbacks`
+- Commit hash: N/A
+- Issues: None
+- Notes: Tạo trang và callbacks Retention khách hàng hiện hữu, tối ưu hóa câu query SQLite (chạy mất ~2-3s trên 829K dòng), và xuất Excel báo cáo biến động.
+
+---
+
+## TIP-bccp-007: Sidebar + Routing Cleanup
+- Status: DONE
+- Started: 2026-06-04T02:06:00+07:00
+- Completed: 2026-06-04T02:10:00+07:00
+- Files: 0 created, 2 modified
+- Tests: 5/5 passed
+- Commit: `feat(bccp): TIP-bccp-007 — UI: Sidebar and routing cleanup for Phase 8`
+- Commit hash: N/A
+- Issues: None
+- Notes: Cập nhật sidebar hiển thị đúng 5 mục menu BCCP mới, đăng ký các routes mới và đăng ký callbacks mới, đồng thời dọn dẹp các đường dẫn cũ.
+
+---
+
+## SUMMARY
 - Branch: feat/bccp-upgrade
 - Total Phase 8 TIPs: 7
-- DONE: 4
+- DONE: 7
 - BLOCKED: 0
-- Overall: IN PROGRESS
+- Overall: COMPLETED ✅
 
 
 

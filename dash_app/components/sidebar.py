@@ -59,10 +59,10 @@ def create_sidebar_layout(filter_opts):
         dbc.Accordion([
             # Bưu chính chuyển phát (BCCP)
             dbc.AccordionItem([
-                dcc.Link("📈 KPI tổng hợp", href="/bccp", id="nav-bccp-kpi", className="sidebar-menu-item"),
-                dcc.Link("📊 Doanh thu chi tiết", href="/bccp/revenue", id="nav-bccp-revenue", className="sidebar-menu-item"),
+                dcc.Link("📈 KPI & Biểu đồ", href="/bccp", id="nav-bccp-kpi", className="sidebar-menu-item"),
                 dcc.Link("🔍 Chi tiết khách hàng", href="/bccp/customer", id="nav-bccp-customer", className="sidebar-menu-item"),
-                dcc.Link("📈 Biểu đồ trực quan", href="/bccp/charts", id="nav-bccp-charts", className="sidebar-menu-item"),
+                dcc.Link("🆕 Khách hàng mới", href="/bccp/new-customer", id="nav-bccp-new-customer", className="sidebar-menu-item"),
+                dcc.Link("🔄 KH hiện hữu", href="/bccp/retention", id="nav-bccp-retention", className="sidebar-menu-item"),
                 dcc.Link("🚨 Cảnh báo doanh thu", href="/bccp/alerts", id="nav-bccp-alerts", className="sidebar-menu-item"),
             ], title="📦 Bưu chính chuyển phát", item_id="menu-bccp"),
             
