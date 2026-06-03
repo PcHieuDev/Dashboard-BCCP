@@ -124,9 +124,105 @@ Builder started: 2026-06-02T18:03:00+07:00
 
 ---
 
+## TIP-bccp-001: Data Layer — Bảng new_customers + Calculator
+- Status: DONE
+- Started: 2026-06-04T00:55:00+07:00
+- Completed: 2026-06-04T01:05:00+07:00
+- Files: 1 created, 0 modified
+- Tests: 4/4 passed
+- Commit: `feat(bccp): TIP-bccp-001 — Data Layer: new_customers table & calculator`
+- Commit hash: N/A
+- Issues: None
+- Notes: Tạo bảng `new_customers` và viết script `new_customer_calculator.py` tự động tính toán. Đã nạp thành công 1863 dòng dữ liệu khách hàng mới lịch sử từ T10/2025 đến T06/2026 không lỗi.
+
+---
+
+## TIP-bccp-002: ETL Trigger — Auto-calc new_customers khi import BCCP
+- Status: DONE
+- Started: 2026-06-04T01:06:00+07:00
+- Completed: 2026-06-04T01:12:00+07:00
+- Files: 0 created, 1 modified
+- Tests: 3/3 passed
+- Commit: `feat(bccp): TIP-bccp-002 — ETL: Auto-calc new_customers on BCCP import`
+- Commit hash: N/A
+- Issues: None
+- Notes: Sửa file `import_callbacks.py` để tích hợp trigger tự động tính toán KH bán mới sau khi import file BCCP thành công. Dữ liệu Alert thành công hiển thị số lượng KH mới được thêm.
+
+---
+
+## TIP-bccp-003: Gộp Charts vào trang /bccp
+- Status: DONE
+- Started: 2026-06-04T01:13:00+07:00
+- Completed: 2026-06-04T01:22:00+07:00
+- Files: 0 created, 3 modified, 2 deleted
+- Tests: 2/2 passed
+- Commit: `feat(bccp): TIP-bccp-003 — UI: Merge charts page into /bccp KPI page`
+- Commit hash: N/A
+- Issues: None
+- Notes: Gộp layout của 3 biểu đồ vào `kpi_page.py` (Donut col-4, Line col-8, Bar col-12). Gộp logic vẽ biểu đồ vào callback của `kpi_callbacks.py` để tối ưu hiệu năng. Xóa file charts.py và charts_callbacks.py, cập nhật app.py.
+
+---
+
+## TIP-bccp-004: Gộp Revenue + Bộ lọc DV vào /bccp/customer
+- Status: DONE
+- Started: 2026-06-04T01:23:00+07:00
+- Completed: 2026-06-04T01:35:00+07:00
+- Files: 0 created, 4 modified, 2 deleted
+- Tests: 4/4 passed
+- Commit: `feat(bccp): TIP-bccp-004 — UI: Merge revenue page and add inline filters to customer page`
+- Commit hash: N/A
+- Issues: None
+- Notes: Gộp trang doanh thu xoay chiều và trang khách hàng chi tiết (CMS) vào chung `/bccp/customer`. Chuyển bộ lọc BCCP (nhóm DV, loại KH, hợp đồng) thành bộ lọc inline ở đầu trang, ẩn bộ lọc cũ trên sidebar bằng dcc.Store ẩn để giữ tương thích ngược. Xóa revenue_detail.py và revenue_callbacks.py.
+
+---
+
 ## SUMMARY
-- Total TIPs: 10
-- Total FIXs: 1
-- DONE: 11
+## TIP-bccp-005: Trang Khách hàng mới (/bccp/new-customer)
+- Status: DONE
+- Started: 2026-06-04T01:36:00+07:00
+- Completed: 2026-06-04T02:00:00+07:00
+- Files: 2 created, 0 modified
+- Tests: 4/4 passed
+- Commit: `feat(bccp): TIP-bccp-005 — UI: Create new-customer page & callbacks`
+- Commit hash: N/A
+- Issues: None
+- Notes: Tạo trang và callbacks Khách hàng mới, hỗ trợ cascade dropdown BĐX và xuất báo cáo Excel in-memory.
+
+---
+
+## TIP-bccp-006: Trang KHHH Retention (/bccp/retention)
+- Status: DONE
+- Started: 2026-06-04T02:01:00+07:00
+- Completed: 2026-06-04T02:05:00+07:00
+- Files: 2 created, 0 modified
+- Tests: 4/4 passed
+- Commit: `feat(bccp): TIP-bccp-006 — UI: Create retention page & callbacks`
+- Commit hash: N/A
+- Issues: None
+- Notes: Tạo trang và callbacks Retention khách hàng hiện hữu, tối ưu hóa câu query SQLite (chạy mất ~2-3s trên 829K dòng), và xuất Excel báo cáo biến động.
+
+---
+
+## TIP-bccp-007: Sidebar + Routing Cleanup
+- Status: DONE
+- Started: 2026-06-04T02:06:00+07:00
+- Completed: 2026-06-04T02:10:00+07:00
+- Files: 0 created, 2 modified
+- Tests: 5/5 passed
+- Commit: `feat(bccp): TIP-bccp-007 — UI: Sidebar and routing cleanup for Phase 8`
+- Commit hash: N/A
+- Issues: None
+- Notes: Cập nhật sidebar hiển thị đúng 5 mục menu BCCP mới, đăng ký các routes mới và đăng ký callbacks mới, đồng thời dọn dẹp các đường dẫn cũ.
+
+---
+
+## SUMMARY
+- Branch: feat/bccp-upgrade
+- Total Phase 8 TIPs: 7
+- DONE: 7
 - BLOCKED: 0
-- Overall: READY FOR VERIFY
+- Overall: COMPLETED ✅
+
+
+
+

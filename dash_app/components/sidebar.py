@@ -59,10 +59,10 @@ def create_sidebar_layout(filter_opts):
         dbc.Accordion([
             # Bưu chính chuyển phát (BCCP)
             dbc.AccordionItem([
-                dcc.Link("📈 KPI tổng hợp", href="/bccp", id="nav-bccp-kpi", className="sidebar-menu-item"),
-                dcc.Link("📊 Doanh thu chi tiết", href="/bccp/revenue", id="nav-bccp-revenue", className="sidebar-menu-item"),
+                dcc.Link("📈 KPI & Biểu đồ", href="/bccp", id="nav-bccp-kpi", className="sidebar-menu-item"),
                 dcc.Link("🔍 Chi tiết khách hàng", href="/bccp/customer", id="nav-bccp-customer", className="sidebar-menu-item"),
-                dcc.Link("📈 Biểu đồ trực quan", href="/bccp/charts", id="nav-bccp-charts", className="sidebar-menu-item"),
+                dcc.Link("🆕 Khách hàng mới", href="/bccp/new-customer", id="nav-bccp-new-customer", className="sidebar-menu-item"),
+                dcc.Link("🔄 KH hiện hữu", href="/bccp/retention", id="nav-bccp-retention", className="sidebar-menu-item"),
                 dcc.Link("🚨 Cảnh báo doanh thu", href="/bccp/alerts", id="nav-bccp-alerts", className="sidebar-menu-item"),
             ], title="📦 Bưu chính chuyển phát", item_id="menu-bccp"),
             
@@ -216,50 +216,11 @@ def create_sidebar_layout(filter_opts):
             ]),
             
             # Bộ lọc dịch vụ BCCP (chỉ hiện khi ở /bccp*)
+            # Bộ lọc dịch vụ BCCP cũ ẩn đi để tương thích ngược với các callback khác
             html.Div(id="bccp-extra-filters", style={"display": "none"}, children=[
-                html.H3("📋 Bộ lọc dịch vụ BCCP", className="section-header"),
-                
-                # Lọc Nhóm Dịch vụ
-                html.Div([
-                    html.Label("Nhóm dịch vụ", className="filter-label"),
-                    dcc.Dropdown(
-                        id="sidebar-nhom-dv",
-                        options=[{"label": n, "value": n} for n in filter_opts["nhom_dv"]],
-                        multi=True,
-                        placeholder="Tất cả dịch vụ"
-                    )
-                ], className="filter-group"),
-                
-                # Lọc Loại Khách hàng
-                html.Div([
-                    html.Label("Loại khách hàng", className="filter-label"),
-                    dbc.Checklist(
-                        id="sidebar-loai-kh",
-                        options=[
-                            {"label": " Hiện hữu", "value": "Hiện hữu"},
-                            {"label": " KHM/Tái bán", "value": "KHM/Tái bán"},
-                            {"label": " Vãng lai", "value": "Vãng lai"}
-                        ],
-                        value=[],
-                        className="custom-checklist",
-                        labelStyle={"display": "block", "marginBottom": "4px"}
-                    )
-                ], className="filter-group"),
-                
-                # Lọc Trạng thái Hợp đồng
-                html.Div([
-                    html.Label("Trạng thái Hợp đồng", className="filter-label"),
-                    dbc.Checklist(
-                        id="sidebar-hop-dong",
-                        options=[
-                            {"label": " Có HĐ", "value": "Có HĐ"},
-                            {"label": " Không HĐ", "value": "Không HĐ"}
-                        ],
-                        value=[],
-                        className="custom-checklist",
-                        labelStyle={"display": "block", "marginBottom": "4px"}
-                    )
-                ], className="filter-group"),
+                dcc.Store(id="sidebar-nhom-dv", data=None),
+                dcc.Store(id="sidebar-loai-kh", data=[]),
+                dcc.Store(id="sidebar-hop-dong", data=[])
             ])
         ], id="sidebar-filters-container", style={"display": "block"})
     ], className="sidebar")

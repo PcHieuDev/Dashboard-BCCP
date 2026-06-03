@@ -1,0 +1,544 @@
+# -*- coding: utf-8 -*-
+"""
+Callbacks xử lý dữ liệu trang Khách hàng bán mới (/bccp/new-customer).
+Bao gồm: Lọc động BĐX theo Cụm, Tính toán KPI, Hiển thị bảng dữ liệu BĐX và xuất Excel.
+"""
+
+import sqlite3
+import pandas as pd
+import dash
+from dash import Output, Input, State, html, dcc, dash_table
+import dash_bootstrap_components as dbc
+from dash.dash_table.Format import Format, Group, Scheme
+from datetime import datetime
+import io
+import openpyxl
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.utils import get_column_letter
+
+import sys
+from pathlib import Path
+
+# Thêm thư mục gốc vào sys.path để import
+project_root = Path(__file__).resolve().parent.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from config.settings import DB_PATH
+from callbacks.utils import format_revenue
+
+def register_new_customer_callbacks(app):
+    """
+    Đăng ký các callback của trang Khách hàng mới.
+    """
+
+    # ==============================================================================
+    # 1. CALLBACK CASCADE: SIDEBAR CỤM -> DROPDOWN BĐX
+    # ==============================================================================
+    @app.callback(
+        [Output("new-cust-filter-bdx", "options"),
+         Output("new-cust-filter-bdx", "value")],
+        [Input("sidebar-cum", "value")]
+    )
+    def update_new_cust_bdx_dropdown(cum_val):
+        if not DB_PATH.exists():
+            return [{"label": "Tất cả BĐX", "value": "Tất cả"}], "Tất cả"
+            
+        conn = sqlite3.connect(str(DB_PATH))
+        try:
+            query = "SELECT DISTINCT ten_bdx FROM dim_buucuc WHERE ten_bdx IS NOT NULL"
+            params = []
+            if cum_val and cum_val != "Tất cả":
+                query += " AND ten_cum = ?"
+                params.append(cum_val)
+            query += " ORDER BY ten_bdx"
+            
+            df = pd.read_sql_query(query, conn, params=params)
+            options = [{"label": "Tất cả BĐX", "value": "Tất cả"}] + [{"label": b, "value": b} for b in df["ten_bdx"].tolist()]
+        except Exception as e:
+            print(f"Error loading BDX for new customer page: {e}")
+            options = [{"label": "Tất cả BĐX", "value": "Tất cả"}]
+        finally:
+            conn.close()
+            
+        return options, "Tất cả"
+
+    # ==============================================================================
+    # 2. HELPER QUERY VÀ XỬ LÝ DỮ LIỆU
+    # ==============================================================================
+    def query_and_process_new_customers(year, month, cum_val, bdx_val):
+        """
+        Query dữ liệu new_customers và plans_new_customer từ DB,
+        lọc theo Cụm và BĐX, sau đó tính toán KPIs và bảng kết quả.
+        """
+        if not DB_PATH.exists():
+            return pd.DataFrame(), {}, {}
+            
+        conn = sqlite3.connect(str(DB_PATH))
+        try:
+            # A. Query thực tế từ new_customers (JOIN dim_buucuc để lấy ten_bdx)
+            query_act = """
+                SELECT nc.cms, nc.tong_doanh_thu, nc.nhom_dv, nc.ma_bdx, b.ten_bdx, nc.ten_cum
+                FROM new_customers nc
+                LEFT JOIN (SELECT DISTINCT ma_bdx, ten_bdx FROM dim_buucuc) b ON nc.ma_bdx = b.ma_bdx
+                WHERE nc.nam = ? AND nc.thang = ?
+            """
+            df_act = pd.read_sql_query(query_act, conn, params=[year, month])
+            
+            # B. Query kế hoạch từ plans_new_customer (JOIN dim_buucuc để lấy ten_bdx, ten_cum)
+            query_plan = """
+                SELECT p.ma_xa, p.nhom_dich_vu, p.ke_hoach_doanh_thu, b.ten_bdx, b.ten_cum
+                FROM plans_new_customer p
+                LEFT JOIN (SELECT DISTINCT ma_bdx, ten_bdx, ten_cum FROM dim_buucuc) b ON p.ma_xa = b.ma_bdx
+                WHERE p.nam = ? AND p.thang = ?
+            """
+            df_plan = pd.read_sql_query(query_plan, conn, params=[year, month])
+            
+        except Exception as e:
+            print(f"Error querying new customer data: {e}")
+            df_act = pd.DataFrame()
+            df_plan = pd.DataFrame()
+        finally:
+            conn.close()
+            
+        # Áp dụng bộ lọc địa lý (Cụm và BĐX)
+        if not df_act.empty:
+            if cum_val and cum_val != "Tất cả":
+                df_act = df_act[df_act['ten_cum'] == cum_val]
+            if bdx_val and bdx_val != "Tất cả":
+                df_act = df_act[df_act['ten_bdx'] == bdx_val]
+                
+        if not df_plan.empty:
+            if cum_val and cum_val != "Tất cả":
+                df_plan = df_plan[df_plan['ten_cum'] == cum_val]
+            if bdx_val and bdx_val != "Tất cả":
+                df_plan = df_plan[df_plan['ten_bdx'] == bdx_val]
+                
+        # 1. Tính toán KPIs tổng hợp
+        tot_sl = df_act['cms'].nunique() if not df_act.empty else 0
+        tot_dt = df_act['tong_doanh_thu'].sum() if not df_act.empty else 0.0
+        tot_kh = df_plan['ke_hoach_doanh_thu'].sum() if not df_plan.empty else 0.0
+        tot_pct = (tot_dt / tot_kh * 100) if tot_kh > 0 else None
+        
+        kpi_totals = {
+            'count': tot_sl,
+            'revenue': tot_dt,
+            'plan': tot_kh,
+            'percent': tot_pct
+        }
+        
+        # 2. Tính toán KPIs theo Nhóm Dịch Vụ
+        # Dịch vụ Truyền thống
+        tt_act = df_act[df_act['nhom_dv'] == 'Truyền thống'] if not df_act.empty else pd.DataFrame()
+        tt_sl = tt_act['cms'].nunique() if not tt_act.empty else 0
+        tt_dt = tt_act['tong_doanh_thu'].sum() if not tt_act.empty else 0.0
+        tt_kh = df_plan[df_plan['nhom_dich_vu'] == 'Truyền thống']['ke_hoach_doanh_thu'].sum() if not df_plan.empty else 0.0
+        tt_pct = (tt_dt / tt_kh * 100) if tt_kh > 0 else None
+        
+        # Dịch vụ TMĐT
+        tmdt_act = df_act[df_act['nhom_dv'] == 'TMĐT'] if not df_act.empty else pd.DataFrame()
+        tmdt_sl = tmdt_act['cms'].nunique() if not tmdt_act.empty else 0
+        tmdt_dt = tmdt_act['tong_doanh_thu'].sum() if not tmdt_act.empty else 0.0
+        tmdt_kh = df_plan[df_plan['nhom_dich_vu'] == 'TMĐT']['ke_hoach_doanh_thu'].sum() if not df_plan.empty else 0.0
+        tmdt_pct = (tmdt_dt / tmdt_kh * 100) if tmdt_kh > 0 else None
+        
+        kpi_services = {
+            'tt': {'count': tt_sl, 'revenue': tt_dt, 'plan': tt_kh, 'percent': tt_pct},
+            'tmdt': {'count': tmdt_sl, 'revenue': tmdt_dt, 'plan': tmdt_kh, 'percent': tmdt_pct}
+        }
+        
+        # 3. Xây dựng bảng BĐX chi tiết
+        all_bdx = set()
+        if not df_act.empty:
+            all_bdx.update(df_act['ten_bdx'].dropna().unique())
+        if not df_plan.empty:
+            all_bdx.update(df_plan['ten_bdx'].dropna().unique())
+            
+        bdx_rows = []
+        for b_name in sorted(all_bdx):
+            b_act = df_act[df_act['ten_bdx'] == b_name] if not df_act.empty else pd.DataFrame()
+            b_plan = df_plan[df_plan['ten_bdx'] == b_name] if not df_plan.empty else pd.DataFrame()
+            
+            # Truyền thống
+            b_tt_act = b_act[b_act['nhom_dv'] == 'Truyền thống'] if not b_act.empty else pd.DataFrame()
+            b_sl_tt = b_tt_act['cms'].nunique() if not b_tt_act.empty else 0
+            b_dt_tt = b_tt_act['tong_doanh_thu'].sum() if not b_tt_act.empty else 0.0
+            b_kh_tt = b_plan[b_plan['nhom_dich_vu'] == 'Truyền thống']['ke_hoach_doanh_thu'].sum() if not b_plan.empty else 0.0
+            b_pct_tt = (b_dt_tt / b_kh_tt * 100) if b_kh_tt > 0 else None
+            
+            # TMĐT
+            b_tmdt_act = b_act[b_act['nhom_dv'] == 'TMĐT'] if not b_act.empty else pd.DataFrame()
+            b_sl_tmdt = b_tmdt_act['cms'].nunique() if not b_tmdt_act.empty else 0
+            b_dt_tmdt = b_tmdt_act['tong_doanh_thu'].sum() if not b_tmdt_act.empty else 0.0
+            b_kh_tmdt = b_plan[b_plan['nhom_dich_vu'] == 'TMĐT']['ke_hoach_doanh_thu'].sum() if not b_plan.empty else 0.0
+            b_pct_tmdt = (b_dt_tmdt / b_kh_tmdt * 100) if b_kh_tmdt > 0 else None
+            
+            # Tổng cộng BĐX
+            b_tot_sl = b_sl_tt + b_sl_tmdt
+            b_tot_dt = b_dt_tt + b_dt_tmdt
+            b_tot_kh = b_kh_tt + b_kh_tmdt
+            b_tot_pct = (b_tot_dt / b_tot_kh * 100) if b_tot_kh > 0 else None
+            
+            bdx_rows.append({
+                'ten_bdx': b_name,
+                'sl_tt': b_sl_tt,
+                'dt_tt': b_dt_tt,
+                'kh_tt': b_kh_tt,
+                'pct_tt': b_pct_tt,
+                'sl_tmdt': b_sl_tmdt,
+                'dt_tmdt': b_dt_tmdt,
+                'kh_tmdt': b_kh_tmdt,
+                'pct_tmdt': b_pct_tmdt,
+                'tot_sl': b_tot_sl,
+                'tot_dt': b_tot_dt,
+                'tot_kh': b_tot_kh,
+                'pct_dat': b_tot_pct
+            })
+            
+        df_result = pd.DataFrame(bdx_rows)
+        return df_result, kpi_totals, kpi_services
+
+    # ==============================================================================
+    # 3. CALLBACK CHÍNH CẬP NHẬT GIAO DIỆN
+    # ==============================================================================
+    @app.callback(
+        [# Block 1
+         Output("new-cust-kpi-count-value", "children"), Output("new-cust-kpi-count-subtext", "children"),
+         Output("new-cust-kpi-revenue-value", "children"), Output("new-cust-kpi-revenue-subtext", "children"),
+         Output("new-cust-kpi-percent-value", "children"), Output("new-cust-kpi-percent-subtext", "children"),
+         # Block 2 (Truyền thống)
+         Output("new-cust-svc-tt-count", "children"), Output("new-cust-svc-tt-revenue", "children"),
+         Output("new-cust-svc-tt-plan", "children"), Output("new-cust-svc-tt-percent", "children"),
+         # Block 2 (TMĐT)
+         Output("new-cust-svc-tmdt-count", "children"), Output("new-cust-svc-tmdt-revenue", "children"),
+         Output("new-cust-svc-tmdt-plan", "children"), Output("new-cust-svc-tmdt-percent", "children"),
+         # Bảng chi tiết
+         Output("new-cust-table-container", "children")],
+        [Input("tabs-navigation", "value"),
+         Input("sidebar-year", "value"),
+         Input("sidebar-month-select", "value"),
+         Input("sidebar-cum", "value"),
+         Input("new-cust-filter-bdx", "value")]
+    )
+    def update_new_cust_page(tab_val, year, month, cum_val, bdx_val):
+        if tab_val != "tab-new-customer" or tab_val is None:
+            return [dash.no_update] * 15
+            
+        # Gọi hàm xử lý dữ liệu
+        df_result, kpi_tot, kpi_svc = query_and_process_new_customers(year, month, cum_val, bdx_val)
+        
+        # 1. Format các thẻ KPI tổng hợp (Block 1)
+        val_count = f"{kpi_tot['count']:,} KH"
+        sub_count = html.Span("Khách hàng mới phát sinh")
+        
+        val_rev = format_revenue(kpi_tot['revenue'])
+        sub_rev = html.Span(f"Kế hoạch: {format_revenue(kpi_tot['plan'])}")
+        
+        val_pct = f"{kpi_tot['percent']:.1f}%" if kpi_tot['percent'] is not None else "-"
+        sub_pct = html.Span("Tỷ lệ hoàn thành kế hoạch")
+        
+        # 2. Format chỉ số theo Nhóm dịch vụ (Block 2)
+        tt_count = f"{kpi_svc['tt']['count']:,}"
+        tt_rev = format_revenue(kpi_svc['tt']['revenue'])
+        tt_plan = format_revenue(kpi_svc['tt']['plan'])
+        tt_pct = f"{kpi_svc['tt']['percent']:.1f}%" if kpi_svc['tt']['percent'] is not None else "-"
+        
+        tmdt_count = f"{kpi_svc['tmdt']['count']:,}"
+        tmdt_rev = format_revenue(kpi_svc['tmdt']['revenue'])
+        tmdt_plan = format_revenue(kpi_svc['tmdt']['plan'])
+        tmdt_pct = f"{kpi_svc['tmdt']['percent']:.1f}%" if kpi_svc['tmdt']['percent'] is not None else "-"
+        
+        # 3. Tạo DataTable (Block 3)
+        if df_result.empty:
+            table_element = dbc.Alert("Không có dữ liệu khách hàng bán mới cho bộ lọc hiện tại.", color="warning", className="m-3")
+        else:
+            # Tạo dòng TỔNG CỘNG
+            sum_sl_tt = df_result['sl_tt'].sum()
+            sum_dt_tt = df_result['dt_tt'].sum()
+            sum_kh_tt = df_result['kh_tt'].sum()
+            sum_pct_tt = (sum_dt_tt / sum_kh_tt * 100) if sum_kh_tt > 0 else None
+            
+            sum_sl_tmdt = df_result['sl_tmdt'].sum()
+            sum_dt_tmdt = df_result['dt_tmdt'].sum()
+            sum_kh_tmdt = df_result['kh_tmdt'].sum()
+            sum_pct_tmdt = (sum_dt_tmdt / sum_kh_tmdt * 100) if sum_kh_tmdt > 0 else None
+            
+            sum_tot_sl = df_result['tot_sl'].sum()
+            sum_tot_dt = df_result['tot_dt'].sum()
+            sum_tot_kh = df_result['tot_kh'].sum()
+            sum_pct_dat = (sum_tot_dt / sum_tot_kh * 100) if sum_tot_kh > 0 else None
+            
+            total_row = {
+                'ten_bdx': 'TỔNG CỘNG',
+                'sl_tt': sum_sl_tt,
+                'dt_tt': sum_dt_tt,
+                'kh_tt': sum_kh_tt,
+                'pct_tt': sum_pct_tt,
+                'sl_tmdt': sum_sl_tmdt,
+                'dt_tmdt': sum_dt_tmdt,
+                'kh_tmdt': sum_kh_tmdt,
+                'pct_tmdt': sum_pct_tmdt,
+                'tot_sl': sum_tot_sl,
+                'tot_dt': sum_tot_dt,
+                'tot_kh': sum_tot_kh,
+                'pct_dat': sum_pct_dat
+            }
+            
+            df_table = pd.concat([df_result, pd.DataFrame([total_row])], ignore_index=True)
+            
+            # Hàm định dạng dữ liệu cho DataTable
+            def format_pct(val):
+                return f"{val:.1f}%" if pd.notna(val) else "-"
+                
+            def format_money(val):
+                return f"{val:,.0f} đ" if pd.notna(val) else "0 đ"
+                
+            df_table_display = df_table.copy()
+            for col in ['dt_tt', 'kh_tt', 'dt_tmdt', 'kh_tmdt', 'tot_dt', 'tot_kh']:
+                df_table_display[col] = df_table_display[col].apply(format_money)
+            for col in ['pct_tt', 'pct_tmdt', 'pct_dat']:
+                df_table_display[col] = df_table_display[col].apply(format_pct)
+            for col in ['sl_tt', 'sl_tmdt', 'tot_sl']:
+                df_table_display[col] = df_table_display[col].apply(lambda x: f"{x:,}" if pd.notna(x) else "0")
+                
+            columns = [
+                {"name": "Bưu điện Xã/Huyện", "id": "ten_bdx"},
+                {"name": "SL KH mới (TT)", "id": "sl_tt"},
+                {"name": "Doanh thu (TT)", "id": "dt_tt"},
+                {"name": "Kế hoạch (TT)", "id": "kh_tt"},
+                {"name": "% Đạt (TT)", "id": "pct_tt"},
+                {"name": "SL KH mới (TMĐT)", "id": "sl_tmdt"},
+                {"name": "Doanh thu (TMĐT)", "id": "dt_tmdt"},
+                {"name": "Kế hoạch (TMĐT)", "id": "kh_tmdt"},
+                {"name": "% Đạt (TMĐT)", "id": "pct_tmdt"},
+                {"name": "Tổng SL", "id": "tot_sl"},
+                {"name": "Tổng DT", "id": "tot_dt"},
+                {"name": "Tổng Kế hoạch", "id": "tot_kh"},
+                {"name": "Tổng % Đạt", "id": "pct_dat"},
+            ]
+            
+            table_element = dash_table.DataTable(
+                columns=columns,
+                data=df_table_display.to_dict('records'),
+                page_action='native',
+                page_size=20,
+                sort_action='native',
+                filter_action='native',
+                style_table={'overflowX': 'auto', 'maxHeight': '500px', 'overflowY': 'auto', 'minWidth': '100%'},
+                style_header={
+                    'backgroundColor': '#F1F5F9',
+                    'fontWeight': 'bold',
+                    'color': '#1E293B',
+                    'border': '1px solid #E2E8F0',
+                    'textAlign': 'left',
+                    'fontSize': '12px',
+                    'padding': '10px 8px'
+                },
+                style_cell={
+                    'border': '1px solid #E2E8F0',
+                    'padding': '8px 8px',
+                    'fontSize': '12px',
+                    'color': '#334155',
+                    'fontFamily': 'Inter, sans-serif'
+                },
+                style_data_conditional=[
+                    {
+                        'if': {'row_index': 'odd'},
+                        'backgroundColor': '#F8FAFC',
+                    },
+                    {
+                        'if': {'filter_query': '{ten_bdx} = "TỔNG CỘNG"'},
+                        'backgroundColor': '#F1F5F9',
+                        'fontWeight': 'bold',
+                        'color': '#0F766E'
+                    }
+                ]
+            )
+            
+        return [
+            val_count, sub_count,
+            val_rev, sub_rev,
+            val_pct, sub_pct,
+            tt_count, tt_rev, tt_plan, tt_pct,
+            tmdt_count, tmdt_rev, tmdt_plan, tmdt_pct,
+            table_element
+        ]
+
+    # ==============================================================================
+    # 4. CALLBACK EXPORT EXCEL
+    # ==============================================================================
+    @app.callback(
+        Output("new-cust-download", "data"),
+        [Input("new-cust-btn-export-excel", "n_clicks")],
+        [State("tabs-navigation", "value"),
+         State("sidebar-year", "value"),
+         State("sidebar-month-select", "value"),
+         State("sidebar-cum", "value"),
+         State("new-cust-filter-bdx", "value")],
+        prevent_initial_call=True
+    )
+    def export_new_cust_excel(n_clicks, tab_val, year, month, cum_val, bdx_val):
+        if not n_clicks or tab_val != "tab-new-customer" or tab_val is None:
+            return dash.no_update
+            
+        # Query và xử lý dữ liệu
+        df_result, kpi_tot, _ = query_and_process_new_customers(year, month, cum_val, bdx_val)
+        
+        if df_result.empty:
+            return dash.no_update
+            
+        # Tạo file Excel in-memory bằng openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "KH Bán Mới"
+        
+        # Bật hiển thị grid lines
+        ws.views.sheetView[0].showGridLines = True
+        
+        # Tiêu đề báo cáo
+        title_font = Font(name="Arial", size=14, bold=True, color="1E3A8A")
+        sub_font = Font(name="Arial", size=10, italic=True)
+        header_font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+        data_font = Font(name="Arial", size=10)
+        total_font = Font(name="Arial", size=10, bold=True, color="0F766E")
+        
+        header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+        total_fill = PatternFill(start_color="E2E8F0", end_color="E2E8F0", fill_type="solid")
+        
+        thin_border = Border(
+            left=Side(style='thin', color='CBD5E1'),
+            right=Side(style='thin', color='CBD5E1'),
+            top=Side(style='thin', color='CBD5E1'),
+            bottom=Side(style='thin', color='CBD5E1')
+        )
+        
+        # Ghi các thông tin tiêu đề
+        ws['A1'] = f"BÁO CÁO PHÁT TRIỂN KHÁCH HÀNG BÁN MỚI - THÁNG {month:02d}/{year}"
+        ws['A1'].font = title_font
+        
+        cum_txt = cum_val if cum_val else "Tất cả"
+        bdx_txt = bdx_val if bdx_val else "Tất cả"
+        ws['A2'] = f"Bộ lọc: Cụm: {cum_txt} | BĐX: {bdx_txt} | Tổng KH mới trong kỳ: {kpi_tot['count']:,} KH"
+        ws['A2'].font = sub_font
+        
+        # Headers cho bảng
+        headers = [
+            "Bưu điện Huyện/Xã", "SL KH mới (TT)", "Doanh thu (TT)", "Kế hoạch (TT)", "% Đạt (TT)",
+            "SL KH mới (TMĐT)", "Doanh thu (TMĐT)", "Kế hoạch (TMĐT)", "% Đạt (TMĐT)",
+            "Tổng SL", "Tổng Doanh thu", "Tổng Kế hoạch", "Tổng % Đạt"
+        ]
+        
+        row_num = 4
+        for col_idx, h in enumerate(headers, 1):
+            cell = ws.cell(row=row_num, column=col_idx, value=h)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            cell.border = thin_border
+            
+        ws.row_dimensions[row_num].height = 28
+        
+        # Ghi dữ liệu
+        for idx, r in df_result.iterrows():
+            row_num += 1
+            ws.row_dimensions[row_num].height = 20
+            
+            # Viết từng cột
+            ws.cell(row=row_num, column=1, value=r['ten_bdx']).alignment = Alignment(horizontal="left", vertical="center")
+            ws.cell(row=row_num, column=2, value=r['sl_tt']).alignment = Alignment(horizontal="right", vertical="center")
+            ws.cell(row=row_num, column=3, value=r['dt_tt']).alignment = Alignment(horizontal="right", vertical="center")
+            ws.cell(row=row_num, column=4, value=r['kh_tt']).alignment = Alignment(horizontal="right", vertical="center")
+            ws.cell(row=row_num, column=5, value=r['pct_tt'] / 100 if pd.notna(r['pct_tt']) else "").alignment = Alignment(horizontal="right", vertical="center")
+            
+            ws.cell(row=row_num, column=6, value=r['sl_tmdt']).alignment = Alignment(horizontal="right", vertical="center")
+            ws.cell(row=row_num, column=7, value=r['dt_tmdt']).alignment = Alignment(horizontal="right", vertical="center")
+            ws.cell(row=row_num, column=8, value=r['kh_tmdt']).alignment = Alignment(horizontal="right", vertical="center")
+            ws.cell(row=row_num, column=9, value=r['pct_tmdt'] / 100 if pd.notna(r['pct_tmdt']) else "").alignment = Alignment(horizontal="right", vertical="center")
+            
+            ws.cell(row=row_num, column=10, value=r['tot_sl']).alignment = Alignment(horizontal="right", vertical="center")
+            ws.cell(row=row_num, column=11, value=r['tot_dt']).alignment = Alignment(horizontal="right", vertical="center")
+            ws.cell(row=row_num, column=12, value=r['tot_kh']).alignment = Alignment(horizontal="right", vertical="center")
+            ws.cell(row=row_num, column=13, value=r['pct_dat'] / 100 if pd.notna(r['pct_dat']) else "").alignment = Alignment(horizontal="right", vertical="center")
+            
+            # Định dạng number format & font cho dòng dữ liệu
+            for col_idx in range(1, 14):
+                cell = ws.cell(row=row_num, column=col_idx)
+                cell.font = data_font
+                cell.border = thin_border
+                
+                # Định dạng tiền tệ
+                if col_idx in [3, 4, 7, 8, 11, 12]:
+                    cell.number_format = '#,##0" đ"'
+                # Định dạng phần trăm
+                elif col_idx in [5, 9, 13]:
+                    cell.number_format = '0.0%'
+                # Định dạng số lượng
+                elif col_idx in [2, 6, 10]:
+                    cell.number_format = '#,##0'
+                    
+        # Dòng TỔNG CỘNG
+        row_num += 1
+        ws.row_dimensions[row_num].height = 22
+        
+        sum_sl_tt = df_result['sl_tt'].sum()
+        sum_dt_tt = df_result['dt_tt'].sum()
+        sum_kh_tt = df_result['kh_tt'].sum()
+        
+        sum_sl_tmdt = df_result['sl_tmdt'].sum()
+        sum_dt_tmdt = df_result['dt_tmdt'].sum()
+        sum_kh_tmdt = df_result['kh_tmdt'].sum()
+        
+        sum_tot_sl = df_result['tot_sl'].sum()
+        sum_tot_dt = df_result['tot_dt'].sum()
+        sum_tot_kh = df_result['tot_kh'].sum()
+        
+        ws.cell(row=row_num, column=1, value="TỔNG CỘNG").alignment = Alignment(horizontal="left", vertical="center")
+        ws.cell(row=row_num, column=2, value=sum_sl_tt)
+        ws.cell(row=row_num, column=3, value=sum_dt_tt)
+        ws.cell(row=row_num, column=4, value=sum_kh_tt)
+        ws.cell(row=row_num, column=5, value=(sum_dt_tt / sum_kh_tt) if sum_kh_tt > 0 else "")
+        
+        ws.cell(row=row_num, column=6, value=sum_sl_tmdt)
+        ws.cell(row=row_num, column=7, value=sum_dt_tmdt)
+        ws.cell(row=row_num, column=8, value=sum_kh_tmdt)
+        ws.cell(row=row_num, column=9, value=(sum_dt_tmdt / sum_kh_tmdt) if sum_kh_tmdt > 0 else "")
+        
+        ws.cell(row=row_num, column=10, value=sum_tot_sl)
+        ws.cell(row=row_num, column=11, value=sum_tot_dt)
+        ws.cell(row=row_num, column=12, value=sum_tot_kh)
+        ws.cell(row=row_num, column=13, value=(sum_tot_dt / sum_tot_kh) if sum_tot_kh > 0 else "")
+        
+        for col_idx in range(1, 14):
+            cell = ws.cell(row=row_num, column=col_idx)
+            cell.font = total_font
+            cell.fill = total_fill
+            cell.border = thin_border
+            if col_idx in [3, 4, 7, 8, 11, 12]:
+                cell.number_format = '#,##0" đ"'
+            elif col_idx in [5, 9, 13]:
+                cell.number_format = '0.0%'
+            elif col_idx in [2, 6, 10]:
+                cell.number_format = '#,##0'
+                
+        # Auto-adjust column widths
+        for col in ws.columns:
+            max_len = 0
+            col_letter = get_column_letter(col[0].column)
+            for cell in col:
+                val = str(cell.value or "")
+                if cell.number_format == '#,##0" đ"' and isinstance(cell.value, (int, float)):
+                    val = f"{cell.value:,.0f} đ"
+                elif cell.number_format == '0.0%' and isinstance(cell.value, (int, float)):
+                    val = f"{cell.value * 100:.1f}%"
+                max_len = max(max_len, len(val))
+            ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+            
+        # Lưu ra bytes
+        output_stream = io.BytesIO()
+        wb.save(output_stream)
+        excel_bytes = output_stream.getvalue()
+        output_stream.close()
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"bao_cao_khach_hang_moi_BBDX_{timestamp}.xlsx"
+        return dcc.send_bytes(excel_bytes, filename=filename)

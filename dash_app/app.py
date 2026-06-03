@@ -25,23 +25,23 @@ from components.sidebar import create_sidebar_layout
 
 # Import các trang Layouts
 from pages.kpi_page import create_kpi_page_layout
-from pages.revenue_detail import create_revenue_detail_layout
 from pages.customer_detail import create_customer_detail_layout
-from pages.charts import create_charts_page_layout
 from pages.import_data import create_import_page_layout
 from pages.hcc_revenue import create_hcc_revenue_layout
+from pages.new_customer import create_new_customer_layout
+from pages.retention import create_retention_layout
 
 # Import các Callbacks đăng ký
 from callbacks.sidebar_callbacks import register_sidebar_callbacks
 from callbacks.kpi_callbacks import register_kpi_callbacks
-from callbacks.revenue_callbacks import register_revenue_callbacks
 from callbacks.customer_callbacks import register_customer_callbacks
 from callbacks.import_callbacks import register_import_callbacks
-from callbacks.charts_callbacks import register_charts_callbacks
 from callbacks.alerts_callbacks import register_alerts_callbacks
 from callbacks.global_callbacks import register_global_callbacks
 from callbacks.service_callbacks import register_service_callbacks
 from callbacks.hcc_revenue_callbacks import register_hcc_revenue_callbacks
+from callbacks.new_customer_callbacks import register_new_customer_callbacks
+from callbacks.retention_callbacks import register_retention_callbacks
 
 # Cấu hình UTF-8 cho Windows output để hiển thị log tiếng Việt chính xác
 if sys.platform.startswith('win'):
@@ -232,12 +232,12 @@ def sync_url_to_tabs_navigation(pathname):
     """
     if pathname == "/bccp":
         return "tab-kpi"
-    elif pathname == "/bccp/revenue":
-        return "tab-revenue"
     elif pathname == "/bccp/customer":
         return "tab-customer"
-    elif pathname == "/bccp/charts":
-        return "tab-charts"
+    elif pathname == "/bccp/new-customer":
+        return "tab-new-customer"
+    elif pathname == "/bccp/retention":
+        return "tab-retention"
     elif pathname == "/bccp/alerts":
         return "tab-alerts"
     elif pathname == "/import":
@@ -269,12 +269,12 @@ def render_page(pathname):
             
     elif pathname == "/bccp":
         return create_kpi_page_layout(), "📊 Bưu chính chuyển phát - KPI"
-    elif pathname == "/bccp/revenue":
-        return create_revenue_detail_layout(), "📊 Bưu chính chuyển phát - Doanh thu"
     elif pathname == "/bccp/customer":
         return create_customer_detail_layout(), "📊 Bưu chính chuyển phát - Khách hàng"
-    elif pathname == "/bccp/charts":
-        return create_charts_page_layout(), "📊 Bưu chính chuyển phát - Biểu đồ"
+    elif pathname == "/bccp/new-customer":
+        return create_new_customer_layout(), "📊 Bưu chính chuyển phát - Khách hàng mới"
+    elif pathname == "/bccp/retention":
+        return create_retention_layout(), "📊 Bưu chính chuyển phát - Duy trì khách hàng"
     elif pathname == "/bccp/alerts":
         try:
             from pages.alerts import create_alerts_page_layout
@@ -362,14 +362,14 @@ def handle_logout(n_clicks):
 # --------------------------------------------------------------------------
 register_sidebar_callbacks(app)
 register_kpi_callbacks(app)
-register_revenue_callbacks(app)
 register_customer_callbacks(app)
 register_import_callbacks(app)
-register_charts_callbacks(app)
 register_alerts_callbacks(app)
 register_global_callbacks(app)
 register_service_callbacks(app)
 register_hcc_revenue_callbacks(app)
+register_new_customer_callbacks(app)
+register_retention_callbacks(app)
 
 # --------------------------------------------------------------------------
 # CHẠY ỨNG DỤNG
