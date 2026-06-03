@@ -123,7 +123,18 @@ E:\OneDrive\z.Database-TTKD\
    - TIP-004 (DONE): Frontend — HCC Revenue + Routing /bccp + Xóa PDF
    - TIP-005 (DONE): Frontend — Import UI (Upload CSV + nút Đồng bộ)
    - FIX-001 (DONE): Fix ten_Cum (case) còn sót trong global/alerts/service callbacks
-
+10. **[DONE ✅] RBAC Authentication**: Tạo 30 tài khoản (admin, provincial, cluster) với Flask-Login
+11. **[IN PROGRESS] Phase 8 — Nâng cấp Module BCCP**:
+    - **Branch**: `feat/bccp-upgrade`
+    - **Worktree**: `E:\Projects\worktrees\Dashboard-BCCP\feat-bccp-upgrade`
+    - **KH 2026 đã import**: plans (19,884 dòng), plans_new_customer (2,472 dòng)
+    - `[ ]` TIP-bccp-001 (P0): Data Layer — Bảng new_customers + Calculator
+    - `[ ]` TIP-bccp-002 (P0): ETL Trigger — Auto-calc khi import BCCP
+    - `[ ]` TIP-bccp-003 (P1): Gộp Charts vào /bccp
+    - `[ ]` TIP-bccp-004 (P1): Gộp Revenue + Bộ lọc DV vào /bccp/customer
+    - `[ ]` TIP-bccp-005 (P0): Trang Khách hàng mới /bccp/new-customer
+    - `[ ]` TIP-bccp-006 (P0): Trang KHHH Retention /bccp/retention
+    - `[ ]` TIP-bccp-007 (P1): Sidebar + Routing Cleanup
 
 ## Issues & Notes
 - **[SỬA LỖI QA REPORT - 2026-06-02]**: Khắc phục triệt để 3 lỗi trong báo cáo nghiệm thu QA:
