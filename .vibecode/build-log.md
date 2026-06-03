@@ -163,12 +163,26 @@ Builder started: 2026-06-02T18:03:00+07:00
 
 ---
 
+## TIP-bccp-004: Gộp Revenue + Bộ lọc DV vào /bccp/customer
+- Status: DONE
+- Started: 2026-06-04T01:23:00+07:00
+- Completed: 2026-06-04T01:35:00+07:00
+- Files: 0 created, 4 modified, 2 deleted
+- Tests: 4/4 passed
+- Commit: `feat(bccp): TIP-bccp-004 — UI: Merge revenue page and add inline filters to customer page`
+- Commit hash: N/A
+- Issues: None
+- Notes: Gộp trang doanh thu xoay chiều và trang khách hàng chi tiết (CMS) vào chung `/bccp/customer`. Chuyển bộ lọc BCCP (nhóm DV, loại KH, hợp đồng) thành bộ lọc inline ở đầu trang, ẩn bộ lọc cũ trên sidebar bằng dcc.Store ẩn để giữ tương thích ngược. Xóa revenue_detail.py và revenue_callbacks.py.
+
+---
+
 ## SUMMARY
 - Branch: feat/bccp-upgrade
 - Total Phase 8 TIPs: 7
-- DONE: 3
+- DONE: 4
 - BLOCKED: 0
 - Overall: IN PROGRESS
+
 
 
 

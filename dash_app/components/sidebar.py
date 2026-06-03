@@ -216,50 +216,11 @@ def create_sidebar_layout(filter_opts):
             ]),
             
             # Bộ lọc dịch vụ BCCP (chỉ hiện khi ở /bccp*)
+            # Bộ lọc dịch vụ BCCP cũ ẩn đi để tương thích ngược với các callback khác
             html.Div(id="bccp-extra-filters", style={"display": "none"}, children=[
-                html.H3("📋 Bộ lọc dịch vụ BCCP", className="section-header"),
-                
-                # Lọc Nhóm Dịch vụ
-                html.Div([
-                    html.Label("Nhóm dịch vụ", className="filter-label"),
-                    dcc.Dropdown(
-                        id="sidebar-nhom-dv",
-                        options=[{"label": n, "value": n} for n in filter_opts["nhom_dv"]],
-                        multi=True,
-                        placeholder="Tất cả dịch vụ"
-                    )
-                ], className="filter-group"),
-                
-                # Lọc Loại Khách hàng
-                html.Div([
-                    html.Label("Loại khách hàng", className="filter-label"),
-                    dbc.Checklist(
-                        id="sidebar-loai-kh",
-                        options=[
-                            {"label": " Hiện hữu", "value": "Hiện hữu"},
-                            {"label": " KHM/Tái bán", "value": "KHM/Tái bán"},
-                            {"label": " Vãng lai", "value": "Vãng lai"}
-                        ],
-                        value=[],
-                        className="custom-checklist",
-                        labelStyle={"display": "block", "marginBottom": "4px"}
-                    )
-                ], className="filter-group"),
-                
-                # Lọc Trạng thái Hợp đồng
-                html.Div([
-                    html.Label("Trạng thái Hợp đồng", className="filter-label"),
-                    dbc.Checklist(
-                        id="sidebar-hop-dong",
-                        options=[
-                            {"label": " Có HĐ", "value": "Có HĐ"},
-                            {"label": " Không HĐ", "value": "Không HĐ"}
-                        ],
-                        value=[],
-                        className="custom-checklist",
-                        labelStyle={"display": "block", "marginBottom": "4px"}
-                    )
-                ], className="filter-group"),
+                dcc.Store(id="sidebar-nhom-dv", data=None),
+                dcc.Store(id="sidebar-loai-kh", data=[]),
+                dcc.Store(id="sidebar-hop-dong", data=[])
             ])
         ], id="sidebar-filters-container", style={"display": "block"})
     ], className="sidebar")
