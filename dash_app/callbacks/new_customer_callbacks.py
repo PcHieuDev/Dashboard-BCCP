@@ -506,7 +506,110 @@ def register_new_customer_callbacks(app):
         ]
 
     # ==============================================================================
-    # 4. CALLBACK EXPORT EXCEL
+    # 4a. CALLBACK EXPORT DANH SÁCH TOÀN BỘ KHM (nút mới trong section Top KHM)
+    # ==============================================================================
+    @app.callback(
+        Output("new-cust-download-khm", "data"),
+        [Input("new-cust-btn-export-khm", "n_clicks")],
+        [State("tabs-navigation", "value"),
+         State("sidebar-year", "value"),
+         State("sidebar-month-select", "value"),
+         State("sidebar-cum", "value")],
+        prevent_initial_call=True
+    )
+    def export_all_khm(n_clicks, tab_val, year, month, cum_val):
+        if not n_clicks or tab_val != "tab-new-customer":
+            return dash.no_update
+        
+        if not DB_PATH.exists():
+            return dash.no_update
+        
+        conn_exp = sqlite3.connect(str(DB_PATH))
+        try:
+            q = """
+                SELECT nc.ten_cum   AS [Cum],
+                       b.ten_bdx   AS [BDH/Xa],
+                       nc.cms      AS [Ma CMS],
+                       nc.buu_cuc  AS [Ma Buu Cuc],
+                       nc.nhom_dv  AS [Nhom DV],
+                       nc.tong_doanh_thu AS [Doanh thu thang dau]
+                FROM new_customers nc
+                LEFT JOIN (SELECT DISTINCT ma_bc, ten_bdx FROM dim_buucuc) b
+                       ON nc.buu_cuc = b.ma_bc
+                WHERE nc.nam = ? AND nc.thang = ?
+            """
+            params = [year, month]
+            if cum_val and cum_val != "Tất cả":
+                q += " AND nc.ten_cum = ?"
+                params.append(cum_val)
+            q += " ORDER BY nc.tong_doanh_thu DESC"
+            df_khm = pd.read_sql_query(q, conn_exp, params=params)
+        except Exception as e:
+            print(f"Error export KHM: {e}")
+            df_khm = pd.DataFrame()
+        finally:
+            conn_exp.close()
+        
+        if df_khm.empty:
+            return dash.no_update
+        
+        # Tạo Excel
+        wb_khm = openpyxl.Workbook()
+        ws_khm = wb_khm.active
+        ws_khm.title = "Danh sach KHM"
+        
+        title_f = Font(name="Arial", size=13, bold=True, color="1E3A8A")
+        sub_f   = Font(name="Arial", size=10, italic=True)
+        hdr_f   = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+        dat_f   = Font(name="Arial", size=10)
+        hdr_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+        thin_b  = Border(
+            left=Side(style='thin', color='CBD5E1'), right=Side(style='thin', color='CBD5E1'),
+            top=Side(style='thin', color='CBD5E1'),  bottom=Side(style='thin', color='CBD5E1')
+        )
+        
+        cum_label = cum_val if (cum_val and cum_val != "Tất cả") else "Tất cả"
+        ws_khm['A1'] = f"DANH SÁCH TOÀN BỘ KHÁCH HÀNG MỚI - THÁNG {month:02d}/{year}"
+        ws_khm['A1'].font = title_f
+        ws_khm['A2'] = f"Bộ lọc Cụm: {cum_label} | Tổng: {len(df_khm):,} KH | Sắp xếp theo DT giảm dần"
+        ws_khm['A2'].font = sub_f
+        
+        headers_khm = list(df_khm.columns)
+        row_k = 4
+        for ci, h in enumerate(headers_khm, 1):
+            cell = ws_khm.cell(row=row_k, column=ci, value=h)
+            cell.font = hdr_f; cell.fill = hdr_fill
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = thin_b
+        ws_khm.row_dimensions[row_k].height = 24
+        
+        for _, r in df_khm.iterrows():
+            row_k += 1
+            for ci, col_name in enumerate(headers_khm, 1):
+                val = r[col_name]
+                cell = ws_khm.cell(row=row_k, column=ci, value=val)
+                cell.font = dat_f; cell.border = thin_b
+                if "Doanh thu" in col_name:
+                    cell.number_format = '#,##0" đ"'
+                    cell.alignment = Alignment(horizontal="right")
+                else:
+                    cell.alignment = Alignment(horizontal="left")
+        
+        for col in ws_khm.columns:
+            max_len = max((len(str(c.value or "")) for c in col), default=10)
+            ws_khm.column_dimensions[get_column_letter(col[0].column)].width = min(max_len + 4, 40)
+        
+        out = io.BytesIO()
+        wb_khm.save(out)
+        excel_bytes = out.getvalue()
+        out.close()
+        
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        cum_tag = cum_val.replace(" ", "_") if (cum_val and cum_val != "Tất cả") else "TatCa"
+        return dcc.send_bytes(excel_bytes, filename=f"KHM_{cum_tag}_T{month:02d}{year}_{ts}.xlsx")
+
+    # ==============================================================================
+    # 4. CALLBACK EXPORT EXCEL (bảng BĐX)
     # ==============================================================================
     @app.callback(
         Output("new-cust-download", "data"),

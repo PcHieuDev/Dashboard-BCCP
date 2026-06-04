@@ -98,6 +98,12 @@ def create_new_customer_layout():
         
         # Block 4: Top KHM giá trị cao
         html.Div("🏆 Top Khách hàng mới giá trị cao", className="section-header", style={"marginTop": "20px"}),
+        dbc.Row([
+            dbc.Col([
+                dbc.Button("📥 Xuất toàn bộ danh sách KHM", id="new-cust-btn-export-khm", color="primary", size="sm"),
+                dcc.Download(id="new-cust-download-khm")
+            ], md=12, xs=12, style={"textAlign": "right", "marginBottom": "10px"})
+        ]),
         dbc.Spinner(
             html.Div(id="new-cust-top-khm-container"),
             color="primary"

@@ -61,23 +61,12 @@ def create_retention_layout():
         html.Div("⚠️ Danh sách Khách hàng Hiện hữu có nguy cơ rời bỏ (Churn Alerts)", className="section-header"),
         dbc.Row([
             dbc.Col([
-                html.Label("Bưu điện Huyện/Xã", className="filter-label"),
-                dcc.Dropdown(
-                    id="ret-filter-bdx",
-                    options=[{"label": "Tất cả BĐX", "value": "Tất cả"}],
-                    value="Tất cả",
-                    clearable=False
-                )
-            ], md=4, xs=12),
-            
-            dbc.Col([
-                dbc.Button("📥 Xuất Excel DS Biến Động", id="ret-btn-export-excel", color="success", size="sm", style={"marginTop": "28px", "marginRight": "10px"}),
-                dbc.Button("📥 Xuất Excel DS Cảnh báo", id="ret-btn-export-churn", color="warning", size="sm", style={"marginTop": "28px"}),
+                dbc.Button("📥 Xuất Excel DS Biến Động", id="ret-btn-export-excel", color="success", size="sm", style={"marginRight": "10px"}),
+                dbc.Button("📥 Xuất Excel DS Cảnh báo", id="ret-btn-export-churn", color="warning", size="sm"),
                 dcc.Download(id="ret-download"),
                 dcc.Download(id="ret-download-churn")
-            ], md=8, xs=12, style={"textAlign": "right"})
-        ], style={"marginBottom": "15px"}),
-        
+            ], md=12, xs=12, style={"textAlign": "right", "marginBottom": "15px"})
+        ]),
         html.Hr(),
         
         dbc.Spinner(
