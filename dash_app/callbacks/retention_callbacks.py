@@ -31,37 +31,7 @@ def register_retention_callbacks(app):
     Đăng ký các callback của trang Retention.
     """
 
-    # ==============================================================================
-    # 1. CALLBACK CASCADE: SIDEBAR CỤM -> DROPDOWN BĐX
-    # ==============================================================================
-    @app.callback(
-        [Output("ret-filter-bdx", "options"),
-         Output("ret-filter-bdx", "value")],
-        [Input("sidebar-cum", "value")]
-    )
-    def update_ret_bdx_dropdown(cum_val):
-        if not DB_PATH.exists():
-            return [{"label": "Tất cả BĐX", "value": "Tất cả"}], "Tất cả"
-            
-        conn = sqlite3.connect(str(DB_PATH))
-        try:
-            query = "SELECT DISTINCT ten_bdx FROM dim_buucuc WHERE ten_bdx IS NOT NULL"
-            params = []
-            if cum_val and cum_val != "Tất cả":
-                query += " AND ten_cum = ?"
-                params.append(cum_val)
-            query += " ORDER BY ten_bdx"
-            
-            df = pd.read_sql_query(query, conn, params=params)
-            options = [{"label": "Tất cả BĐX", "value": "Tất cả"}] + [{"label": b, "value": b} for b in df["ten_bdx"].tolist()]
-        except Exception as e:
-            print(f"Error loading BDX for retention page: {e}")
-            options = [{"label": "Tất cả BĐX", "value": "Tất cả"}
-]
-        finally:
-            conn.close()
-            
-        return options, "Tất cả"
+    # (Đã xóa cascade callback update_ret_bdx_dropdown - không còn lọc BĐX)
 
     # ==============================================================================
     # 2. HELPER XỬ LÝ BẢNG BIẾN ĐỘNG
@@ -109,13 +79,13 @@ def register_retention_callbacks(app):
          # Block 4: Churn Alerts Table
          Output("ret-churn-table-container", "children")],
         [Input("btn-apply-filter", "n_clicks"),
-         Input("tabs-navigation", "value"),
-         Input("ret-filter-bdx", "value")],
+         Input("tabs-navigation", "value")],
         [State("sidebar-year", "value"),
          State("sidebar-month-select", "value"),
          State("sidebar-cum", "value")]
     )
-    def update_retention_page(n_clicks, tab_val, bdx_val, year, month, cum_val):
+    def update_retention_page(n_clicks, tab_val, year, month, cum_val):
+        bdx_val = None  # Không còn lọc theo BĐX
         if tab_val != "tab-retention" or tab_val is None:
             return [dash.no_update] * 11
             
@@ -363,11 +333,11 @@ def register_retention_callbacks(app):
         [State("tabs-navigation", "value"),
          State("sidebar-year", "value"),
          State("sidebar-month-select", "value"),
-         State("sidebar-cum", "value"),
-         State("ret-filter-bdx", "value")],
+         State("sidebar-cum", "value")],
         prevent_initial_call=True
     )
-    def export_retention_excel(n_clicks, tab_val, year, month, cum_val, bdx_val):
+    def export_retention_excel(n_clicks, tab_val, year, month, cum_val):
+        bdx_val = None  # Không còn lọc theo BĐX
         if not n_clicks or tab_val != "tab-retention" or tab_val is None:
             return dash.no_update
             
@@ -530,11 +500,11 @@ def register_retention_callbacks(app):
         [State("tabs-navigation", "value"),
          State("sidebar-year", "value"),
          State("sidebar-month-select", "value"),
-         State("sidebar-cum", "value"),
-         State("ret-filter-bdx", "value")],
+         State("sidebar-cum", "value")],
         prevent_initial_call=True
     )
-    def export_churn_alerts_excel(n_clicks, tab_val, year, month, cum_val, bdx_val):
+    def export_churn_alerts_excel(n_clicks, tab_val, year, month, cum_val):
+        bdx_val = None  # Không còn lọc theo BĐX
         if not n_clicks or tab_val != "tab-retention" or tab_val is None:
             return dash.no_update
             

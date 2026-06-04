@@ -671,13 +671,81 @@ def register_new_customer_callbacks(app):
                     val = f"{cell.value * 100:.1f}%"
                 max_len = max(max_len, len(val))
             ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+        
+        # ================================================================
+        # SHEET 2: Danh sách đầy đủ toàn bộ KHM theo bộ lọc Cụm
+        # ================================================================
+        ws2 = wb.create_sheet(title="Danh sach KHM")
+        
+        try:
+            import sqlite3 as _sqlite3
+            conn_exp = _sqlite3.connect(str(DB_PATH))
+            q_khm = """
+                SELECT nc.cms        AS cms,
+                       nc.buu_cuc   AS ma_buu_cuc,
+                       b.ten_bdx    AS bdh_xa,
+                       nc.ten_cum   AS cum,
+                       nc.nhom_dv   AS nhom_dv,
+                       nc.tong_doanh_thu AS doanh_thu
+                FROM new_customers nc
+                LEFT JOIN (SELECT DISTINCT ma_bc, ten_bdx FROM dim_buucuc) b
+                       ON nc.buu_cuc = b.ma_bc
+                WHERE nc.nam = ? AND nc.thang = ?
+            """
+            params_khm = [year, month]
+            if cum_val and cum_val != "Tat ca" and cum_val != "T\u1ea5t c\u1ea3":
+                q_khm += " AND nc.ten_cum = ?"
+                params_khm.append(cum_val)
+            q_khm += " ORDER BY nc.tong_doanh_thu DESC"
+            df_all_khm = pd.read_sql_query(q_khm, conn_exp, params=params_khm)
+            conn_exp.close()
+        except Exception as e:
+            print(f"Error query all KHM: {e}")
+            df_all_khm = pd.DataFrame()
+        
+        ws2['A1'] = f"DANH SACH TOAN BO KHACH HANG MOI - THANG {month:02d}/{year}"
+        ws2['A1'].font = title_font
+        cum_label = cum_val if (cum_val and cum_val not in ["T\u1ea5t c\u1ea3", "Tat ca"]) else "T\u1ea5t c\u1ea3"
+        ws2['A2'] = f"Bo loc Cum: {cum_label} | Tong: {len(df_all_khm):,} KH"
+        ws2['A2'].font = sub_font
+        
+        headers2 = ["Cum", "BDH/Xa", "Ma CMS", "Ma Buu Cuc", "Nhom DV", "Doanh thu thang dau (VND)"]
+        col_map2 = ["cum", "bdh_xa", "cms", "ma_buu_cuc", "nhom_dv", "doanh_thu"]
+        
+        row2 = 4
+        for col_idx, h in enumerate(headers2, 1):
+            cell = ws2.cell(row=row2, column=col_idx, value=h)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.border = thin_border
+        ws2.row_dimensions[row2].height = 24
+        
+        if not df_all_khm.empty:
+            for _, r in df_all_khm.iterrows():
+                row2 += 1
+                for col_idx, col_key in enumerate(col_map2, 1):
+                    val = r[col_key] if col_key in r.index else ""
+                    cell = ws2.cell(row=row2, column=col_idx, value=val)
+                    cell.font = data_font
+                    cell.border = thin_border
+                    if col_key == "doanh_thu":
+                        cell.number_format = '#,##0" \u0111"'
+                        cell.alignment = Alignment(horizontal="right")
+                    else:
+                        cell.alignment = Alignment(horizontal="left")
             
-        # Lưu ra bytes
+            for col in ws2.columns:
+                max_len = max((len(str(c.value or "")) for c in col), default=10)
+                ws2.column_dimensions[get_column_letter(col[0].column)].width = min(max_len + 4, 45)
+        
+        # Luu file
         output_stream = io.BytesIO()
         wb.save(output_stream)
         excel_bytes = output_stream.getvalue()
         output_stream.close()
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"bao_cao_khach_hang_moi_BBDX_{timestamp}.xlsx"
+        cum_tag = cum_val.replace(" ", "_") if (cum_val and cum_val not in ["T\u1ea5t c\u1ea3", "Tat ca"]) else "TatCa"
+        filename = f"KHM_{cum_tag}_T{month:02d}{year}_{timestamp}.xlsx"
         return dcc.send_bytes(excel_bytes, filename=filename)
