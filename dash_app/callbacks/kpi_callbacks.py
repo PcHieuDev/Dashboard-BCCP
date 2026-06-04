@@ -6,7 +6,7 @@ Callbacks xử lý cập nhật dữ liệu cho các thẻ KPI trên Trang chủ
 import sqlite3
 import pandas as pd
 import dash
-from dash import Output, Input, html
+from dash import Output, Input, State, html
 import plotly.graph_objects as go
 
 import sys
@@ -69,22 +69,23 @@ def register_kpi_callbacks(app):
          Output("chart-revenue-trend", "figure"),
          Output("chart-cluster-bar", "figure")],
 
-        [Input("tabs-navigation", "value"),
-         Input("sidebar-year", "value"),
-         Input("sidebar-period", "value"),
-         Input("sidebar-date-range", "start_date"),
-         Input("sidebar-date-range", "end_date"),
-         Input("sidebar-week-select", "value"),
-         Input("sidebar-month-select", "value"),
-         Input("sidebar-compare-mode", "value"),
-         Input("sidebar-nhom-dv", "value"),
-         Input("sidebar-cum", "value"),
-         Input("sidebar-bdx", "value"),
-         Input("sidebar-buu-cuc", "value"),
-         Input("sidebar-loai-kh", "value"),
-         Input("sidebar-hop-dong", "value")]
+        [Input("btn-apply-filter", "n_clicks"),
+         Input("tabs-navigation", "value")],
+        [State("sidebar-year", "value"),
+         State("sidebar-period", "value"),
+         State("sidebar-date-range", "start_date"),
+         State("sidebar-date-range", "end_date"),
+         State("sidebar-week-select", "value"),
+         State("sidebar-month-select", "value"),
+         State("sidebar-compare-mode", "value"),
+         State("sidebar-nhom-dv", "value"),
+         State("sidebar-cum", "value"),
+         State("sidebar-bdx", "value"),
+         State("sidebar-buu-cuc", "value"),
+         State("sidebar-loai-kh", "value"),
+         State("sidebar-hop-dong", "value")]
     )
-    def update_kpi_cards(tab_val, year, period, start_date, end_date, week_idx, month_val, compare_mode,
+    def update_kpi_cards(n_clicks, tab_val, year, period, start_date, end_date, week_idx, month_val, compare_mode,
                          nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         # Chỉ xử lý khi đang ở Tab Tổng quan KPI
         if tab_val != "tab-kpi" or tab_val is None:

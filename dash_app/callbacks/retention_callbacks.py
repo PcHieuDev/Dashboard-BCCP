@@ -104,13 +104,14 @@ def register_retention_callbacks(app):
          Output("ret-rate-dt-value", "children"), Output("ret-rate-dt-subtext", "children"),
          # Block 3: Bảng phân tích biến động
          Output("ret-table-container", "children")],
-        [Input("tabs-navigation", "value"),
-         Input("sidebar-year", "value"),
-         Input("sidebar-month-select", "value"),
-         Input("sidebar-cum", "value"),
-         Input("ret-filter-bdx", "value")]
+        [Input("btn-apply-filter", "n_clicks"),
+         Input("tabs-navigation", "value"),
+         Input("ret-filter-bdx", "value")],
+        [State("sidebar-year", "value"),
+         State("sidebar-month-select", "value"),
+         State("sidebar-cum", "value")]
     )
-    def update_retention_page(tab_val, year, month, cum_val, bdx_val):
+    def update_retention_page(n_clicks, tab_val, bdx_val, year, month, cum_val):
         if tab_val != "tab-retention" or tab_val is None:
             return [dash.no_update] * 11
             

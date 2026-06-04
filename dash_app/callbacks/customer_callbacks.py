@@ -32,27 +32,28 @@ def register_customer_callbacks(app):
     # ==============================================================================
     @app.callback(
         Output("revenue-table-container", "children"),
-        [Input("tabs-navigation", "value"),
+        [Input("btn-apply-filter", "n_clicks"),
+         Input("tabs-navigation", "value"),
          Input("revenue-g1", "value"),
          Input("revenue-g2", "value"),
          Input("revenue-compare-opt", "value"),
-         # Bộ lọc địa lý từ Sidebar
-         Input("sidebar-year", "value"),
-         Input("sidebar-period", "value"),
-         Input("sidebar-date-range", "start_date"),
-         Input("sidebar-date-range", "end_date"),
-         Input("sidebar-week-select", "value"),
-         Input("sidebar-month-select", "value"),
          # Bộ lọc dịch vụ inline mới
          Input("customer-filter-nhom-dv", "value"),
-         Input("sidebar-cum", "value"),
-         Input("sidebar-bdx", "value"),
-         Input("sidebar-buu-cuc", "value"),
          Input("customer-filter-loai-kh", "value"),
-         Input("customer-filter-hop-dong", "value")]
+         Input("customer-filter-hop-dong", "value")],
+        [# Bộ lọc địa lý từ Sidebar (State)
+         State("sidebar-year", "value"),
+         State("sidebar-period", "value"),
+         State("sidebar-date-range", "start_date"),
+         State("sidebar-date-range", "end_date"),
+         State("sidebar-week-select", "value"),
+         State("sidebar-month-select", "value"),
+         State("sidebar-cum", "value"),
+         State("sidebar-bdx", "value"),
+         State("sidebar-buu-cuc", "value")]
     )
-    def update_revenue_table(tab_val, g1, g2, compare_opt, year, period, start_date, end_date, week_idx, month_val,
-                             nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
+    def update_revenue_table(n_clicks, tab_val, g1, g2, compare_opt, nhom_dv, loai_kh, hop_dong,
+                             year, period, start_date, end_date, week_idx, month_val, cum, bdx, buu_cuc):
         # Chạy khi ở tab Chi tiết Khách hàng (do đã gộp trang)
         if tab_val != "tab-customer" or tab_val is None:
             return dash.no_update
@@ -147,24 +148,25 @@ def register_customer_callbacks(app):
     # ==============================================================================
     @app.callback(
         Output("customer-table-container", "children"),
-        [Input("tabs-navigation", "value"),
-         # Bộ lọc địa lý từ Sidebar
-         Input("sidebar-year", "value"),
-         Input("sidebar-period", "value"),
-         Input("sidebar-date-range", "start_date"),
-         Input("sidebar-date-range", "end_date"),
-         Input("sidebar-week-select", "value"),
-         Input("sidebar-month-select", "value"),
+        [Input("btn-apply-filter", "n_clicks"),
+         Input("tabs-navigation", "value"),
          # Bộ lọc dịch vụ inline mới
          Input("customer-filter-nhom-dv", "value"),
-         Input("sidebar-cum", "value"),
-         Input("sidebar-bdx", "value"),
-         Input("sidebar-buu-cuc", "value"),
          Input("customer-filter-loai-kh", "value"),
-         Input("customer-filter-hop-dong", "value")]
+         Input("customer-filter-hop-dong", "value")],
+        [# Bộ lọc địa lý từ Sidebar (State)
+         State("sidebar-year", "value"),
+         State("sidebar-period", "value"),
+         State("sidebar-date-range", "start_date"),
+         State("sidebar-date-range", "end_date"),
+         State("sidebar-week-select", "value"),
+         State("sidebar-month-select", "value"),
+         State("sidebar-cum", "value"),
+         State("sidebar-bdx", "value"),
+         State("sidebar-buu-cuc", "value")]
     )
-    def update_customer_table(tab_val, year, period, start_date, end_date, week_idx, month_val,
-                              nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
+    def update_customer_table(n_clicks, tab_val, nhom_dv, loai_kh, hop_dong,
+                              year, period, start_date, end_date, week_idx, month_val, cum, bdx, buu_cuc):
         # Chỉ chạy khi đang ở Tab Chi tiết Khách hàng
         if tab_val != "tab-customer" or tab_val is None:
             return dash.no_update
