@@ -787,6 +787,8 @@ def register_kpi_callbacks(app):
                     {"name": "Nhóm DV chính", "id": "nhom_dv_chinh"},
                     {"name": "⚠️", "id": "canh_bao"}
                 ],
+                sort_action='native',
+                filter_action='native',
                 style_table={"overflowX": "auto", "borderRadius": "8px", "border": "1px solid #E2E8F0"},
                 style_header={
                     "backgroundColor": "#F8FAFC",

@@ -33,35 +33,8 @@ def register_new_customer_callbacks(app):
     """
 
     # ==============================================================================
-    # 1. CALLBACK CASCADE: SIDEBAR CỤM -> DROPDOWN BĐX
+    # 1. ĐÃ XÓA CALLBACK DROPDOWN BĐX THEO YÊU CẦU TIP-11-003
     # ==============================================================================
-    @app.callback(
-        [Output("new-cust-filter-bdx", "options"),
-         Output("new-cust-filter-bdx", "value")],
-        [Input("sidebar-cum", "value")]
-    )
-    def update_new_cust_bdx_dropdown(cum_val):
-        if not DB_PATH.exists():
-            return [{"label": "Tất cả BĐX", "value": "Tất cả"}], "Tất cả"
-            
-        conn = sqlite3.connect(str(DB_PATH))
-        try:
-            query = "SELECT DISTINCT ten_bdx FROM dim_buucuc WHERE ten_bdx IS NOT NULL"
-            params = []
-            if cum_val and cum_val != "Tất cả":
-                query += " AND ten_cum = ?"
-                params.append(cum_val)
-            query += " ORDER BY ten_bdx"
-            
-            df = pd.read_sql_query(query, conn, params=params)
-            options = [{"label": "Tất cả BĐX", "value": "Tất cả"}] + [{"label": b, "value": b} for b in df["ten_bdx"].tolist()]
-        except Exception as e:
-            print(f"Error loading BDX for new customer page: {e}")
-            options = [{"label": "Tất cả BĐX", "value": "Tất cả"}]
-        finally:
-            conn.close()
-            
-        return options, "Tất cả"
 
     # ==============================================================================
     # 2. HELPER QUERY VÀ XỬ LÝ DỮ LIỆU
@@ -219,18 +192,17 @@ def register_new_customer_callbacks(app):
          Output("new-cust-chart-dv", "figure"),
          Output("new-cust-top-khm-container", "children")],
         [Input("btn-apply-filter", "n_clicks"),
-         Input("tabs-navigation", "value"),
-         Input("new-cust-filter-bdx", "value")],
+         Input("tabs-navigation", "value")],
         [State("sidebar-year", "value"),
          State("sidebar-month-select", "value"),
          State("sidebar-cum", "value")]
     )
-    def update_new_cust_page(n_clicks, tab_val, bdx_val, year, month, cum_val):
+    def update_new_cust_page(n_clicks, tab_val, year, month, cum_val):
         if tab_val != "tab-new-customer" or tab_val is None:
             return [dash.no_update] * 18
             
-        # Gọi hàm xử lý dữ liệu
-        df_result, kpi_tot, kpi_svc = query_and_process_new_customers(year, month, cum_val, bdx_val)
+        # Gọi hàm xử lý dữ liệu (luôn dùng bdx="Tất cả")
+        df_result, kpi_tot, kpi_svc = query_and_process_new_customers(year, month, cum_val, "Tất cả")
         
         # 1. Format các thẻ KPI tổng hợp (Block 1)
         val_count = f"{kpi_tot['count']:,} KH"
@@ -420,6 +392,8 @@ def register_new_customer_callbacks(app):
                     {"name": "% Toàn tỉnh", "id": "% Toàn tỉnh"},
                 ],
                 data=df_ld_display.to_dict('records'),
+                sort_action='native',
+                filter_action='native',
                 style_table={'overflowX': 'auto', 'maxHeight': '300px', 'overflowY': 'auto'},
                 style_header={
                     'backgroundColor': '#F1F5F9',
@@ -472,6 +446,8 @@ def register_new_customer_callbacks(app):
                     {"name": "Nhóm DV chính", "id": "Nhóm DV chính"},
                 ],
                 data=df_top_khm_display.to_dict('records'),
+                sort_action='native',
+                filter_action='native',
                 style_table={'overflowX': 'auto'},
                 style_header={
                     'backgroundColor': '#F1F5F9',
@@ -542,16 +518,15 @@ def register_new_customer_callbacks(app):
         [State("tabs-navigation", "value"),
          State("sidebar-year", "value"),
          State("sidebar-month-select", "value"),
-         State("sidebar-cum", "value"),
-         State("new-cust-filter-bdx", "value")],
+         State("sidebar-cum", "value")],
         prevent_initial_call=True
     )
-    def export_new_cust_excel(n_clicks, tab_val, year, month, cum_val, bdx_val):
+    def export_new_cust_excel(n_clicks, tab_val, year, month, cum_val):
         if not n_clicks or tab_val != "tab-new-customer" or tab_val is None:
             return dash.no_update
             
-        # Query và xử lý dữ liệu
-        df_result, kpi_tot, _ = query_and_process_new_customers(year, month, cum_val, bdx_val)
+        # Query và xử lý dữ liệu (luôn dùng bdx="Tất cả")
+        df_result, kpi_tot, _ = query_and_process_new_customers(year, month, cum_val, "Tất cả")
         
         if df_result.empty:
             return dash.no_update
@@ -586,8 +561,7 @@ def register_new_customer_callbacks(app):
         ws['A1'].font = title_font
         
         cum_txt = cum_val if cum_val else "Tất cả"
-        bdx_txt = bdx_val if bdx_val else "Tất cả"
-        ws['A2'] = f"Bộ lọc: Cụm: {cum_txt} | BĐX: {bdx_txt} | Tổng KH mới trong kỳ: {kpi_tot['count']:,} KH"
+        ws['A2'] = f"Bộ lọc: Cụm: {cum_txt} | BĐX: Tất cả | Tổng KH mới trong kỳ: {kpi_tot['count']:,} KH"
         ws['A2'].font = sub_font
         
         # Headers cho bảng

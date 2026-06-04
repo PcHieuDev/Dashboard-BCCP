@@ -244,6 +244,8 @@ def register_retention_callbacks(app):
         table_element = dash_table.DataTable(
             columns=columns,
             data=df_display.to_dict('records'),
+            sort_action='native',
+            filter_action='native',
             style_table={'overflowX': 'auto', 'minWidth': '100%', 'maxHeight': '280px', 'overflowY': 'auto'},
             style_header={
                 'backgroundColor': '#F1F5F9',
