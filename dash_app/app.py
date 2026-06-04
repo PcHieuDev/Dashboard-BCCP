@@ -65,7 +65,11 @@ app.config.suppress_callback_exceptions = True
 
 # Biến server dùng cho triển khai production (Gunicorn/Waitress)
 server = app.server
-server.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'bccp_dashboard_secret_key_2026_05_31')
+# Đổi key để invalidate toàn bộ session cũ (bypass login)
+server.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'bccp_dashboard_rbac_active_2026_06_04')
+# Cấu hình session bảo mật
+server.config['SESSION_COOKIE_HTTPONLY'] = True
+server.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Thiết lập quản lý phiên đăng nhập
 login_manager = LoginManager()
