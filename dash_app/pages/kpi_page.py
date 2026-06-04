@@ -78,8 +78,24 @@ def create_kpi_page_layout():
                     html.H4("🏢 So sánh doanh thu giữa các Cụm địa lý", style={'fontSize': '15px', 'fontWeight': 'bold', 'color': '#1E293B'}),
                     dbc.Spinner(dcc.Graph(id="chart-cluster-bar", style={'height': '400px'}))
                 ], style={'padding': '15px', 'background': '#FFF', 'borderRadius': '12px', 'border': '1px solid #E2E8F0', 'boxShadow': '0 1px 3px rgba(0,0,0,0.05)'})
-            ], md=12)
-        ])
+            ], md=12, className="mb-4")
+        ], className="mb-4", style={"marginBottom": "20px"}),
+        
+        # Hàng biểu đồ 3: Area luân chuyển KH (Col lg=7) + Top 10 CMS (Col lg=5)
+        dbc.Row([
+            dbc.Col([
+                html.Div([
+                    html.H4("📈 Luân chuyển KH theo tháng (DT)", style={'fontSize': '15px', 'fontWeight': 'bold', 'color': '#1E293B'}),
+                    dbc.Spinner(dcc.Graph(id="chart-customer-area", style={'height': '350px'}))
+                ], style={'padding': '15px', 'background': '#FFF', 'borderRadius': '12px', 'border': '1px solid #E2E8F0', 'boxShadow': '0 1px 3px rgba(0,0,0,0.05)', 'height': '100%'})
+            ], lg=7, md=12, className="mb-3"),
+            dbc.Col([
+                html.Div([
+                    html.H4("🏆 Top 10 khách hàng CMS", style={'fontSize': '15px', 'fontWeight': 'bold', 'color': '#1E293B'}),
+                    dbc.Spinner(html.Div(id="top-cms-table-container"))
+                ], style={'padding': '15px', 'background': '#FFF', 'borderRadius': '12px', 'border': '1px solid #E2E8F0', 'boxShadow': '0 1px 3px rgba(0,0,0,0.05)', 'height': '100%'})
+            ], lg=5, md=12, className="mb-3")
+        ], className="g-3")
     ])
     
     return html.Div([

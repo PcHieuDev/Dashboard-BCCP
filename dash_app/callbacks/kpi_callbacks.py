@@ -178,7 +178,10 @@ def register_kpi_callbacks(app):
          Output("chart-service-pie", "figure"),
          Output("chart-customer-pie", "figure"),
          Output("chart-revenue-trend", "figure"),
-         Output("chart-cluster-bar", "figure")],
+         Output("chart-cluster-bar", "figure"),
+         # Area Chart & Top 10 CMS Table
+         Output("chart-customer-area", "figure"),
+         Output("top-cms-table-container", "children")],
 
         [Input("btn-apply-filter", "n_clicks"),
          Input("tabs-navigation", "value")],
@@ -200,7 +203,7 @@ def register_kpi_callbacks(app):
                          nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         # Chỉ xử lý khi đang ở Tab Tổng quan KPI
         if tab_val != "tab-kpi" or tab_val is None:
-            return [dash.no_update] * 33
+            return [dash.no_update] * 35
 
         spdv = None
 
@@ -624,6 +627,171 @@ def register_kpi_callbacks(app):
         else:
             fig_bar.update_layout(title="Không có dữ liệu so sánh Cụm")
 
+        # ── Area Chart: Luân chuyển KH theo 6 tháng gần nhất ────────────────
+        months_kh_data = []
+        last_6_months = []
+        cy, cm = target_year, target_month
+        for _ in range(6):
+            last_6_months.append((cy, cm))
+            cm -= 1
+            if cm == 0:
+                cm = 12
+                cy -= 1
+        last_6_months.reverse()
+
+        conn_tmp = sqlite3.connect(str(DB_PATH))
+        try:
+            for y_val, m_val in last_6_months:
+                from config.week_calendar import get_month_range
+                m_start, m_end = get_month_range(y_val, m_val)
+                df_m = query_revenue(
+                    conn=conn_tmp, date_from=m_start, date_to=m_end, date_column='thang_du_lieu',
+                    nhom_dv=nhom_dv, dich_vu=spdv, cum=cum_f, bdx=bdx_f, buu_cuc=bc_f, loai_kh=loai_kh, hop_dong=hd_f,
+                    group_by_primary='loai_kh', compare_prev=False, nam=y_val
+                )
+                hien_huu = df_m[df_m['loai_kh'] == 'Hiện hữu']['cuoc_tt_tong'].sum() if not df_m.empty and 'loai_kh' in df_m.columns else 0.0
+                khm_tb = df_m[df_m['loai_kh'] == 'KHM/Tái bán']['cuoc_tt_tong'].sum() if not df_m.empty and 'loai_kh' in df_m.columns else 0.0
+                vanglai_dt = df_m[df_m['loai_kh'] == 'Vãng lai']['cuoc_tt_tong'].sum() if not df_m.empty and 'loai_kh' in df_m.columns else 0.0
+                
+                months_kh_data.append({
+                    "Tháng": f"T{m_val:02d}/{str(y_val)[2:]}",
+                    "Hiện hữu": hien_huu,
+                    "KHM/Tái bán": khm_tb,
+                    "Vãng lai": vanglai_dt
+                })
+        except Exception as e:
+            print(f"Error building area chart: {e}")
+        finally:
+            conn_tmp.close()
+
+        df_area = pd.DataFrame(months_kh_data)
+        fig_area = go.Figure()
+        if not df_area.empty:
+            for kh_type, color in [("Hiện hữu", "#10B981"), ("KHM/Tái bán", "#3B82F6"), ("Vãng lai", "#94A3B8")]:
+                fig_area.add_trace(go.Scatter(
+                    x=df_area["Tháng"], y=df_area[kh_type],
+                    name=kh_type, fill='tonexty', stackgroup='one',
+                    mode='none',
+                    marker=dict(color=color)
+                ))
+            fig_area.update_layout(
+                margin=dict(t=30, b=10, l=50, r=10),
+                height=320,
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+            )
+        else:
+            fig_area.update_layout(title="Không có dữ liệu xu hướng KH")
+
+        # ── Top 10 CMS DataTable ───────────────────────────────────────────
+        conn_tmp = sqlite3.connect(str(DB_PATH))
+        try:
+            df_cur_cms = query_revenue(
+                conn=conn_tmp, date_from=date_from, date_to=date_to, date_column=date_column,
+                nhom_dv=nhom_dv, dich_vu=spdv, cum=cum_f, bdx=bdx_f, buu_cuc=bc_f, loai_kh=loai_kh, hop_dong=hd_f,
+                group_by_primary='cms', group_by_secondary='nhom_dv', compare_prev=False
+            )
+            df_cms_dv = df_cur_cms.groupby(['cms', 'nhom_dv'])['cuoc_tt_tong'].sum().reset_index()
+            df_cms_dv = df_cms_dv.sort_values('cuoc_tt_tong', ascending=False)
+            df_main_dv = df_cms_dv.drop_duplicates(subset=['cms'], keep='first')[['cms', 'nhom_dv']]
+            df_main_dv = df_main_dv.rename(columns={'nhom_dv': 'nhom_dv_chinh'})
+            
+            df_cur_cms_tot = df_cur_cms.groupby('cms')['cuoc_tt_tong'].sum().reset_index()
+            
+            df_prev_cms = query_revenue(
+                conn=conn_tmp, date_from=prev_from, date_to=prev_to, date_column=date_column,
+                nhom_dv=nhom_dv, dich_vu=spdv, cum=cum_f, bdx=bdx_f, buu_cuc=bc_f, loai_kh=loai_kh, hop_dong=hd_f,
+                group_by_primary='cms', compare_prev=False
+            )
+            df_prev_cms_tot = df_prev_cms.groupby('cms')['cuoc_tt_tong'].sum().reset_index() if not df_prev_cms.empty else pd.DataFrame(columns=['cms', 'cuoc_tt_tong'])
+        except Exception as e:
+            print(f"Error querying Top 10 CMS: {e}")
+            df_cur_cms_tot = pd.DataFrame()
+            df_prev_cms_tot = pd.DataFrame()
+            df_main_dv = pd.DataFrame()
+        finally:
+            conn_tmp.close()
+
+        if not df_cur_cms_tot.empty:
+            df_cur_cms_tot = df_cur_cms_tot[~df_cur_cms_tot['cms'].str.startswith('VANGLAI_', na=False)]
+            df_cur_cms_tot = df_cur_cms_tot[df_cur_cms_tot['cms'].str.upper() != 'NONE']
+            df_cur_cms_tot = df_cur_cms_tot[df_cur_cms_tot['cms'].str.strip() != 'Chưa phân loại']
+            df_cur_cms_tot = df_cur_cms_tot[df_cur_cms_tot['cms'].str.strip() != '']
+            
+            df_merge = df_cur_cms_tot.merge(df_prev_cms_tot, on='cms', suffixes=('', '_prev'), how='left')
+            df_merge['cuoc_tt_tong_prev'] = df_merge['cuoc_tt_tong_prev'].fillna(0)
+            
+            def calc_pct(row):
+                cur = row['cuoc_tt_tong']
+                prv = row['cuoc_tt_tong_prev']
+                if prv <= 0:
+                    return 100.0 if cur > 0 else 0.0
+                return round((cur - prv) * 100.0 / prv, 1)
+                
+            df_merge['pct_change'] = df_merge.apply(calc_pct, axis=1)
+            df_merge = df_merge.merge(df_main_dv, on='cms', how='left')
+            df_merge['nhom_dv_chinh'] = df_merge['nhom_dv_chinh'].fillna('Chưa rõ')
+            df_merge['canh_bao'] = df_merge['pct_change'].apply(lambda x: '🔴' if x < -20 else '')
+            
+            df_top = df_merge.nlargest(10, 'cuoc_tt_tong')
+            df_top_display = df_top.copy()
+            df_top_display['Doanh thu'] = df_top_display['cuoc_tt_tong'].apply(lambda x: f"{x:,.0f} đ")
+            df_top_display['Tăng trưởng'] = df_top_display['pct_change'].apply(lambda x: f"{x:+.1f}%")
+            
+            from dash import dash_table
+            top_table = dash_table.DataTable(
+                id="top-cms-table",
+                data=df_top_display.to_dict("records"),
+                columns=[
+                    {"name": "CMS", "id": "cms"},
+                    {"name": "Doanh thu kỳ này", "id": "Doanh thu"},
+                    {"name": "% Tăng trưởng", "id": "Tăng trưởng"},
+                    {"name": "Nhóm DV chính", "id": "nhom_dv_chinh"},
+                    {"name": "⚠️", "id": "canh_bao"}
+                ],
+                style_table={"overflowX": "auto", "borderRadius": "8px", "border": "1px solid #E2E8F0"},
+                style_header={
+                    "backgroundColor": "#F8FAFC",
+                    "fontWeight": "bold",
+                    "color": "#1E293B",
+                    "border": "1px solid #CBD5E1"
+                },
+                style_cell={
+                    "padding": "8px 10px",
+                    "textAlign": "left",
+                    "fontSize": "12px",
+                    "fontFamily": "Inter, sans-serif"
+                },
+                style_data_conditional=[
+                    {
+                        "if": {
+                            "column_id": "Tăng trưởng",
+                            "filter_query": "{pct_change} < 0"
+                        },
+                        "color": "#DC2626",
+                        "fontWeight": "bold"
+                    },
+                    {
+                        "if": {
+                            "column_id": "Tăng trưởng",
+                            "filter_query": "{pct_change} >= 0"
+                        },
+                        "color": "#059669",
+                        "fontWeight": "bold"
+                    },
+                    {
+                        "if": {
+                            "column_id": "cms",
+                            "filter_query": '{canh_bao} = "🔴"'
+                        },
+                        "backgroundColor": "#FEE2E2"
+                    }
+                ]
+            )
+        else:
+            top_table = html.Div("Không có dữ liệu Top CMS")
+
         return [
             phbc_n, phbc_s, phbc_p, phbc_y,
             tt_n,   tt_s,   tt_p,   tt_y,
@@ -638,7 +806,9 @@ def register_kpi_callbacks(app):
             fig_pie_dv,
             fig_pie_kh,
             fig_trend,
-            fig_bar
+            fig_bar,
+            fig_area,
+            top_table
         ]
 
 

@@ -32,7 +32,18 @@ def create_customer_detail_layout():
                     multi=True,
                     placeholder="Tất cả Nhóm DV..."
                 )
-            ], md=4, xs=12),
+            ], md=3, xs=12),
+            
+            # 1.1 Dịch vụ cụ thể
+            dbc.Col([
+                html.Label("Dịch vụ cụ thể", className="filter-label"),
+                dcc.Dropdown(
+                    id="customer-filter-spdv",
+                    multi=True,
+                    placeholder="Tất cả dịch vụ...",
+                    style={"fontSize": "13px"}
+                )
+            ], md=3, xs=12),
             
             # 2. Loại khách hàng
             dbc.Col([
@@ -48,7 +59,7 @@ def create_customer_detail_layout():
                     inline=True,
                     style={"paddingTop": "8px"}
                 )
-            ], md=4, xs=12),
+            ], md=3, xs=12),
             
             # 3. Trạng thái hợp đồng
             dbc.Col([
@@ -63,7 +74,7 @@ def create_customer_detail_layout():
                     inline=True,
                     style={"paddingTop": "8px"}
                 )
-            ], md=4, xs=12)
+            ], md=3, xs=12)
         ], style={"marginBottom": "20px", "padding": "15px", "background": "#F8FAFC", "borderRadius": "8px", "border": "1px solid #E2E8F0"}),
         
         # ==============================================================================

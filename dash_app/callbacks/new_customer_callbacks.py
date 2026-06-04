@@ -213,7 +213,11 @@ def register_new_customer_callbacks(app):
          Output("new-cust-svc-tmdt-count", "children"), Output("new-cust-svc-tmdt-revenue", "children"),
          Output("new-cust-svc-tmdt-plan", "children"), Output("new-cust-svc-tmdt-percent", "children"),
          # Bảng chi tiết
-         Output("new-cust-table-container", "children")],
+         Output("new-cust-table-container", "children"),
+         # Leaderboard Cụm + Bar chart DV + Top KHM
+         Output("new-cust-leaderboard-container", "children"),
+         Output("new-cust-chart-dv", "figure"),
+         Output("new-cust-top-khm-container", "children")],
         [Input("btn-apply-filter", "n_clicks"),
          Input("tabs-navigation", "value"),
          Input("new-cust-filter-bdx", "value")],
@@ -223,7 +227,7 @@ def register_new_customer_callbacks(app):
     )
     def update_new_cust_page(n_clicks, tab_val, bdx_val, year, month, cum_val):
         if tab_val != "tab-new-customer" or tab_val is None:
-            return [dash.no_update] * 15
+            return [dash.no_update] * 18
             
         # Gọi hàm xử lý dữ liệu
         df_result, kpi_tot, kpi_svc = query_and_process_new_customers(year, month, cum_val, bdx_val)
@@ -356,13 +360,177 @@ def register_new_customer_callbacks(app):
                 ]
             )
             
+        # 4. Bảng xếp hạng Leaderboard Cụm
+        conn_db = sqlite3.connect(str(DB_PATH))
+        try:
+            sql_ld = """
+                SELECT ten_cum, COUNT(DISTINCT cms) as sl_khm, SUM(tong_doanh_thu) as dt_khm
+                FROM new_customers
+                WHERE nam = ? AND thang = ? AND ten_cum IS NOT NULL AND ten_cum != 'Khác'
+                GROUP BY ten_cum
+                ORDER BY dt_khm DESC
+            """
+            df_ld = pd.read_sql_query(sql_ld, conn_db, params=[year, month])
+            
+            # Top KHM giá trị cao
+            query_top = """
+                SELECT nc.cms, nc.buu_cuc, nc.tong_doanh_thu, nc.nhom_dv, b.ten_bdx, nc.ten_cum
+                FROM new_customers nc
+                LEFT JOIN (SELECT DISTINCT ma_bc, ten_bdx FROM dim_buucuc) b ON nc.buu_cuc = b.ma_bc
+                WHERE nc.nam = ? AND nc.thang = ?
+            """
+            df_top_khm = pd.read_sql_query(query_top, conn_db, params=[year, month])
+            
+            # Phân rã DV KHM sử dụng
+            query_chart = """
+                SELECT tong_doanh_thu, nhom_dv, ten_cum, b.ten_bdx
+                FROM new_customers nc
+                LEFT JOIN (SELECT DISTINCT ma_bdx, ten_bdx FROM dim_buucuc) b ON nc.ma_bdx = b.ma_bdx
+                WHERE nc.nam = ? AND nc.thang = ?
+            """
+            df_chart = pd.read_sql_query(query_chart, conn_db, params=[year, month])
+        except Exception as e:
+            print(f"Error query new customer components: {e}")
+            df_ld = pd.DataFrame()
+            df_top_khm = pd.DataFrame()
+            df_chart = pd.DataFrame()
+        finally:
+            conn_db.close()
+
+        # Tạo Leaderboard Element
+        if not df_ld.empty:
+            df_ld['rank'] = range(1, len(df_ld) + 1)
+            total_dt_ld = df_ld['dt_khm'].sum()
+            df_ld['pct_total'] = df_ld['dt_khm'].apply(lambda x: (x * 100.0 / total_dt_ld) if total_dt_ld > 0 else 0.0)
+            
+            df_ld_display = df_ld.copy()
+            df_ld_display['DT bán mới'] = df_ld_display['dt_khm'].apply(lambda x: f"{x:,.0f} đ")
+            df_ld_display['SL KHM'] = df_ld_display['sl_khm'].apply(lambda x: f"{x:,}")
+            df_ld_display['% Toàn tỉnh'] = df_ld_display['pct_total'].apply(lambda x: f"{x:.1f}%")
+            df_ld_display['#'] = df_ld_display['rank']
+            df_ld_display['Cụm'] = df_ld_display['ten_cum']
+            
+            ld_table = dash_table.DataTable(
+                id="new-cust-leaderboard",
+                columns=[
+                    {"name": "#", "id": "#"},
+                    {"name": "Cụm", "id": "Cụm"},
+                    {"name": "SL KHM", "id": "SL KHM"},
+                    {"name": "DT bán mới", "id": "DT bán mới"},
+                    {"name": "% Toàn tỉnh", "id": "% Toàn tỉnh"},
+                ],
+                data=df_ld_display.to_dict('records'),
+                style_table={'overflowX': 'auto', 'maxHeight': '300px', 'overflowY': 'auto'},
+                style_header={
+                    'backgroundColor': '#F1F5F9',
+                    'fontWeight': 'bold',
+                    'color': '#1E293B',
+                    'border': '1px solid #E2E8F0',
+                    'textAlign': 'left',
+                    'fontSize': '12px'
+                },
+                style_cell={
+                    'border': '1px solid #E2E8F0',
+                    'padding': '8px 8px',
+                    'fontSize': '12px',
+                    'color': '#334155',
+                    'fontFamily': 'Inter, sans-serif'
+                },
+                style_data_conditional=[
+                    {
+                        'if': {'row_index': [0, 1, 2]},
+                        'fontWeight': 'bold',
+                        'backgroundColor': '#ECFDF5',
+                        'color': '#065F46'
+                    }
+                ]
+            )
+        else:
+            ld_table = html.Div("Không có dữ liệu xếp hạng")
+
+        # Tạo Top KHM Element
+        if not df_top_khm.empty:
+            if cum_val and cum_val != "Tất cả":
+                df_top_khm = df_top_khm[df_top_khm['ten_cum'] == cum_val]
+            if bdx_val and bdx_val != "Tất cả":
+                df_top_khm = df_top_khm[df_top_khm['ten_bdx'] == bdx_val]
+                
+            df_top_khm = df_top_khm.nlargest(10, 'tong_doanh_thu')
+            df_top_khm_display = df_top_khm.copy()
+            df_top_khm_display['Doanh thu tháng đầu'] = df_top_khm_display['tong_doanh_thu'].apply(lambda x: f"{x:,.0f} đ")
+            df_top_khm_display['Bưu cục'] = df_top_khm_display['buu_cuc'].fillna("-")
+            df_top_khm_display['Nhóm DV chính'] = df_top_khm_display['nhom_dv'].fillna("-")
+            df_top_khm_display['#'] = range(1, len(df_top_khm_display) + 1)
+            
+            top_khm_table = dash_table.DataTable(
+                id="new-cust-top-khm-table",
+                columns=[
+                    {"name": "#", "id": "#"},
+                    {"name": "CMS", "id": "cms"},
+                    {"name": "Bưu cục", "id": "Bưu cục"},
+                    {"name": "Doanh thu tháng đầu", "id": "Doanh thu tháng đầu"},
+                    {"name": "Nhóm DV chính", "id": "Nhóm DV chính"},
+                ],
+                data=df_top_khm_display.to_dict('records'),
+                style_table={'overflowX': 'auto'},
+                style_header={
+                    'backgroundColor': '#F1F5F9',
+                    'fontWeight': 'bold',
+                    'color': '#1E293B',
+                    'border': '1px solid #E2E8F0',
+                    'textAlign': 'left',
+                    'fontSize': '12px'
+                },
+                style_cell={
+                    'border': '1px solid #E2E8F0',
+                    'padding': '8px 8px',
+                    'fontSize': '12px',
+                    'color': '#334155',
+                    'fontFamily': 'Inter, sans-serif'
+                }
+            )
+        else:
+            top_khm_table = html.Div("Không có dữ liệu Top KHM")
+
+        # Tạo Bar Chart
+        if not df_chart.empty:
+            if cum_val and cum_val != "Tất cả":
+                df_chart = df_chart[df_chart['ten_cum'] == cum_val]
+            if bdx_val and bdx_val != "Tất cả":
+                df_chart = df_chart[df_chart['ten_bdx'] == bdx_val]
+                
+            df_khm_dv = df_chart.groupby('nhom_dv')['tong_doanh_thu'].sum().reset_index()
+            
+            import plotly.express as px
+            fig_bar_dv = px.bar(
+                df_khm_dv, x='nhom_dv', y='tong_doanh_thu',
+                color='nhom_dv',
+                color_discrete_map={"Truyền thống": "#2196F3", "TMĐT": "#4CAF50", "Quốc tế": "#FF9800", "Phát hành báo chí": "#F97316"}
+            )
+            fig_bar_dv.update_layout(
+                margin=dict(t=20, b=10, l=50, r=10),
+                height=300,
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                showlegend=False,
+                xaxis_title="Nhóm dịch vụ",
+                yaxis_title="Doanh thu bán mới (đ)",
+                yaxis=dict(tickformat=",.0f")
+            )
+        else:
+            import plotly.graph_objects as go
+            fig_bar_dv = go.Figure()
+
         return [
             val_count, sub_count,
             val_rev, sub_rev,
             val_pct, sub_pct,
             tt_count, tt_rev, tt_plan, tt_pct,
             tmdt_count, tmdt_rev, tmdt_plan, tmdt_pct,
-            table_element
+            table_element,
+            ld_table,
+            fig_bar_dv,
+            top_khm_table
         ]
 
     # ==============================================================================
