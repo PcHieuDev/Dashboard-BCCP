@@ -374,6 +374,8 @@ def get_bccp_week_number(d, year):
     weeks = get_bccp_weeks(year)
     for w_num, start_d, end_d in weeks:
         if start_d <= d <= end_d:
-            return w_num
-    return weeks[-1][0] if weeks else 1
+            return 1 if w_num == 53 else w_num
+    
+    last_w = weeks[-1][0] if weeks else 1
+    return 1 if last_w == 53 else last_w
 

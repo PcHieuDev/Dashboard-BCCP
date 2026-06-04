@@ -113,69 +113,8 @@ def register_customer_callbacks(app):
         return render_revenue_datatable(df, groupby_cols, compare_opt)
 
     # ==============================================================================
-    # 2. CALLBACK XUẤT EXCEL BẢNG DOANH THU XOAY CHIỀU
+    # 2. ĐÃ XÓA CALLBACK XUẤT EXCEL BẢNG DOANH THU THEO YÊU CẦU TIP-11-002
     # ==============================================================================
-    @app.callback(
-        Output("revenue-download", "data"),
-        [Input("revenue-btn-export-excel", "n_clicks")],
-        [State("tabs-navigation", "value"),
-         State("revenue-g1", "value"),
-         State("revenue-g2", "value"),
-         State("revenue-compare-opt", "value"),
-         # Bộ lọc địa lý từ Sidebar
-         State("sidebar-year", "value"),
-         State("sidebar-period", "value"),
-         State("sidebar-date-range", "start_date"),
-         State("sidebar-date-range", "end_date"),
-         State("sidebar-week-select", "value"),
-         State("sidebar-month-select", "value"),
-         # Bộ lọc dịch vụ inline mới
-         State("customer-filter-nhom-dv", "value"),
-         State("sidebar-cum", "value"),
-         State("sidebar-bdx", "value"),
-         State("sidebar-buu-cuc", "value"),
-         State("customer-filter-loai-kh", "value"),
-         State("customer-filter-hop-dong", "value"),
-         State("customer-filter-spdv", "value")],
-        prevent_initial_call=True
-    )
-    def export_revenue_table(n_clicks, tab_val, g1, g2, compare_opt, year, period, start_date, end_date, week_idx, month_val,
-                             nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong, spdv):
-        ctx = dash.callback_context
-        if not ctx.triggered or tab_val != "tab-customer" or tab_val is None:
-            return dash.no_update
-            
-        g2_actual = None if g2 == "None" else g2
-        compare_prev = compare_opt != "none"
-        compare_mode = compare_opt if compare_prev else "prev_period"
-        
-        # 1. Truy vấn dữ liệu có cache dựa vào các bộ lọc
-        date_from, date_to, _, df = resolve_filters_and_query(
-            year, period, start_date, end_date, week_idx, month_val, compare_mode,
-            nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong,
-            group_by_primary=g1, group_by_secondary=g2_actual, compare_prev=compare_prev
-        )
-        
-        groupby_cols = [g1]
-        if g2_actual:
-            groupby_cols.append(g2_actual)
-            
-        # 2. Tạo thông tin bộ lọc gửi đi
-        filter_info = {
-            "Năm dữ liệu": year,
-            "Chu kỳ báo cáo": period,
-            "Khoảng thời gian": f"{date_from.strftime('%d/%m/%Y')} - {date_to.strftime('%d/%m/%Y')}",
-            "Nhóm dịch vụ": ", ".join(nhom_dv) if nhom_dv else "Tất cả",
-            "Cụm địa lý": cum,
-            "Mã bưu điện": bdx if bdx != "Tất cả" else "Tất cả",
-            "Phân loại KH": ", ".join(loai_kh) if loai_kh else "Tất cả",
-            "Trạng thái HĐ": ", ".join(hop_dong) if isinstance(hop_dong, list) and hop_dong else (hop_dong if isinstance(hop_dong, str) and hop_dong else 'Tất cả')
-        }
-        
-        # 3. Tạo file xuất tương ứng
-        excel_bytes = generate_excel_report(df, groupby_cols, compare_opt, filter_info)
-        filename = f"BaoCaoDoanhThu_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        return dcc.send_bytes(excel_bytes, filename)
 
     # ==============================================================================
     # 3. CALLBACK CẬP NHẬT BẢNG CHI TIẾT KHÁCH HÀNG (CMS)
@@ -218,29 +157,35 @@ def register_customer_callbacks(app):
             
         # 3. Xác định cấu trúc cột hiển thị
         col_labels = {
-            'cms': 'Mã khách hàng',
-            'loai_kh': 'Loại khách hàng',
-            'hop_dong': 'Trạng thái HĐ',
-            'buu_cuc_list': 'Danh sách Bưu cục',
+            'cms': 'Mã CMS',
+            'loai_kh': 'Tên Khách hàng', # Thay thế tạm vì không có cột tên
+            'nhom_dv_chinh': 'Nhóm DV chính',
+            'Tổng SL': 'Sản lượng',
+            'Tổng Cước TT': 'Cước không VAT'
         }
         
+        if not df.empty:
+            cuoc_cols = [c for c in df.columns if '] Cước TT' in c]
+            def get_main_dv(row):
+                max_val = 0
+                main_dv = 'Chưa rõ'
+                for c in cuoc_cols:
+                    if row[c] > max_val:
+                        max_val = row[c]
+                        main_dv = c.split(']')[0].replace('[', '')
+                return main_dv
+            df['nhom_dv_chinh'] = df.apply(get_main_dv, axis=1) if cuoc_cols else 'Chưa rõ'
+        
+        keep_cols = ['cms', 'loai_kh', 'nhom_dv_chinh', 'Tổng SL', 'Tổng Cước TT']
         columns = []
-        for c in df.columns:
-            name = col_labels.get(c, c)
-            col_def = {"name": name, "id": c}
-            
-            # Chỉ định sort và filter cho tất cả các cột
-            if c in ['cms', 'loai_kh', 'hop_dong', 'buu_cuc_list']:
-                pass
-            else:
-                col_def["type"] = "numeric"
-                if 'SL' in c:
+        for c in keep_cols:
+            if c in df.columns:
+                name = col_labels.get(c, c)
+                col_def = {"name": name, "id": c}
+                if c not in ['cms', 'loai_kh', 'nhom_dv_chinh']:
+                    col_def["type"] = "numeric"
                     col_def["format"] = Format(group=Group.yes)
-                elif 'KL' in c:
-                    col_def["format"] = Format(group=Group.yes, precision=2, scheme=Scheme.fixed)
-                else: # Cước
-                    col_def["format"] = Format(group=Group.yes, precision=0, scheme=Scheme.fixed)
-            columns.append(col_def)
+                columns.append(col_def)
             
         # 4. Trả về bảng DataTable được định dạng
         table = dash_table.DataTable(
@@ -315,6 +260,30 @@ def register_customer_callbacks(app):
         if df.empty:
             return dash.no_update
             
+        if not df.empty:
+            cuoc_cols = [c for c in df.columns if '] Cước TT' in c]
+            def get_main_dv(row):
+                max_val = 0
+                main_dv = 'Chưa rõ'
+                for c in cuoc_cols:
+                    if row[c] > max_val:
+                        max_val = row[c]
+                        main_dv = c.split(']')[0].replace('[', '')
+                return main_dv
+            df['nhom_dv_chinh'] = df.apply(get_main_dv, axis=1) if cuoc_cols else 'Chưa rõ'
+            
+        keep_cols = ['cms', 'loai_kh', 'nhom_dv_chinh', 'Tổng SL', 'Tổng Cước TT']
+        df = df[[c for c in keep_cols if c in df.columns]]
+        
+        col_rename = {
+            'cms': 'Mã CMS',
+            'loai_kh': 'Tên Khách hàng',
+            'nhom_dv_chinh': 'Nhóm DV chính',
+            'Tổng SL': 'Sản lượng',
+            'Tổng Cước TT': 'Cước không VAT'
+        }
+        df = df.rename(columns=col_rename)
+        
         # 2. Xây dựng thông tin bộ lọc
         filter_parts = [
             f"Năm dữ liệu: {year}",

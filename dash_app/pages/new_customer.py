@@ -81,22 +81,11 @@ def create_new_customer_layout():
         # Block 3: Bảng chi tiết theo BĐX và bộ lọc
         html.Div("🏢 Chi tiết thực hiện theo Bưu điện Huyện/Xã (BĐX)", className="section-header"),
         dbc.Row([
-            # Dropdown lọc BĐX (lọc động theo Cụm đã chọn ở Sidebar)
-            dbc.Col([
-                html.Label("Bưu điện Huyện/Xã", className="filter-label"),
-                dcc.Dropdown(
-                    id="new-cust-filter-bdx",
-                    options=[{"label": "Tất cả BĐX", "value": "Tất cả"}],
-                    value="Tất cả",
-                    clearable=False
-                )
-            ], md=4, xs=12),
-            
             # Nút xuất Excel
             dbc.Col([
                 dbc.Button("📥 Xuất Excel", id="new-cust-btn-export-excel", color="success", size="sm", style={"marginTop": "28px"}),
                 dcc.Download(id="new-cust-download")
-            ], md=8, xs=12, style={"textAlign": "right"})
+            ], md=12, xs=12, style={"textAlign": "right"})
         ], style={"marginBottom": "15px"}),
         
         html.Hr(),
