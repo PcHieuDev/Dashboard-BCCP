@@ -398,25 +398,27 @@ def register_hcc_revenue_callbacks(app):
     
     @app.callback(
         Output("hcc-revenue-table-container", "children"),
-        [Input("url", "pathname"),
-         Input("hcc-revenue-g1", "value"),
-         Input("hcc-revenue-g2", "value"),
-         Input("hcc-revenue-compare-opt", "value"),
+        [Input("btn-apply-filter", "n_clicks")],
+        [State("url", "pathname"),
+         State("hcc-revenue-g1", "value"),
+         State("hcc-revenue-g2", "value"),
+         State("hcc-revenue-compare-opt", "value"),
          # Bộ lọc từ Sidebar
-         Input("sidebar-year", "value"),
-         Input("sidebar-period", "value"),
-         Input("sidebar-date-range", "start_date"),
-         Input("sidebar-date-range", "end_date"),
-         Input("sidebar-week-select", "value"),
-         Input("sidebar-month-select", "value"),
-         Input("sidebar-nhom-dv", "data"),
-         Input("sidebar-cum", "value"),
-         Input("sidebar-bdx", "value"),
-         Input("sidebar-buu-cuc", "value"),
-         Input("sidebar-loai-kh", "data"),
-         Input("sidebar-hop-dong", "data")]
+         State("sidebar-year", "value"),
+         State("sidebar-period", "value"),
+         State("sidebar-date-range", "start_date"),
+         State("sidebar-date-range", "end_date"),
+         State("sidebar-week-select", "value"),
+         State("sidebar-month-select", "value"),
+         State("sidebar-nhom-dv", "data"),
+         State("sidebar-cum", "value"),
+         State("sidebar-bdx", "value"),
+         State("sidebar-buu-cuc", "value"),
+         State("sidebar-loai-kh", "data"),
+         State("sidebar-hop-dong", "data")],
+        prevent_initial_call=True
     )
-    def update_hcc_revenue_table(pathname, g1, g2, compare_opt, year, period, start_date, end_date, week_idx, month_val,
+    def update_hcc_revenue_table(n_clicks, pathname, g1, g2, compare_opt, year, period, start_date, end_date, week_idx, month_val,
                                  nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         if pathname != "/hcc/revenue":
             return dash.no_update

@@ -191,11 +191,12 @@ def register_new_customer_callbacks(app):
          Output("new-cust-leaderboard-container", "children"),
          Output("new-cust-chart-dv", "figure"),
          Output("new-cust-top-khm-container", "children")],
-        [Input("btn-apply-filter", "n_clicks"),
-         Input("tabs-navigation", "value")],
-        [State("sidebar-year", "value"),
+        [Input("btn-apply-filter", "n_clicks")],
+        [State("tabs-navigation", "value"),
+         State("sidebar-year", "value"),
          State("sidebar-month-select", "value"),
-         State("sidebar-cum", "value")]
+         State("sidebar-cum", "value")],
+        prevent_initial_call=True
     )
     def update_new_cust_page(n_clicks, tab_val, year, month, cum_val):
         if tab_val != "tab-new-customer" or tab_val is None:

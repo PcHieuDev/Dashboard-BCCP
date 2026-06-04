@@ -34,10 +34,10 @@ def register_alerts_callbacks(app):
     """
     @app.callback(
         Output("alerts-list-container", "children"),
-        [Input("btn-apply-filter", "n_clicks"),
-         Input("tabs-navigation", "value"),
-         Input("alerts-nhom-dv-select", "value")],
-        [State("sidebar-year", "value"),
+        [Input("btn-apply-filter", "n_clicks")],
+        [State("tabs-navigation", "value"),
+         State("alerts-nhom-dv-select", "value"),
+         State("sidebar-year", "value"),
          State("sidebar-period", "value"),
          State("sidebar-date-range", "start_date"),
          State("sidebar-date-range", "end_date"),
@@ -48,7 +48,8 @@ def register_alerts_callbacks(app):
          State("sidebar-bdx", "value"),
          State("sidebar-buu-cuc", "value"),
          State("sidebar-loai-kh", "data"),
-         State("sidebar-hop-dong", "data")]
+         State("sidebar-hop-dong", "data")],
+        prevent_initial_call=True
     )
     def update_alerts_list(n_clicks, tab_val, selected_service, year, period, start_date, end_date, week_idx, month_val,
                            nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):

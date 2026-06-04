@@ -66,17 +66,15 @@ def register_customer_callbacks(app):
     # ==============================================================================
     @app.callback(
         Output("revenue-table-container", "children"),
-        [Input("btn-apply-filter", "n_clicks"),
-         Input("tabs-navigation", "value"),
-         Input("revenue-g1", "value"),
-         Input("revenue-g2", "value"),
-         Input("revenue-compare-opt", "value"),
-         # Bộ lọc dịch vụ inline mới
-         Input("customer-filter-nhom-dv", "value"),
-         Input("customer-filter-loai-kh", "value"),
-         Input("customer-filter-hop-dong", "value"),
-         Input("customer-filter-spdv", "value")],
-        [# Bộ lọc địa lý từ Sidebar (State)
+        [Input("btn-apply-filter", "n_clicks")],
+        [State("tabs-navigation", "value"),
+         State("revenue-g1", "value"),
+         State("revenue-g2", "value"),
+         State("revenue-compare-opt", "value"),
+         State("customer-filter-nhom-dv", "value"),
+         State("customer-filter-loai-kh", "value"),
+         State("customer-filter-hop-dong", "value"),
+         State("customer-filter-spdv", "value"),
          State("sidebar-year", "value"),
          State("sidebar-period", "value"),
          State("sidebar-date-range", "start_date"),
@@ -85,7 +83,8 @@ def register_customer_callbacks(app):
          State("sidebar-month-select", "value"),
          State("sidebar-cum", "value"),
          State("sidebar-bdx", "value"),
-         State("sidebar-buu-cuc", "value")]
+         State("sidebar-buu-cuc", "value")],
+        prevent_initial_call=True
     )
     def update_revenue_table(n_clicks, tab_val, g1, g2, compare_opt, nhom_dv, loai_kh, hop_dong, spdv,
                              year, period, start_date, end_date, week_idx, month_val, cum, bdx, buu_cuc):
@@ -121,14 +120,12 @@ def register_customer_callbacks(app):
     # ==============================================================================
     @app.callback(
         Output("customer-table-container", "children"),
-        [Input("btn-apply-filter", "n_clicks"),
-         Input("tabs-navigation", "value"),
-         # Bộ lọc dịch vụ inline mới
-         Input("customer-filter-nhom-dv", "value"),
-         Input("customer-filter-loai-kh", "value"),
-         Input("customer-filter-hop-dong", "value"),
-         Input("customer-filter-spdv", "value")],
-        [# Bộ lọc địa lý từ Sidebar (State)
+        [Input("btn-apply-filter", "n_clicks")],
+        [State("tabs-navigation", "value"),
+         State("customer-filter-nhom-dv", "value"),
+         State("customer-filter-loai-kh", "value"),
+         State("customer-filter-hop-dong", "value"),
+         State("customer-filter-spdv", "value"),
          State("sidebar-year", "value"),
          State("sidebar-period", "value"),
          State("sidebar-date-range", "start_date"),
@@ -137,7 +134,8 @@ def register_customer_callbacks(app):
          State("sidebar-month-select", "value"),
          State("sidebar-cum", "value"),
          State("sidebar-bdx", "value"),
-         State("sidebar-buu-cuc", "value")]
+         State("sidebar-buu-cuc", "value")],
+        prevent_initial_call=True
     )
     def update_customer_table(n_clicks, tab_val, nhom_dv, loai_kh, hop_dong, spdv,
                               year, period, start_date, end_date, week_idx, month_val, cum, bdx, buu_cuc):

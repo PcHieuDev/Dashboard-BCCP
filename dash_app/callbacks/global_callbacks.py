@@ -163,7 +163,8 @@ def register_global_callbacks(app):
         [State("sidebar-year", "value"),
          State("sidebar-month-select", "value"),
          State("sidebar-compare-mode", "value"),
-         State("sidebar-cum", "value")]
+         State("sidebar-cum", "value")],
+        prevent_initial_call=True
     )
     def update_global_overview(n_clicks, year, month, compare_mode, cum):
         if not year or not month:

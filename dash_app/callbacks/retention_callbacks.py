@@ -78,11 +78,12 @@ def register_retention_callbacks(app):
          Output("ret-table-container", "children"),
          # Block 4: Churn Alerts Table
          Output("ret-churn-table-container", "children")],
-        [Input("btn-apply-filter", "n_clicks"),
-         Input("tabs-navigation", "value")],
-        [State("sidebar-year", "value"),
+        [Input("btn-apply-filter", "n_clicks")],
+        [State("tabs-navigation", "value"),
+         State("sidebar-year", "value"),
          State("sidebar-month-select", "value"),
-         State("sidebar-cum", "value")]
+         State("sidebar-cum", "value")],
+        prevent_initial_call=True
     )
     def update_retention_page(n_clicks, tab_val, year, month, cum_val):
         bdx_val = None  # Không còn lọc theo BĐX

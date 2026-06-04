@@ -182,9 +182,9 @@ def register_kpi_callbacks(app):
          # Top 10 CMS Table
          Output("top-cms-table-container", "children")],
 
-        [Input("btn-apply-filter", "n_clicks"),
-         Input("tabs-navigation", "value")],
-        [State("sidebar-year", "value"),
+        [Input("btn-apply-filter", "n_clicks")],
+        [State("tabs-navigation", "value"),
+         State("sidebar-year", "value"),
          State("sidebar-period", "value"),
          State("sidebar-date-range", "start_date"),
          State("sidebar-date-range", "end_date"),
@@ -196,7 +196,8 @@ def register_kpi_callbacks(app):
          State("sidebar-bdx", "value"),
          State("sidebar-buu-cuc", "value"),
          State("sidebar-loai-kh", "data"),
-         State("sidebar-hop-dong", "data")]
+         State("sidebar-hop-dong", "data")],
+        prevent_initial_call=True
     )
     def update_kpi_cards(n_clicks, tab_val, year, period, start_date, end_date, week_idx, month_val, compare_mode,
                          nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
