@@ -179,8 +179,7 @@ def register_kpi_callbacks(app):
          Output("chart-customer-pie", "figure"),
          Output("chart-revenue-trend", "figure"),
          Output("chart-cluster-bar", "figure"),
-         # Area Chart & Top 10 CMS Table
-         Output("chart-customer-area", "figure"),
+         # Top 10 CMS Table
          Output("top-cms-table-container", "children")],
 
         [Input("btn-apply-filter", "n_clicks"),
@@ -627,88 +626,126 @@ def register_kpi_callbacks(app):
         else:
             fig_bar.update_layout(title="Không có dữ liệu so sánh Cụm")
 
-        # ── Area Chart: Luân chuyển KH theo 6 tháng gần nhất ────────────────
-        months_kh_data = []
-        last_6_months = []
-        cy, cm = target_year, target_month
-        for _ in range(6):
-            last_6_months.append((cy, cm))
-            cm -= 1
-            if cm == 0:
-                cm = 12
-                cy -= 1
-        last_6_months.reverse()
-
-        conn_tmp = sqlite3.connect(str(DB_PATH))
-        try:
-            for y_val, m_val in last_6_months:
-                from config.week_calendar import get_month_range
-                m_start, m_end = get_month_range(y_val, m_val)
-                df_m = query_revenue(
-                    conn=conn_tmp, date_from=m_start, date_to=m_end, date_column='thang_du_lieu',
-                    nhom_dv=nhom_dv, dich_vu=spdv, cum=cum_f, bdx=bdx_f, buu_cuc=bc_f, loai_kh=loai_kh, hop_dong=hd_f,
-                    group_by_primary='loai_kh', compare_prev=False, nam=y_val
-                )
-                hien_huu = df_m[df_m['loai_kh'] == 'Hiện hữu']['cuoc_tt_tong'].sum() if not df_m.empty and 'loai_kh' in df_m.columns else 0.0
-                khm_tb = df_m[df_m['loai_kh'] == 'KHM/Tái bán']['cuoc_tt_tong'].sum() if not df_m.empty and 'loai_kh' in df_m.columns else 0.0
-                vanglai_dt = df_m[df_m['loai_kh'] == 'Vãng lai']['cuoc_tt_tong'].sum() if not df_m.empty and 'loai_kh' in df_m.columns else 0.0
-                
-                months_kh_data.append({
-                    "Tháng": f"T{m_val:02d}/{str(y_val)[2:]}",
-                    "Hiện hữu": hien_huu,
-                    "KHM/Tái bán": khm_tb,
-                    "Vãng lai": vanglai_dt
-                })
-        except Exception as e:
-            print(f"Error building area chart: {e}")
-        finally:
-            conn_tmp.close()
-
-        df_area = pd.DataFrame(months_kh_data)
+        # Area chart has been removed as per TIP-11-001.
         fig_area = go.Figure()
-        if not df_area.empty:
-            for kh_type, color in [("Hiện hữu", "#10B981"), ("KHM/Tái bán", "#3B82F6"), ("Vãng lai", "#94A3B8")]:
-                fig_area.add_trace(go.Scatter(
-                    x=df_area["Tháng"], y=df_area[kh_type],
-                    name=kh_type, fill='tonexty', stackgroup='one',
-                    mode='none',
-                    marker=dict(color=color)
-                ))
-            fig_area.update_layout(
-                margin=dict(t=30, b=10, l=50, r=10),
-                height=320,
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
-            )
-        else:
-            fig_area.update_layout(title="Không có dữ liệu xu hướng KH")
+        fig_area.update_layout(title="Biểu đồ đã bị ẩn")
 
         # ── Top 10 CMS DataTable ───────────────────────────────────────────
         conn_tmp = sqlite3.connect(str(DB_PATH))
         try:
-            df_cur_cms = query_revenue(
-                conn=conn_tmp, date_from=date_from, date_to=date_to, date_column=date_column,
-                nhom_dv=nhom_dv, dich_vu=spdv, cum=cum_f, bdx=bdx_f, buu_cuc=bc_f, loai_kh=loai_kh, hop_dong=hd_f,
-                group_by_primary='cms', group_by_secondary='nhom_dv', compare_prev=False
-            )
-            df_cms_dv = df_cur_cms.groupby(['cms', 'nhom_dv'])['cuoc_tt_tong'].sum().reset_index()
-            df_cms_dv = df_cms_dv.sort_values('cuoc_tt_tong', ascending=False)
-            df_main_dv = df_cms_dv.drop_duplicates(subset=['cms'], keep='first')[['cms', 'nhom_dv']]
-            df_main_dv = df_main_dv.rename(columns={'nhom_dv': 'nhom_dv_chinh'})
+            where_clauses = [
+                "cms IS NOT NULL", "cms != ''", "cms != 'NONE'", "cms NOT LIKE 'VANGLAI_%'",
+                "san_pham_dv IN (SELECT ma_dich_vu FROM dim_dichvu WHERE nhom_chinh = 'BCCP' OR nhom_chinh IS NULL)"
+            ]
+            params_cur = []
             
-            df_cur_cms_tot = df_cur_cms.groupby('cms')['cuoc_tt_tong'].sum().reset_index()
+            if date_column == 'thang_du_lieu':
+                start_month = f"T{date_from.month:02d}"
+                end_month = f"T{date_to.month:02d}"
+                where_clauses.append("thang_du_lieu BETWEEN ? AND ?")
+                params_cur.extend([start_month, end_month])
+                if year is not None:
+                    where_clauses.append("nam_du_lieu = ?")
+                    params_cur.append(year)
+            else:
+                where_clauses.append("ngay_chap_nhan BETWEEN ? AND ?")
+                params_cur.extend([date_from.isoformat(), date_to.isoformat()])
+                
+            if nhom_dv:
+                ph_dv = ",".join(["?"] * len(nhom_dv))
+                where_clauses.append(f"san_pham_dv IN (SELECT ma_dich_vu FROM dim_dichvu WHERE nhom_dich_vu IN ({ph_dv}))")
+                params_cur.extend(nhom_dv)
+            if spdv:
+                ph_spdv = ",".join(["?"] * len(spdv))
+                where_clauses.append(f"san_pham_dv IN ({ph_spdv})")
+                params_cur.extend(spdv)
+            if cum_f and cum_f != "Tất cả":
+                where_clauses.append("buu_cuc IN (SELECT ma_bc FROM dim_buucuc WHERE ten_cum = ?)")
+                params_cur.append(cum_f)
+            if bdx_f and bdx_f != "Tất cả":
+                where_clauses.append("buu_cuc IN (SELECT ma_bc FROM dim_buucuc WHERE ten_bdx = ?)")
+                params_cur.append(bdx_f)
+            if bc_f and bc_f != "Tất cả":
+                where_clauses.append("buu_cuc = ?")
+                params_cur.append(bc_f)
+            if hd_f == "Có HĐ":
+                where_clauses.append("ma_hop_dong IS NOT NULL AND ma_hop_dong != ''")
+            elif hd_f == "Không HĐ":
+                where_clauses.append("(ma_hop_dong IS NULL OR ma_hop_dong = '')")
+                
+            where_str = " AND ".join(where_clauses)
             
-            df_prev_cms = query_revenue(
-                conn=conn_tmp, date_from=prev_from, date_to=prev_to, date_column=date_column,
-                nhom_dv=nhom_dv, dich_vu=spdv, cum=cum_f, bdx=bdx_f, buu_cuc=bc_f, loai_kh=loai_kh, hop_dong=hd_f,
-                group_by_primary='cms', compare_prev=False
-            )
-            df_prev_cms_tot = df_prev_cms.groupby('cms')['cuoc_tt_tong'].sum().reset_index() if not df_prev_cms.empty else pd.DataFrame(columns=['cms', 'cuoc_tt_tong'])
+            sql_cur = f"""
+                WITH top_cms AS (
+                    SELECT cms, SUM(cuoc_tt_tong) as cuoc_tt_tong
+                    FROM transactions
+                    WHERE {where_str}
+                    GROUP BY cms
+                    ORDER BY cuoc_tt_tong DESC
+                    LIMIT 20
+                )
+                SELECT t.cms, t.cuoc_tt_tong, 
+                       (SELECT d.nhom_dich_vu 
+                        FROM transactions t2 
+                        LEFT JOIN dim_dichvu d ON t2.san_pham_dv = d.ma_dich_vu 
+                        WHERE t2.cms = t.cms AND {where_str}
+                        GROUP BY d.nhom_dich_vu 
+                        ORDER BY SUM(t2.cuoc_tt_tong) DESC LIMIT 1) as nhom_dv_chinh
+                FROM top_cms t
+            """
+            df_cur_cms_tot = pd.read_sql_query(sql_cur, conn_tmp, params=params_cur)
+            df_main_dv = df_cur_cms_tot[['cms', 'nhom_dv_chinh']].copy() if not df_cur_cms_tot.empty else pd.DataFrame(columns=['cms', 'nhom_dv_chinh'])
+            
+            if prev_from and prev_to and not df_cur_cms_tot.empty:
+                where_prev = [
+                    "cms IS NOT NULL", "cms != ''", "cms != 'NONE'", "cms NOT LIKE 'VANGLAI_%'",
+                    "san_pham_dv IN (SELECT ma_dich_vu FROM dim_dichvu WHERE nhom_chinh = 'BCCP' OR nhom_chinh IS NULL)"
+                ]
+                params_prev = []
+                if date_column == 'thang_du_lieu':
+                    where_prev.append("thang_du_lieu BETWEEN ? AND ?")
+                    params_prev.extend([f"T{prev_from.month:02d}", f"T{prev_to.month:02d}"])
+                    if year is not None:
+                        where_prev.append("nam_du_lieu = ?")
+                        params_prev.append(prev_from.year)
+                else:
+                    where_prev.append("ngay_chap_nhan BETWEEN ? AND ?")
+                    params_prev.extend([prev_from.isoformat(), prev_to.isoformat()])
+                    
+                if nhom_dv:
+                    where_prev.append(f"san_pham_dv IN (SELECT ma_dich_vu FROM dim_dichvu WHERE nhom_dich_vu IN ({ph_dv}))")
+                    params_prev.extend(nhom_dv)
+                if spdv:
+                    where_prev.append(f"san_pham_dv IN ({ph_spdv})")
+                    params_prev.extend(spdv)
+                if cum_f and cum_f != "Tất cả":
+                    where_prev.append("buu_cuc IN (SELECT ma_bc FROM dim_buucuc WHERE ten_cum = ?)")
+                    params_prev.append(cum_f)
+                if bdx_f and bdx_f != "Tất cả":
+                    where_prev.append("buu_cuc IN (SELECT ma_bc FROM dim_buucuc WHERE ten_bdx = ?)")
+                    params_prev.append(bdx_f)
+                if bc_f and bc_f != "Tất cả":
+                    where_prev.append("buu_cuc = ?")
+                    params_prev.append(bc_f)
+                if hd_f == "Có HĐ":
+                    where_prev.append("ma_hop_dong IS NOT NULL AND ma_hop_dong != ''")
+                elif hd_f == "Không HĐ":
+                    where_prev.append("(ma_hop_dong IS NULL OR ma_hop_dong = '')")
+                    
+                cms_list = df_cur_cms_tot['cms'].tolist()
+                ph_cms = ",".join(["?"] * len(cms_list))
+                where_prev.append(f"cms IN ({ph_cms})")
+                params_prev.extend(cms_list)
+                
+                sql_prev = f"SELECT cms, SUM(cuoc_tt_tong) as cuoc_tt_tong FROM transactions WHERE {' AND '.join(where_prev)} GROUP BY cms"
+                df_prev_cms_tot = pd.read_sql_query(sql_prev, conn_tmp, params=params_prev)
+            else:
+                df_prev_cms_tot = pd.DataFrame(columns=['cms', 'cuoc_tt_tong'])
+                
         except Exception as e:
             print(f"Error querying Top 10 CMS: {e}")
             df_cur_cms_tot = pd.DataFrame()
-            df_prev_cms_tot = pd.DataFrame()
+            df_prev_cms_tot = pd.DataFrame(columns=['cms', 'cuoc_tt_tong'])
             df_main_dv = pd.DataFrame()
         finally:
             conn_tmp.close()
@@ -807,7 +844,6 @@ def register_kpi_callbacks(app):
             fig_pie_kh,
             fig_trend,
             fig_bar,
-            fig_area,
             top_table
         ]
 
