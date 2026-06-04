@@ -22,7 +22,8 @@ from analytics.global_metrics import (
     get_revenue_structure,
     get_ytd_revenue,
     get_ytd_plan,
-    get_revenue_by_cum
+    get_revenue_by_cum,
+    get_growth_heatmap_data
 )
 
 def get_prev_month_year(year, month):
@@ -154,7 +155,8 @@ def register_global_callbacks(app):
          Output("global-kpi-tcbc-compare-info", "children"),
          Output("global-kpi-ppbl-value", "children"),
          Output("global-kpi-ppbl-compare-info", "children"),
-         Output("global-donut-chart", "figure"),
+         Output("global-stacked-bar", "figure"),
+         Output("global-heatmap", "figure"),
          Output("ytd-table-container", "children"),
          Output("global-cum-table-container", "children")],
         [Input("btn-apply-filter", "n_clicks")],
@@ -165,7 +167,7 @@ def register_global_callbacks(app):
     )
     def update_global_overview(n_clicks, year, month, compare_mode, cum):
         if not year or not month:
-            return ["—"] * 8 + [go.Figure(), go.Figure(), html.Div("Vui lòng chọn bộ lọc thời gian.")]
+            return ["—"] * 8 + [go.Figure(), go.Figure(), html.Div(), html.Div("Vui lòng chọn bộ lọc thời gian.")]
             
         # 1. Lấy doanh thu thực tế kỳ hiện tại
         rev_cur = get_total_revenue_by_service(DB_PATH, year, month, cum)
@@ -240,40 +242,75 @@ def register_global_callbacks(app):
         ppbl_val_str = format_revenue(rev_cur["PPBL"])
         ppbl_info = build_compare_info("PPBL")
         
-        # 6. Biểu đồ Donut cơ cấu doanh thu
-        donut_fig = go.Figure()
-        labels = ["BCCP", "HCC", "TCBC", "PPBL"]
-        values = [rev_cur["BCCP"], rev_cur["HCC"], rev_cur["TCBC"], rev_cur["PPBL"]]
-        colors = ["#2196F3", "#4CAF50", "#FF9800", "#9C27B0"]
+        # 6. Biểu đồ Stacked Bar Chart doanh thu theo tháng
+        months_data = []
+        for m in range(1, month + 1):
+            rev = get_total_revenue_by_service(DB_PATH, year, m, cum)
+            months_data.append({"Tháng": f"T{m:02d}", **rev})
+        df_bar = pd.DataFrame(months_data)
         
-        if sum(values) > 0:
-            donut_fig.add_trace(go.Pie(
-                labels=labels,
-                values=values,
-                hole=0.5,
-                marker=dict(colors=colors),
-                textinfo="percent",
-                hoverinfo="label+value+percent",
-                hovertemplate="<b>%{label}</b><br>Doanh thu: %{value:,.0f} đ<br>Tỉ lệ: %{percent}<extra></extra>"
-            ))
-        else:
-            # Empty placeholder
-            donut_fig.add_trace(go.Pie(
-                labels=["Không có dữ liệu"],
-                values=[1],
-                hole=0.5,
-                marker=dict(colors=["#E2E8F0"]),
-                textinfo="none",
-                showlegend=False
+        stacked_bar_fig = go.Figure()
+        colors = {"BCCP": "#2196F3", "HCC": "#4CAF50", "TCBC": "#FF9800", "PPBL": "#9C27B0"}
+        for service in ["BCCP", "HCC", "TCBC", "PPBL"]:
+            stacked_bar_fig.add_trace(go.Bar(
+                name=service,
+                x=df_bar["Tháng"],
+                y=df_bar[service],
+                marker_color=colors[service],
+                hovertemplate=f"{service}: %{{y:,.0f}} đ<extra></extra>"
             ))
             
-        donut_fig.update_layout(
-            margin=dict(t=10, b=10, l=10, r=10),
-            legend=dict(orientation="h", yanchor="bottom", y=-0.1, xanchor="center", x=0.5),
-            height=300,
+        stacked_bar_fig.update_layout(
+            barmode="stack",
+            margin=dict(t=30, b=30, l=50, r=10),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+            height=300
+        )
+        
+        # 6b. Bản đồ nhiệt (Heatmap) tăng trưởng Cụm x DV
+        import plotly.figure_factory as ff
+        h_mode = "yoy" if (compare_mode and "yoy" in compare_mode) else "prev"
+        df_growth = get_growth_heatmap_data(DB_PATH, year, month, compare_mode=h_mode, cum=cum)
+        
+        z = df_growth[["BCCP", "HCC", "TCBC", "PPBL"]].values.tolist()
+        x_labels = ["BCCP", "HCC", "TCBC", "PPBL"]
+        y_labels = df_growth.index.tolist()
+        
+        annotation_text = [[f"{val:+.1f}%" if val is not None else "N/A" for val in row] for row in z]
+        z_colors = [[val if val is not None else 0.0 for val in row] for row in z]
+        
+        all_vals = [val for row in z for val in row if val is not None]
+        if all_vals:
+            max_abs = max(abs(min(all_vals)), abs(max(all_vals)))
+            zmax = max(max_abs, 10.0)
+            zmin = -zmax
+        else:
+            zmax = 100.0
+            zmin = -100.0
+
+        heatmap_height = 150 if len(y_labels) == 1 else 500
+        
+        heatmap_fig = ff.create_annotated_heatmap(
+            z=z_colors,
+            x=x_labels,
+            y=y_labels,
+            colorscale='RdYlGn',
+            annotation_text=annotation_text,
+            font_colors=['black', 'black'],
+            zmid=0,
+            zmin=zmin,
+            zmax=zmax
+        )
+        
+        heatmap_fig.update_layout(
+            height=heatmap_height,
+            margin=dict(l=150, r=30, t=30, b=30),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)"
         )
+
         
         # 7. Bảng doanh thu YTD (lũy kế từ đầu năm đến tháng hiện tại)
         ytd_cum_data = get_ytd_data_by_cum(DB_PATH, year, month)
@@ -460,7 +497,8 @@ def register_global_callbacks(app):
             hcc_val_str, hcc_info,
             tcbc_val_str, tcbc_info,
             ppbl_val_str, ppbl_info,
-            donut_fig,
+            stacked_bar_fig,
+            heatmap_fig,
             ytd_table,
             table
         )
