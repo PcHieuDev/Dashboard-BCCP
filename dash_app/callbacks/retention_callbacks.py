@@ -117,7 +117,7 @@ def register_retention_callbacks(app):
             mode="gauge+number",
             value=stats['retention_rate_sl'],
             number={"suffix": "%", "font": {"size": 22}},
-            title={'text': "Retention SL", 'font': {'size': 12, 'color': '#64748B', 'fontWeight': 'bold'}},
+            title={'text': "Retention SL", 'font': {'size': 12, 'color': '#64748B', 'weight': 'bold'}},
             gauge={
                 'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "#94A3B8"},
                 'bar': {'color': "#0F766E"},
@@ -147,7 +147,7 @@ def register_retention_callbacks(app):
             mode="gauge+number",
             value=stats['retention_rate_dt'],
             number={"suffix": "%", "font": {"size": 22}},
-            title={'text': "Retention DT", 'font': {'size': 12, 'color': '#64748B', 'fontWeight': 'bold'}},
+            title={'text': "Retention DT", 'font': {'size': 12, 'color': '#64748B', 'weight': 'bold'}},
             gauge={
                 'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "#94A3B8"},
                 'bar': {'color': "#2563EB"},
