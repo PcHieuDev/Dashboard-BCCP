@@ -20,8 +20,9 @@ import dash
 from dash import html, dcc, Input, Output, State
 import dash_bootstrap_components as dbc
 
-# Import Sidebar layout
+# Import Sidebar và Topbar layout
 from components.sidebar import create_sidebar_layout
+from components.topbar import create_topbar_layout
 
 # Import các trang Layouts
 from pages.kpi_page import create_kpi_page_layout
@@ -212,6 +213,9 @@ def serve_layout():
                 # Nút Import — chỉ hiển thị cho user có quyền can_upload
                 dcc.Link("📥 Nhập dữ liệu", href="/import", className="header-import-btn", id="btn-goto-import") if getattr(current_user, 'can_upload', False) else ""
             ], style={"display": "flex", "justify-content": "space-between", "align-items": "center", "margin-bottom": "20px"}),
+            
+            # Vùng Topbar (Bộ lọc toàn cục)
+            create_topbar_layout(FILTER_OPTS),
             
             # Vùng chứa layout động của từng trang
             html.Div(id="page-content", style={"paddingTop": "10px"})
