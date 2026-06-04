@@ -325,3 +325,55 @@ def resolve_filters_and_query(year, period, date_range_start, date_range_end, we
     )
     
     return date_from, date_to, date_column, df
+
+
+def get_bccp_weeks(year):
+    """
+    Tính ranh giới các tuần BCCP cho năm.
+    Tuần BCCP: Thứ 6 tuần trước -> Thứ 5 tuần này.
+    Tuần 1 bắt đầu từ 01/01.
+    Returns: list of (week_number, start_date, end_date)
+    """
+    from datetime import date, timedelta
+    
+    weeks = []
+    current_date = date(year, 1, 1)
+    
+    # Tìm Thứ 5 đầu tiên kể từ 01/01 (weekday() == 3)
+    days_to_thursday = (3 - current_date.weekday()) % 7
+    first_thursday = current_date + timedelta(days=days_to_thursday)
+    
+    week_num = 1
+    weeks.append((week_num, current_date, first_thursday))
+    
+    current_date = first_thursday + timedelta(days=1) # Thứ 6
+    while current_date.year == year:
+        next_thursday = current_date + timedelta(days=6)
+        if next_thursday.year > year:
+            next_thursday = date(year, 12, 31)
+        weeks.append((week_num + 1, current_date, next_thursday))
+        week_num += 1
+        current_date = next_thursday + timedelta(days=1)
+        if current_date.year > year:
+            break
+            
+    return weeks
+
+
+def get_bccp_week_number(d, year):
+    """Lấy số tuần BCCP của một ngày trong năm"""
+    from datetime import date
+    if isinstance(d, str):
+        try:
+            d = date.fromisoformat(d)
+        except ValueError:
+            d = pd.to_datetime(d).date()
+    elif isinstance(d, pd.Timestamp):
+        d = d.date()
+        
+    weeks = get_bccp_weeks(year)
+    for w_num, start_d, end_d in weeks:
+        if start_d <= d <= end_d:
+            return w_num
+    return weeks[-1][0] if weeks else 1
+

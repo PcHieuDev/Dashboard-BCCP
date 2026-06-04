@@ -31,26 +31,34 @@ def create_global_overview_layout():
             dbc.Col(make_global_kpi_card_layout("global-kpi-ppbl", "Phân phối bán lẻ (PPBL)", "🛍️", "#9C27B0"), lg=3, md=6, className="mb-3"),
         ], className="g-3"),
         
-        # Block 2: Biểu đồ cơ cấu & so sánh thực tế vs kế hoạch
+        # Block 2: Stacked Bar Chart & so sánh thực tế vs kế hoạch (YTD)
         dbc.Row([
-            # Biểu đồ Donut cơ cấu bên trái
             dbc.Col([
                 html.Div([
-                    html.Div("🍩 Cơ cấu doanh thu", className="section-header"),
-                    dcc.Graph(id="global-donut-chart", config={"displayModeBar": False})
+                    html.Div("📊 Doanh thu theo tháng", className="section-header"),
+                    dcc.Graph(id="global-stacked-bar", config={"displayModeBar": False})
                 ], className="info-box", style={"height": "100%", "padding": "15px"})
-            ], lg=4, md=12, className="mb-3"),
+            ], lg=6, md=12, className="mb-3"),
             
-            # Bảng doanh thu YTD bên phải (DataTable YTD)
             dbc.Col([
                 html.Div([
                     html.Div("📈 Doanh thu Thực tế vs Kế hoạch lũy kế (YTD)", className="section-header"),
                     dbc.Spinner(html.Div(id="ytd-table-container"))
                 ], className="info-box", style={"height": "100%", "padding": "15px"})
-            ], lg=8, md=12, className="mb-3")
+            ], lg=6, md=12, className="mb-3")
         ], className="g-3", style={"marginTop": "10px"}),
         
-        # Block 3: Bảng doanh thu chi tiết phân cấp theo cụm
+        # Block 3: Bản đồ nhiệt: Tăng trưởng theo Cụm × Dịch vụ
+        dbc.Row([
+            dbc.Col([
+                html.Div([
+                    html.Div("🔥 Bản đồ nhiệt: Tăng trưởng theo Cụm × Dịch vụ", className="section-header"),
+                    dcc.Graph(id="global-heatmap", config={"displayModeBar": False})
+                ], className="info-box", style={"padding": "15px"})
+            ], lg=12)
+        ], className="g-3 mt-1"),
+        
+        # Block 4: Bảng doanh thu chi tiết phân cấp theo cụm
         html.Div([
             html.Div("📋 Chi tiết doanh thu theo Cụm", className="section-header"),
             html.Div(id="global-cum-table-container")

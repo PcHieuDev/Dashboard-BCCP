@@ -11,6 +11,8 @@ from pathlib import Path
 from datetime import datetime
 import dash_bootstrap_components as dbc
 from dash.dash_table.Format import Format, Group, Scheme
+import sqlite3
+import pandas as pd
 
 # Thêm thư mục gốc vào sys.path để import
 project_root = Path(__file__).resolve().parent.parent.parent
@@ -28,6 +30,38 @@ def register_customer_callbacks(app):
     """
     
     # ==============================================================================
+    # 0. CALLBACK CASCADE: NHÓM DV -> MÃ DỊCH VỤ CỤ THỂ
+    # ==============================================================================
+    @app.callback(
+        Output("customer-filter-spdv", "options"),
+        [Input("customer-filter-nhom-dv", "value")]
+    )
+    def update_spdv_options(nhom_dv_selected):
+        """Load SPDV options dựa trên nhóm DV đã chọn."""
+        if not DB_PATH.exists():
+            return []
+            
+        conn = sqlite3.connect(str(DB_PATH))
+        try:
+            query = "SELECT DISTINCT ma_dich_vu, ten_dich_vu FROM dim_dichvu WHERE nhom_chinh = 'BCCP'"
+            params = []
+            if nhom_dv_selected:
+                placeholders = ",".join(["?"] * len(nhom_dv_selected))
+                query += f" AND nhom_dich_vu IN ({placeholders})"
+                params.extend(nhom_dv_selected)
+            query += " ORDER BY ma_dich_vu"
+            
+            df = pd.read_sql_query(query, conn, params=params)
+            options = [{"label": f"{r['ma_dich_vu']} - {r['ten_dich_vu']}", "value": r['ma_dich_vu']} for _, r in df.iterrows()]
+        except Exception as e:
+            print(f"Error loading SPDV options: {e}")
+            options = []
+        finally:
+            conn.close()
+            
+        return options
+
+    # ==============================================================================
     # 1. CALLBACK CẬP NHẬT BẢNG DOANH THU XOAY CHIỀU
     # ==============================================================================
     @app.callback(
@@ -40,7 +74,8 @@ def register_customer_callbacks(app):
          # Bộ lọc dịch vụ inline mới
          Input("customer-filter-nhom-dv", "value"),
          Input("customer-filter-loai-kh", "value"),
-         Input("customer-filter-hop-dong", "value")],
+         Input("customer-filter-hop-dong", "value"),
+         Input("customer-filter-spdv", "value")],
         [# Bộ lọc địa lý từ Sidebar (State)
          State("sidebar-year", "value"),
          State("sidebar-period", "value"),
@@ -52,12 +87,11 @@ def register_customer_callbacks(app):
          State("sidebar-bdx", "value"),
          State("sidebar-buu-cuc", "value")]
     )
-    def update_revenue_table(n_clicks, tab_val, g1, g2, compare_opt, nhom_dv, loai_kh, hop_dong,
+    def update_revenue_table(n_clicks, tab_val, g1, g2, compare_opt, nhom_dv, loai_kh, hop_dong, spdv,
                              year, period, start_date, end_date, week_idx, month_val, cum, bdx, buu_cuc):
         # Chạy khi ở tab Chi tiết Khách hàng (do đã gộp trang)
         if tab_val != "tab-customer" or tab_val is None:
             return dash.no_update
-        spdv = None
             
         g2_actual = None if g2 == "None" else g2
         compare_prev = compare_opt != "none"
@@ -101,15 +135,15 @@ def register_customer_callbacks(app):
          State("sidebar-bdx", "value"),
          State("sidebar-buu-cuc", "value"),
          State("customer-filter-loai-kh", "value"),
-         State("customer-filter-hop-dong", "value")],
+         State("customer-filter-hop-dong", "value"),
+         State("customer-filter-spdv", "value")],
         prevent_initial_call=True
     )
     def export_revenue_table(n_clicks, tab_val, g1, g2, compare_opt, year, period, start_date, end_date, week_idx, month_val,
-                             nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
+                             nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong, spdv):
         ctx = dash.callback_context
         if not ctx.triggered or tab_val != "tab-customer" or tab_val is None:
             return dash.no_update
-        spdv = None
             
         g2_actual = None if g2 == "None" else g2
         compare_prev = compare_opt != "none"
@@ -153,7 +187,8 @@ def register_customer_callbacks(app):
          # Bộ lọc dịch vụ inline mới
          Input("customer-filter-nhom-dv", "value"),
          Input("customer-filter-loai-kh", "value"),
-         Input("customer-filter-hop-dong", "value")],
+         Input("customer-filter-hop-dong", "value"),
+         Input("customer-filter-spdv", "value")],
         [# Bộ lọc địa lý từ Sidebar (State)
          State("sidebar-year", "value"),
          State("sidebar-period", "value"),
@@ -165,12 +200,11 @@ def register_customer_callbacks(app):
          State("sidebar-bdx", "value"),
          State("sidebar-buu-cuc", "value")]
     )
-    def update_customer_table(n_clicks, tab_val, nhom_dv, loai_kh, hop_dong,
+    def update_customer_table(n_clicks, tab_val, nhom_dv, loai_kh, hop_dong, spdv,
                               year, period, start_date, end_date, week_idx, month_val, cum, bdx, buu_cuc):
         # Chỉ chạy khi đang ở Tab Chi tiết Khách hàng
         if tab_val != "tab-customer" or tab_val is None:
             return dash.no_update
-        spdv = None
             
         # 1. Truy vấn dữ liệu qua Cache
         _, _, _, df = resolve_filters_and_query_customer(
@@ -262,15 +296,15 @@ def register_customer_callbacks(app):
          State("sidebar-bdx", "value"),
          State("sidebar-buu-cuc", "value"),
          State("customer-filter-loai-kh", "value"),
-         State("customer-filter-hop-dong", "value")],
+         State("customer-filter-hop-dong", "value"),
+         State("customer-filter-spdv", "value")],
         prevent_initial_call=True
     )
     def export_customer_table(n_clicks, tab_val, year, period, start_date, end_date, week_idx, month_val,
-                              nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
+                              nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong, spdv):
         ctx = dash.callback_context
         if not ctx.triggered or tab_val != "tab-customer" or tab_val is None:
             return dash.no_update
-        spdv = None
             
         # 1. Truy vấn toàn bộ dữ liệu
         _, _, _, df = resolve_filters_and_query_customer(
@@ -299,7 +333,9 @@ def register_customer_callbacks(app):
         filter_parts.append(f"Loại KH: {', '.join(loai_kh) if loai_kh else 'Tất cả'}")
         hop_dong_str = ", ".join(hop_dong) if isinstance(hop_dong, list) and hop_dong else (hop_dong if isinstance(hop_dong, str) and hop_dong else 'Tất cả')
         filter_parts.append(f"Trạng thái HĐ: {hop_dong_str}")
-        
+        if spdv:
+            filter_parts.append(f"SPDV cụ thể: {', '.join(spdv)}")
+            
         filter_info = " | ".join(filter_parts)
         
         # 3. Tạo file Excel qua export_helpers

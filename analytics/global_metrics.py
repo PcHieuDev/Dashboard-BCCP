@@ -403,3 +403,46 @@ def get_revenue_by_cum(db_path, nam, thang=None):
     # Lưu vào cache
     _revenue_by_cum_cache.set(key, df_res)
     return df_res
+
+def get_growth_heatmap_data(db_path, year, month, compare_mode="prev", cum=None):
+    """
+    Tính % tăng trưởng cho mỗi Cụm × Nhóm DV.
+    compare_mode: "prev" (so tháng trước) hoặc "yoy" (so cùng kỳ)
+    Returns: DataFrame(index=Cụm, columns=[BCCP,HCC,TCBC,PPBL], values=% growth)
+    """
+    df_current = get_revenue_by_cum(db_path, year, month)
+    
+    if compare_mode == "yoy":
+        df_prev = get_revenue_by_cum(db_path, year - 1, month)
+    else:
+        prev_month = 12 if month == 1 else month - 1
+        prev_year = year - 1 if month == 1 else year
+        df_prev = get_revenue_by_cum(db_path, prev_year, prev_month)
+        
+    df_curr_indexed = df_current.set_index("Cụm")
+    df_prev_indexed = df_prev.set_index("Cụm")
+    
+    services = ["BCCP", "HCC", "TCBC", "PPBL"]
+    df_growth = pd.DataFrame(index=df_curr_indexed.index, columns=services)
+    
+    for svc in services:
+        curr_vals = df_curr_indexed[svc].fillna(0)
+        prev_vals = df_prev_indexed[svc].fillna(0)
+        
+        growth_vals = []
+        for c_val, p_val in zip(curr_vals, prev_vals):
+            if p_val == 0:
+                if c_val == 0:
+                    growth_vals.append(0.0)
+                else:
+                    growth_vals.append(None)
+            else:
+                growth_vals.append((c_val - p_val) * 100.0 / p_val)
+        df_growth[svc] = growth_vals
+        
+    if cum and cum != "Tất cả":
+        if cum in df_growth.index:
+            df_growth = df_growth.loc[[cum]]
+            
+    return df_growth
+

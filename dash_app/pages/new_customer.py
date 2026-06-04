@@ -62,6 +62,22 @@ def create_new_customer_layout():
             dbc.Col(make_service_kpi_card("new-cust-svc-tmdt", "Dịch vụ TMĐT", "🛒"), md=6, xs=12)
         ], style={"marginBottom": "20px"}),
         
+        # Block 2b: Xếp hạng Cụm & Phân dịch vụ
+        dbc.Row([
+            dbc.Col([
+                html.Div([
+                    html.H4("🏆 Bảng xếp hạng Cụm (KHM)", style={'fontSize': '15px', 'fontWeight': 'bold', 'color': '#1E293B'}),
+                    dbc.Spinner(html.Div(id="new-cust-leaderboard-container"))
+                ], style={'padding': '15px', 'background': '#FFF', 'borderRadius': '12px', 'border': '1px solid #E2E8F0', 'boxShadow': '0 1px 3px rgba(0,0,0,0.05)', 'height': '100%'})
+            ], lg=7, md=12, className="mb-3"),
+            dbc.Col([
+                html.Div([
+                    html.H4("📊 Phân rã DV mà KHM sử dụng", style={'fontSize': '15px', 'fontWeight': 'bold', 'color': '#1E293B'}),
+                    dbc.Spinner(dcc.Graph(id="new-cust-chart-dv", style={'height': '350px'}))
+                ], style={'padding': '15px', 'background': '#FFF', 'borderRadius': '12px', 'border': '1px solid #E2E8F0', 'boxShadow': '0 1px 3px rgba(0,0,0,0.05)', 'height': '100%'})
+            ], lg=5, md=12, className="mb-3")
+        ], className="g-3 mb-4", style={"marginBottom": "20px"}),
+        
         # Block 3: Bảng chi tiết theo BĐX và bộ lọc
         html.Div("🏢 Chi tiết thực hiện theo Bưu điện Huyện/Xã (BĐX)", className="section-header"),
         dbc.Row([
@@ -85,9 +101,16 @@ def create_new_customer_layout():
         
         html.Hr(),
         
-        # Vùng chứa bảng dữ liệu động
+        # Vùng chứa bảng dữ liệu động BĐX
         dbc.Spinner(
             html.Div(id="new-cust-table-container"),
+            color="primary"
+        ),
+        
+        # Block 4: Top KHM giá trị cao
+        html.Div("🏆 Top Khách hàng mới giá trị cao", className="section-header", style={"marginTop": "20px"}),
+        dbc.Spinner(
+            html.Div(id="new-cust-top-khm-container"),
             color="primary"
         )
     ])
