@@ -158,7 +158,7 @@ def serve_layout():
             html.Div(id="login-error-output")
         ])
         
-    if False: # not current_user.is_authenticated:
+    if not current_user.is_authenticated:
         # Layout trang đăng nhập
         return html.Div([
             dcc.Location(id="login-url", refresh=True),
@@ -205,8 +205,8 @@ def serve_layout():
                     html.H1("📊 Dashboard Điều hành Doanh thu", className="main-title", id="main-title-text"),
                     html.Div(id="header-sub-title", className="sub-title")
                 ], style={"flex": "1"}),
-                # Nút Import
-                dcc.Link("📥 Nhập dữ liệu", href="/import", className="header-import-btn", id="btn-goto-import")
+                # Nút Import — chỉ hiển thị cho user có quyền can_upload
+                dcc.Link("📥 Nhập dữ liệu", href="/import", className="header-import-btn", id="btn-goto-import") if getattr(current_user, 'can_upload', False) else ""
             ], style={"display": "flex", "justify-content": "space-between", "align-items": "center", "margin-bottom": "20px"}),
             
             # Vùng chứa layout động của từng trang
@@ -257,7 +257,7 @@ def render_page(pathname):
     Định tuyến và trả về layout trang phù hợp dựa theo URL pathname.
     """
     # Bảo mật: nếu chưa auth thì không trả về gì
-    if False: # not current_user.is_authenticated:
+    if not current_user.is_authenticated:
         return html.Div("Vui lòng đăng nhập hệ thống", style={"textAlign": "center", "padding": "50px"}), "🔑 Hệ thống điều hành"
         
     if not pathname or pathname == "/":
@@ -312,6 +312,12 @@ def render_page(pathname):
             return html.Div("Trang Phân phối bán lẻ đang được xây dựng...", className="empty-state-container"), "🛍️ Phân phối bán lẻ"
             
     elif pathname == "/import":
+        if not getattr(current_user, 'can_upload', False):
+            return html.Div([
+                html.Div("⛔", className="empty-state-icon", style={"fontSize": "48px"}),
+                html.Div("Từ chối truy cập", className="empty-state-title"),
+                html.Div("Bạn không có quyền truy cập trang này.", className="empty-state-desc")
+            ], className="empty-state-container"), "⛔ Truy cập bị từ chối"
         return create_import_page_layout(), "📥 Nhập dữ liệu hệ thống"
         
     return html.Div([

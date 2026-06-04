@@ -29,6 +29,16 @@ class User(UserMixin):
     def is_admin(self):
         return self.role == 'admin'
 
+    @property
+    def can_upload(self):
+        """Admin và provincial_uploader mới có quyền upload dữ liệu."""
+        return self.role in ['admin', 'provincial_uploader']
+
+    @property
+    def is_cluster_restricted(self):
+        """cluster_viewer chỉ xem được dữ liệu của cụm được gán."""
+        return self.role == 'cluster_viewer'
+
 def get_user_by_id(user_id):
     """Lấy thông tin người dùng theo ID từ cơ sở dữ liệu SQLite."""
     if not DB_PATH.exists():
