@@ -214,13 +214,14 @@ def register_new_customer_callbacks(app):
          Output("new-cust-svc-tmdt-plan", "children"), Output("new-cust-svc-tmdt-percent", "children"),
          # Bảng chi tiết
          Output("new-cust-table-container", "children")],
-        [Input("tabs-navigation", "value"),
-         Input("sidebar-year", "value"),
-         Input("sidebar-month-select", "value"),
-         Input("sidebar-cum", "value"),
-         Input("new-cust-filter-bdx", "value")]
+        [Input("btn-apply-filter", "n_clicks"),
+         Input("tabs-navigation", "value"),
+         Input("new-cust-filter-bdx", "value")],
+        [State("sidebar-year", "value"),
+         State("sidebar-month-select", "value"),
+         State("sidebar-cum", "value")]
     )
-    def update_new_cust_page(tab_val, year, month, cum_val, bdx_val):
+    def update_new_cust_page(n_clicks, tab_val, bdx_val, year, month, cum_val):
         if tab_val != "tab-new-customer" or tab_val is None:
             return [dash.no_update] * 15
             

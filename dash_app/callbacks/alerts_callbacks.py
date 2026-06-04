@@ -5,7 +5,7 @@ Ngưỡng sụt giảm: Vàng 15%, Đỏ 30%.
 """
 
 import dash
-from dash import Output, Input, html
+from dash import Output, Input, State, html
 import sys
 import pandas as pd
 from pathlib import Path
@@ -16,7 +16,17 @@ if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
 from callbacks.utils import resolve_filters_and_query, format_revenue
+from config.settings import DB_PATH
+import sqlite3
 import dash_bootstrap_components as dbc
+
+def get_prev_month_year(year, month):
+    if not year or not month:
+        return year, month
+    if month == 1:
+        return year - 1, 12
+    else:
+        return year, month - 1
 
 def register_alerts_callbacks(app):
     """
@@ -24,23 +34,23 @@ def register_alerts_callbacks(app):
     """
     @app.callback(
         Output("alerts-list-container", "children"),
-        [Input("tabs-navigation", "value"),
-         Input("alerts-nhom-dv-select", "value"),
-         # Bộ lọc thời gian & địa lý từ Sidebar
-         Input("sidebar-year", "value"),
-         Input("sidebar-period", "value"),
-         Input("sidebar-date-range", "start_date"),
-         Input("sidebar-date-range", "end_date"),
-         Input("sidebar-week-select", "value"),
-         Input("sidebar-month-select", "value"),
-         Input("sidebar-nhom-dv", "value"),
-         Input("sidebar-cum", "value"),
-         Input("sidebar-bdx", "value"),
-         Input("sidebar-buu-cuc", "value"),
-         Input("sidebar-loai-kh", "value"),
-         Input("sidebar-hop-dong", "value")]
+        [Input("btn-apply-filter", "n_clicks"),
+         Input("tabs-navigation", "value"),
+         Input("alerts-nhom-dv-select", "value")],
+        [State("sidebar-year", "value"),
+         State("sidebar-period", "value"),
+         State("sidebar-date-range", "start_date"),
+         State("sidebar-date-range", "end_date"),
+         State("sidebar-week-select", "value"),
+         State("sidebar-month-select", "value"),
+         State("sidebar-nhom-dv", "value"),
+         State("sidebar-cum", "value"),
+         State("sidebar-bdx", "value"),
+         State("sidebar-buu-cuc", "value"),
+         State("sidebar-loai-kh", "value"),
+         State("sidebar-hop-dong", "value")]
     )
-    def update_alerts_list(tab_val, selected_service, year, period, start_date, end_date, week_idx, month_val,
+    def update_alerts_list(n_clicks, tab_val, selected_service, year, period, start_date, end_date, week_idx, month_val,
                            nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         # Chỉ chạy khi đang ở Tab Cảnh báo
         if tab_val != "tab-alerts" or tab_val is None:

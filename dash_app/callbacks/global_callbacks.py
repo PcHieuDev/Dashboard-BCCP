@@ -7,7 +7,7 @@ import sys
 import sqlite3
 import pandas as pd
 from pathlib import Path
-from dash import Output, Input, html, dash_table
+from dash import Output, Input, State, html, dash_table
 import plotly.graph_objects as go
 
 # Setup sys.path
@@ -157,12 +157,13 @@ def register_global_callbacks(app):
          Output("global-donut-chart", "figure"),
          Output("ytd-table-container", "children"),
          Output("global-cum-table-container", "children")],
-        [Input("sidebar-year", "value"),
-         Input("sidebar-month-select", "value"),
-         Input("sidebar-compare-mode", "value"),
-         Input("sidebar-cum", "value")]
+        [Input("btn-apply-filter", "n_clicks")],
+        [State("sidebar-year", "value"),
+         State("sidebar-month-select", "value"),
+         State("sidebar-compare-mode", "value"),
+         State("sidebar-cum", "value")]
     )
-    def update_global_overview(year, month, compare_mode, cum):
+    def update_global_overview(n_clicks, year, month, compare_mode, cum):
         if not year or not month:
             return ["—"] * 8 + [go.Figure(), go.Figure(), html.Div("Vui lòng chọn bộ lọc thời gian.")]
             

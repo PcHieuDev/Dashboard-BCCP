@@ -75,13 +75,11 @@ def create_sidebar_layout(filter_opts):
             # Tài chính Bưu chính (TCBC)
             dbc.AccordionItem([
                 dcc.Link("📊 Tổng quan & Chi tiết", href="/tcbc", id="nav-tcbc-overview", className="sidebar-menu-item"),
-                dcc.Link("📊 Doanh thu chi tiết", href="/tcbc", id="nav-tcbc-revenue", className="sidebar-menu-item", style={"display": "none"}),
             ], title="💰 Tài chính Bưu chính", item_id="menu-tcbc"),
             
             # Phân phối bán lẻ (PPBL)
             dbc.AccordionItem([
                 dcc.Link("📊 Tổng quan & Chi tiết", href="/ppbl", id="nav-ppbl-overview", className="sidebar-menu-item"),
-                dcc.Link("📊 Doanh thu chi tiết", href="/ppbl", id="nav-ppbl-revenue", className="sidebar-menu-item", style={"display": "none"}),
             ], title="🛍️ Phân phối bán lẻ", item_id="menu-ppbl"),
         ], id="sidebar-accordion", active_item="menu-bccp", flush=True, className="sidebar-accordion")
     ], style={"marginBottom": "20px"})
@@ -215,8 +213,18 @@ def create_sidebar_layout(filter_opts):
                 ], className="filter-group"),
             ]),
             
-            # Bộ lọc dịch vụ BCCP (chỉ hiện khi ở /bccp*)
-            # Bộ lọc dịch vụ BCCP cũ ẩn đi để tương thích ngược với các callback khác
+            # Nút Áp dụng bộ lọc
+            html.Div([
+                dbc.Button(
+                    "🔍 Áp dụng bộ lọc",
+                    id="btn-apply-filter",
+                    color="primary",
+                    className="w-100 mt-2",
+                    style={"fontWeight": "bold"}
+                )
+            ], id="apply-filter-container", style={"padding": "10px 0"}),
+            
+            # Bộ lọc dịch vụ BCCP dịch vụ BCCP cũ ẩn đi để tương thích ngược với các callback khác
             html.Div(id="bccp-extra-filters", style={"display": "none"}, children=[
                 dcc.Store(id="sidebar-nhom-dv", data=None),
                 dcc.Store(id="sidebar-loai-kh", data=[]),

@@ -70,14 +70,14 @@ def query_revenue(
             t.cuoc_tt_tong,
             t.cuoc_tt_gom_vat,
             d.nhom_dich_vu,
-            d.ten_spdv,
+            d.ten_dich_vu as ten_spdv,
             b.ten_buu_cuc,
             b.ten_bdx,
             b.ten_cum
         FROM transactions t
-        LEFT JOIN dim_spdv d ON t.san_pham_dv = d.ma_spdv
+        LEFT JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
         LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
-        WHERE 1=1
+        WHERE (d.nhom_chinh = 'BCCP' OR d.nhom_chinh IS NULL)
         """
     ]
     params = []
@@ -502,9 +502,9 @@ def query_customer_detail_pivot(
             b.ten_bdx,
             b.ten_cum
         FROM transactions t
-        LEFT JOIN dim_spdv d ON t.san_pham_dv = d.ma_spdv
+        LEFT JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
         LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
-        WHERE 1=1
+        WHERE (d.nhom_chinh = 'BCCP' OR d.nhom_chinh IS NULL)
         """
     ]
     params = []

@@ -23,20 +23,44 @@ def register_sidebar_callbacks(app):
     Đăng ký các callback của Sidebar với ứng dụng Dash.
     """
     
-    # 1. Callback chuyển đổi hiển thị của DatePickerRange, Tuần, Tháng theo chu kỳ chọn
+    # 1. Callback chuyển đổi hiển thị của DatePickerRange, Tuần, Tháng theo chu kỳ chọn và gán default values
     @app.callback(
         [Output("filter-container-day", "style"),
          Output("filter-container-week", "style"),
-         Output("filter-container-month", "style")],
-        [Input("sidebar-period", "value")]
+         Output("filter-container-month", "style"),
+         Output("sidebar-date-range", "start_date"),
+         Output("sidebar-date-range", "end_date"),
+         Output("sidebar-month-select", "value")],
+        [Input("sidebar-period", "value"),
+         Input("sidebar-year", "value")]
     )
-    def toggle_period_filters(period):
+    def toggle_period_filters(period, year):
+        import dash
+        from datetime import date
+        today = date.today()
+        
+        ctx = dash.callback_context
+        triggered_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else ""
+        
+        # Mặc định giữ nguyên các giá trị
+        start_date = dash.no_update
+        end_date = dash.no_update
+        month_val = dash.no_update
+        
+        # Chỉ thiết lập default value khi thay đổi chu kỳ (sidebar-period) hoặc lần đầu load
+        if triggered_id == "sidebar-period" or not triggered_id:
+            if period == "Ngày":
+                start_date = today.isoformat()
+                end_date = today.isoformat()
+            elif period == "Tháng":
+                month_val = today.month
+                
         if period == "Ngày":
-            return {"display": "block"}, {"display": "none"}, {"display": "none"}
+            return {"display": "block"}, {"display": "none"}, {"display": "none"}, start_date, end_date, month_val
         elif period == "Tuần":
-            return {"display": "none"}, {"display": "block"}, {"display": "none"}
+            return {"display": "none"}, {"display": "block"}, {"display": "none"}, start_date, end_date, month_val
         else:  # Tháng
-            return {"display": "none"}, {"display": "none"}, {"display": "block"}
+            return {"display": "none"}, {"display": "none"}, {"display": "block"}, start_date, end_date, month_val
 
     # 2. Callback cập nhật danh sách Tuần theo Năm đã chọn (Đã sửa lỗi ValueError unpack 3-tuple)
     @app.callback(
@@ -135,16 +159,14 @@ def register_sidebar_callbacks(app):
          Output("sidebar-accordion", "active_item"),
          Output("nav-global-overview", "className"),
          Output("nav-bccp-kpi", "className"),
-         Output("nav-bccp-revenue", "className"),
          Output("nav-bccp-customer", "className"),
-         Output("nav-bccp-charts", "className"),
+         Output("nav-bccp-new-customer", "className"),
+         Output("nav-bccp-retention", "className"),
          Output("nav-bccp-alerts", "className"),
          Output("nav-hcc-overview", "className"),
          Output("nav-hcc-revenue", "className"),
          Output("nav-tcbc-overview", "className"),
-         Output("nav-tcbc-revenue", "className"),
          Output("nav-ppbl-overview", "className"),
-         Output("nav-ppbl-revenue", "className"),
          Output("bccp-extra-filters", "style")],
         [Input("url", "pathname")]
     )
@@ -153,16 +175,14 @@ def register_sidebar_callbacks(app):
         classes = {
             "global": "sidebar-menu-item",
             "bccp-kpi": "sidebar-menu-item",
-            "bccp-rev": "sidebar-menu-item",
             "bccp-cust": "sidebar-menu-item",
-            "bccp-chart": "sidebar-menu-item",
+            "bccp-new-cust": "sidebar-menu-item",
+            "bccp-ret": "sidebar-menu-item",
             "bccp-alert": "sidebar-menu-item",
             "hcc-over": "sidebar-menu-item",
             "hcc-rev": "sidebar-menu-item",
             "tcbc-over": "sidebar-menu-item",
-            "tcbc-rev": "sidebar-menu-item",
-            "ppbl-over": "sidebar-menu-item",
-            "ppbl-rev": "sidebar-menu-item"
+            "ppbl-over": "sidebar-menu-item"
         }
         
         # Ẩn hiện bộ lọc: Chỉ hiện cho Tổng quan chung và các trang BCCP
@@ -190,12 +210,12 @@ def register_sidebar_callbacks(app):
             classes["global"] = "sidebar-menu-item active"
         elif pathname == "/bccp":
             classes["bccp-kpi"] = "sidebar-menu-item active active-bccp"
-        elif pathname == "/bccp/revenue":
-            classes["bccp-rev"] = "sidebar-menu-item active active-bccp"
         elif pathname == "/bccp/customer":
             classes["bccp-cust"] = "sidebar-menu-item active active-bccp"
-        elif pathname == "/bccp/charts":
-            classes["bccp-chart"] = "sidebar-menu-item active active-bccp"
+        elif pathname == "/bccp/new-customer":
+            classes["bccp-new-cust"] = "sidebar-menu-item active active-bccp"
+        elif pathname == "/bccp/retention":
+            classes["bccp-ret"] = "sidebar-menu-item active active-bccp"
         elif pathname == "/bccp/alerts":
             classes["bccp-alert"] = "sidebar-menu-item active active-bccp"
         elif pathname == "/hcc":
@@ -204,26 +224,22 @@ def register_sidebar_callbacks(app):
             classes["hcc-rev"] = "sidebar-menu-item active active-hcc"
         elif pathname == "/tcbc":
             classes["tcbc-over"] = "sidebar-menu-item active active-tcbc"
-            classes["tcbc-rev"] = "sidebar-menu-item active active-tcbc"
         elif pathname == "/ppbl":
             classes["ppbl-over"] = "sidebar-menu-item active active-ppbl"
-            classes["ppbl-rev"] = "sidebar-menu-item active active-ppbl"
             
         return (
             filter_style,
             active_accordion,
             classes["global"],
             classes["bccp-kpi"],
-            classes["bccp-rev"],
             classes["bccp-cust"],
-            classes["bccp-chart"],
+            classes["bccp-new-cust"],
+            classes["bccp-ret"],
             classes["bccp-alert"],
             classes["hcc-over"],
             classes["hcc-rev"],
             classes["tcbc-over"],
-            classes["tcbc-rev"],
             classes["ppbl-over"],
-            classes["ppbl-rev"],
             bccp_filter_style
         )
 
