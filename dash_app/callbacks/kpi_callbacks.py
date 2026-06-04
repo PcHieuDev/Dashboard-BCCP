@@ -23,8 +23,10 @@ from analytics.revenue import query_revenue
 from callbacks.utils import (
     format_revenue,
     generate_svg_sparkline_src,
-    resolve_filters_and_query
+    resolve_filters_and_query,
+    get_bccp_week_number
 )
+from analytics.retention_metrics import get_retention_stats
 
 def _get_phbc_revenue(db_path, year, month):
     """Query doanh thu PHBC từ bảng transactions_phbc. Trả về 0 nếu bảng chưa tồn tại."""
@@ -40,6 +42,105 @@ def _get_phbc_revenue(db_path, year, month):
         return float(df.iloc[0]['dt'] or 0)
     except Exception:
         return 0.0
+
+def get_bccp_plan(db_path, year, month, cum=None, bdx=None, buu_cuc=None):
+    """Lấy kế hoạch doanh thu của nhóm BCCP dựa theo thời gian và bộ lọc địa lý"""
+    if not db_path.exists():
+        return 0.0
+    sql = """
+        SELECT SUM(p.ke_hoach_doanh_thu)
+        FROM plans p
+        INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_bc
+        WHERE p.nam = :nam AND p.thang = :thang AND p.nhom_dich_vu = 'BCCP'
+    """
+    params = {"nam": year, "thang": month}
+    if cum and cum != "Tất cả":
+        sql += " AND b.ten_cum = :cum"
+        params["cum"] = cum
+    if bdx and bdx != "Tất cả":
+        sql += " AND b.ten_bdx = :bdx"
+        params["bdx"] = bdx
+    if buu_cuc and buu_cuc != "Tất cả":
+        sql += " AND p.ma_buu_cuc = :buu_cuc"
+        params["buu_cuc"] = buu_cuc
+        
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cursor = conn.cursor()
+        cursor.execute(sql, params)
+        row = cursor.fetchone()
+        return row[0] if row and row[0] is not None else 0.0
+    except Exception as e:
+        print(f"Error querying BCCP plan: {e}")
+        return 0.0
+    finally:
+        conn.close()
+
+def get_new_customers_metrics(db_path, year, month, cum=None, bdx=None, buu_cuc=None):
+    """Lấy số lượng và tổng doanh thu của KHM từ bảng new_customers"""
+    if not db_path.exists():
+        return 0, 0.0, 0, 0.0
+        
+    sql = """
+        SELECT COUNT(cms), SUM(tong_doanh_thu)
+        FROM new_customers
+        WHERE nam = :nam AND thang = :thang
+    """
+    params = {"nam": year, "thang": month}
+    
+    if cum and cum != "Tất cả":
+        sql += " AND ten_cum = :cum"
+        params["cum"] = cum
+    if bdx and bdx != "Tất cả":
+        sql += " AND ma_bdx = :bdx"
+        params["bdx"] = bdx
+    if buu_cuc and buu_cuc != "Tất cả":
+        sql += " AND buu_cuc = :buu_cuc"
+        params["buu_cuc"] = buu_cuc
+        
+    # Tính tháng trước
+    prev_year = year
+    prev_month = month - 1
+    if prev_month == 0:
+        prev_month = 12
+        prev_year = year - 1
+        
+    params_prev = {"nam": prev_year, "thang": prev_month}
+    sql_prev = """
+        SELECT COUNT(cms), SUM(tong_doanh_thu)
+        FROM new_customers
+        WHERE nam = :nam AND thang = :thang
+    """
+    if cum and cum != "Tất cả":
+        sql_prev += " AND ten_cum = :cum"
+        params_prev["cum"] = cum
+    if bdx and bdx != "Tất cả":
+        sql_prev += " AND ma_bdx = :bdx"
+        params_prev["bdx"] = bdx
+    if buu_cuc and buu_cuc != "Tất cả":
+        sql_prev += " AND buu_cuc = :buu_cuc"
+        params_prev["buu_cuc"] = buu_cuc
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cursor = conn.cursor()
+        cursor.execute(sql, params)
+        r = cursor.fetchone()
+        curr_count = r[0] if r and r[0] is not None else 0
+        curr_rev = r[1] if r and r[1] is not None else 0.0
+        
+        cursor.execute(sql_prev, params_prev)
+        r_prev = cursor.fetchone()
+        prev_count = r_prev[0] if r_prev and r_prev[0] is not None else 0
+        prev_rev = r_prev[1] if r_prev and r_prev[1] is not None else 0.0
+        
+        return curr_count, curr_rev, prev_count, prev_rev
+    except Exception as e:
+        print(f"Error getting new customer metrics: {e}")
+        return 0, 0.0, 0, 0.0
+    finally:
+        conn.close()
+
 
 def register_kpi_callbacks(app):
     """
@@ -64,8 +165,18 @@ def register_kpi_callbacks(app):
          # Card: Khách hàng
          Output("kpi-kh-value", "children"), Output("kpi-kh-sparkline", "children"),
          Output("kpi-kh-delta-prev", "children"), Output("kpi-kh-delta-yoy", "children"),
-         # 3 Biểu đồ trực quan
+         # Card: Sản lượng tổng
+         Output("kpi-sl-value", "children"), Output("kpi-sl-sparkline", "children"),
+         Output("kpi-sl-delta-prev", "children"), Output("kpi-sl-delta-yoy", "children"),
+         # Card: % Kế hoạch
+         Output("kpi-plan-value", "children"), Output("kpi-plan-subtext", "children"),
+         # Customer Health row
+         Output("health-gauge-retention", "figure"),
+         Output("health-khm-card", "children"),
+         Output("health-vanglai-card", "children"),
+         # 4 Biểu đồ trực quan (Pie DV, Pie KH, Line trend, Bar Cụm)
          Output("chart-service-pie", "figure"),
+         Output("chart-customer-pie", "figure"),
          Output("chart-revenue-trend", "figure"),
          Output("chart-cluster-bar", "figure")],
 
@@ -89,7 +200,7 @@ def register_kpi_callbacks(app):
                          nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         # Chỉ xử lý khi đang ở Tab Tổng quan KPI
         if tab_val != "tab-kpi" or tab_val is None:
-            return [dash.no_update] * 23
+            return [dash.no_update] * 33
 
         spdv = None
 
@@ -191,7 +302,7 @@ def register_kpi_callbacks(app):
                 return 0
             return int(df['so_kh'].sum())
 
-        # Tính toán các chỉ số hiện tại, kỳ trước, yoy cho 7 thẻ
+        # Tính toán các chỉ số hiện tại, kỳ trước, yoy cho các thẻ
         # 1. Tổng doanh thu
         tot_cur = df_cur['cuoc_tt_tong'].sum() if not df_cur.empty else 0.0
         tot_prev = df_prev['cuoc_tt_tong'].sum() if not df_prev.empty else 0.0
@@ -229,6 +340,11 @@ def register_kpi_callbacks(app):
         kh_prev = get_kh_by_nhom(df_prev)
         kh_yoy = get_kh_by_nhom(df_yoy)
 
+        # 6. Sản lượng tổng
+        sl_cur = df_cur['san_luong'].sum() if not df_cur.empty else 0.0
+        sl_prev = df_prev['san_luong'].sum() if not df_prev.empty else 0.0
+        sl_yoy = df_yoy['san_luong'].sum() if not df_yoy.empty else 0.0
+
         # Lấy chuỗi dữ liệu trend cho sparklines
         def get_trend_series(df_tr, nhom_name=None, metric='cuoc_tt_tong'):
             if df_tr.empty or 'ngay' not in df_tr.columns:
@@ -248,18 +364,16 @@ def register_kpi_callbacks(app):
         y_tmdt = get_trend_series(df_trend, 'TMĐT')
         y_qt = get_trend_series(df_trend, 'Quốc tế')
         y_kh = get_trend_series(df_trend, metric='so_kh')
+        y_sl = get_trend_series(df_trend, metric='san_luong')
 
         # Helper render các output cho 1 thẻ KPI
         def render_card_outputs(val_now, val_prev, val_yoy, y_series, color, is_count_card=False):
-            # Định dạng hiển thị giá trị số hiện tại
-            display_now = f"{val_now:,}" if is_count_card else format_revenue(val_now)
-            display_prev = f"{val_prev:,}" if is_count_card else format_revenue(val_prev)
-            display_yoy = f"{val_yoy:,}" if is_count_card else format_revenue(val_yoy)
+            display_now = f"{val_now:,.0f}" if is_count_card else format_revenue(val_now)
+            display_prev = f"{val_prev:,.0f}" if is_count_card else format_revenue(val_prev)
+            display_yoy = f"{val_yoy:,.0f}" if is_count_card else format_revenue(val_yoy)
             
-            # Sparkline SVG
             spark_svg = html.Img(src=generate_svg_sparkline_src(y_series, color), width="100%", height="35px", style={"display": "block", "margin": "2px 0"})
             
-            # Phần trăm thay đổi kỳ trước
             delta_p_div = None
             if (compare_mode in ('prev_period', 'both')) and val_prev != 0:
                 pct_p = (val_now - val_prev) * 100.0 / val_prev
@@ -270,7 +384,6 @@ def register_kpi_callbacks(app):
                     html.Span(f"so với kỳ trước ({display_prev})", className="delta-label")
                 ])
                 
-            # Phần trăm thay đổi YoY
             delta_y_div = None
             if (compare_mode in ('yoy', 'both')) and val_yoy != 0:
                 pct_y = (val_now - val_yoy) * 100.0 / val_yoy
@@ -289,46 +402,181 @@ def register_kpi_callbacks(app):
         tmdt_n, tmdt_s, tmdt_p, tmdt_y = render_card_outputs(tmdt_cur, tmdt_prev, tmdt_yoy, y_tmdt, "#8B5CF6")
         qt_n, qt_s, qt_p, qt_y     = render_card_outputs(qt_cur,   qt_prev,   qt_yoy,   y_qt,   "#0EA5E9")
         kh_n, kh_s, kh_p, kh_y    = render_card_outputs(kh_cur,   kh_prev,   kh_yoy,   y_kh,   "#14B8A6", is_count_card=True)
+        sl_n, sl_s, sl_p, sl_y    = render_card_outputs(sl_cur,   sl_prev,   sl_yoy,   y_sl,   "#2196F3", is_count_card=True)
 
-        # ── Vẽ biểu đồ 1: Cơ cấu dịch vụ (Donut Chart) ──────────────────
-        fig_pie = go.Figure()
+        # 🎯 Tính % Hoàn thành kế hoạch
+        target_year = year if year else date_from.year
+        target_month = month_val if month_val else date_from.month
+        plan_val = get_bccp_plan(DB_PATH, target_year, target_month, cum, bdx, buu_cuc)
+        
+        if plan_val > 0:
+            plan_rate = (bccp_cur * 100.0 / plan_val)
+            plan_val_str = f"{plan_rate:.1f}%"
+            plan_subtext = f"Kế hoạch tháng: {format_revenue(plan_val)}"
+        else:
+            plan_val_str = "— %"
+            plan_subtext = "🎯 Chưa giao kế hoạch"
+
+        # 🏥 Tính sức khỏe khách hàng: Retention Rate
+        # Tính tháng trước
+        y_prev, m_prev = pyear, pmonth
+        try:
+            ret_stats = get_retention_stats(str(DB_PATH), target_year, target_month, cum, bdx)
+            retention_rate = ret_stats['retention_rate_sl']
+            
+            ret_stats_prev = get_retention_stats(str(DB_PATH), y_prev, m_prev, cum, bdx)
+            prev_retention_rate = ret_stats_prev['retention_rate_sl']
+        except Exception as e:
+            print(f"Error calculating retention rate: {e}")
+            retention_rate = 0.0
+            prev_retention_rate = 0.0
+
+        fig_gauge = go.Figure(go.Indicator(
+            mode="gauge+number+delta",
+            value=retention_rate,
+            domain={'x': [0, 1], 'y': [0, 1]},
+            title={'text': "Tỷ lệ duy trì KH (%)", 'font': {'size': 14}},
+            delta={'reference': prev_retention_rate, 'relative': False, 'valueformat': "+.1f%"},
+            gauge={
+                'axis': {'range': [0, 100]},
+                'bar': {'color': "darkblue"},
+                'steps': [
+                    {'range': [0, 50], 'color': "#ffcccc"},
+                    {'range': [50, 80], 'color': "#fff3cd"},
+                    {'range': [80, 100], 'color': "#d4edda"}
+                ],
+                'threshold': {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': 90}
+            }
+        ))
+        fig_gauge.update_layout(
+            height=200,
+            margin=dict(t=30, b=10, l=30, r=30),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)"
+        )
+
+        # 🏥 Card KHM/Tái bán phát sinh
+        khm_count, khm_rev, khm_prev_count, khm_prev_rev = get_new_customers_metrics(DB_PATH, target_year, target_month, cum, bdx, buu_cuc)
+        khm_count_diff = khm_count - khm_prev_count
+        khm_badge = "▲" if khm_count_diff >= 0 else "▼"
+        khm_badge_class = "delta-badge positive" if khm_count_diff >= 0 else "delta-badge negative"
+        khm_card_children = html.Div([
+            html.Div([
+                html.Div("🆕 KH Mới / Tái bán phát sinh", className="kpi-title"),
+                html.Span("🆕", style={"fontSize": "20px", "float": "right", "marginTop": "-24px"})
+            ]),
+            html.Div(f"{khm_count:,} KH", className="kpi-value"),
+            html.Div([
+                html.Span(f"{khm_badge} {abs(khm_count_diff)} KH", className=khm_badge_class),
+                html.Span("so với tháng trước", className="delta-label")
+            ], className="delta-row", style={"marginTop": "8px"}),
+            html.Div(f"Tổng DT bán mới: {format_revenue(khm_rev)}", style={"marginTop": "8px", "color": "#64748B", "fontSize": "13px"})
+        ], className="kpi-card", style={"height": "100%"})
+
+        # 🏥 Card % DT Vãng lai
+        conn_tmp = sqlite3.connect(str(DB_PATH))
+        try:
+            cum_f = None if cum == "Tất cả" else cum
+            bdx_f = None if bdx == "Tất cả" else bdx
+            bc_f = None if buu_cuc == "Tất cả" else buu_cuc
+            hd_f = None if hop_dong == "Tất cả" else hop_dong
+            df_kh_breakdown = query_revenue(
+                conn=conn_tmp, date_from=date_from, date_to=date_to, date_column=date_column,
+                nhom_dv=nhom_dv, dich_vu=spdv, cum=cum_f, bdx=bdx_f, buu_cuc=bc_f, loai_kh=loai_kh, hop_dong=hd_f,
+                group_by_primary='loai_kh', compare_prev=False
+            )
+        except Exception as e:
+            print(f"Error querying customer breakdown: {e}")
+            df_kh_breakdown = pd.DataFrame()
+        finally:
+            conn_tmp.close()
+
+        dt_vanglai = df_kh_breakdown[df_kh_breakdown['loai_kh'] == 'Vãng lai']['cuoc_tt_tong'].sum() if not df_kh_breakdown.empty else 0.0
+        dt_tong = df_kh_breakdown['cuoc_tt_tong'].sum() if not df_kh_breakdown.empty else 0.0
+        pct_vanglai = (dt_vanglai * 100.0 / dt_tong) if dt_tong > 0 else 0.0
+
+        val_color = "#10B981" if pct_vanglai <= 30 else "#EF4444"
+        icon_str = "✅" if pct_vanglai <= 30 else "⚠️"
+        status_text = "Tỷ lệ an toàn (≤30%)" if pct_vanglai <= 30 else "Cảnh báo: Tỷ lệ cao (>30%)"
+        
+        vanglai_card_children = html.Div([
+            html.Div([
+                html.Div("📊 Tỷ lệ doanh thu Vãng lai", className="kpi-title"),
+                html.Span(icon_str, style={"fontSize": "20px", "float": "right", "marginTop": "-24px"})
+            ]),
+            html.Div(f"{pct_vanglai:.1f}%", className="kpi-value", style={"color": val_color}),
+            html.Div([
+                html.Span(status_text, style={"color": val_color, "fontWeight": "bold", "fontSize": "13px"})
+            ], className="delta-row", style={"marginTop": "8px"}),
+            html.Div(f"DT Vãng lai: {format_revenue(dt_vanglai)}", style={"marginTop": "8px", "color": "#64748B", "fontSize": "13px"})
+        ], className="kpi-card", style={"height": "100%"})
+
+        # ── Vẽ biểu đồ 1: Cơ cấu dịch vụ (Pie Chart - Không Donut) ──────────────────
+        fig_pie_dv = go.Figure()
         if not df_cur.empty and 'nhom_dv' in df_cur.columns:
-            pie_colors = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#64748B']
-            fig_pie.add_trace(go.Pie(
+            pie_colors = ['#2196F3', '#4CAF50', '#FF9800', '#9C27B0']
+            fig_pie_dv.add_trace(go.Pie(
                 labels=df_cur['nhom_dv'],
                 values=df_cur['cuoc_tt_tong'],
-                hole=.4,
+                hole=0,
                 marker=dict(colors=pie_colors),
                 textinfo='percent+label',
                 hovertemplate="Nhóm %{label}: %{value:,.0f} đ (%{percent})<extra></extra>"
             ))
-            fig_pie.update_layout(
-                margin=dict(l=20, r=20, t=10, b=10),
+            fig_pie_dv.update_layout(
+                margin=dict(l=10, r=10, t=30, b=10),
+                height=280,
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
                 legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5)
             )
         else:
-            fig_pie.update_layout(title="Không có dữ liệu cơ cấu")
+            fig_pie_dv.update_layout(title="Không có dữ liệu cơ cấu")
 
-        # ── Vẽ biểu đồ 2: Xu hướng theo ngày (Line Chart) ───────────────
+        # ── Vẽ biểu đồ 1b: Cơ cấu loại khách hàng (Pie Chart - Không Donut) ─────────
+        fig_pie_kh = go.Figure()
+        if not df_kh_breakdown.empty and 'loai_kh' in df_kh_breakdown.columns:
+            kh_colors = ['#94A3B8', '#3B82F6', '#10B981']  # Vãng lai (xám), KHM (xanh dương), Hiện hữu (xanh lá)
+            fig_pie_kh.add_trace(go.Pie(
+                labels=df_kh_breakdown['loai_kh'],
+                values=df_kh_breakdown['cuoc_tt_tong'],
+                hole=0,
+                marker=dict(colors=kh_colors),
+                textinfo='percent+label',
+                hovertemplate="Loại %{label}: %{value:,.0f} đ (%{percent})<extra></extra>"
+            ))
+            fig_pie_kh.update_layout(
+                margin=dict(l=10, r=10, t=30, b=10),
+                height=280,
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5)
+            )
+        else:
+            fig_pie_kh.update_layout(title="Không có dữ liệu cơ cấu KH")
+
+        # ── Vẽ biểu đồ 2: Xu hướng theo tuần BCCP (Line Chart) ───────────────
         fig_trend = go.Figure()
         if not df_trend.empty and 'ngay' in df_trend.columns:
-            df_trend_daily = df_trend.groupby('ngay')['cuoc_tt_tong'].sum().reset_index()
-            df_sorted = df_trend_daily.sort_values('ngay')
-            df_sorted['ngay_display'] = df_sorted['ngay'].apply(lambda x: pd.to_datetime(x).strftime('%d/%m') if pd.notna(x) else '')
+            df_trend_weekly = df_trend.copy()
+            df_trend_weekly = df_trend_weekly[df_trend_weekly['ngay'] != 'Chưa phân loại']
+            df_trend_weekly['bccp_week'] = df_trend_weekly['ngay'].apply(lambda d: get_bccp_week_number(d, year))
+            
+            df_weekly = df_trend_weekly.groupby('bccp_week')['cuoc_tt_tong'].sum().reset_index()
+            df_weekly = df_weekly.sort_values('bccp_week')
             
             fig_trend.add_trace(go.Scatter(
-                x=df_sorted['ngay_display'],
-                y=df_sorted['cuoc_tt_tong'],
+                x=[f"Tuần {w}" for w in df_weekly['bccp_week']],
+                y=df_weekly['cuoc_tt_tong'],
                 mode='lines+markers',
-                name='Doanh thu TT',
+                name='Doanh thu',
                 line=dict(color='#3B82F6', width=3),
                 marker=dict(size=6, color='#1D4ED8'),
-                hovertemplate="Ngày %{x}: %{y:,.0f} đ<extra></extra>"
+                fill='tozeroy',
+                hovertemplate="Tuần %{x}: %{y:,.0f} đ<extra></extra>"
             ))
             fig_trend.update_layout(
-                margin=dict(l=40, r=20, t=15, b=20),
+                margin=dict(l=50, r=20, t=15, b=20),
                 hovermode="x unified",
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
@@ -339,7 +587,6 @@ def register_kpi_callbacks(app):
             fig_trend.update_layout(title="Không có dữ liệu xu hướng")
 
         # ── Vẽ biểu đồ 3: So sánh doanh thu giữa các Cụm (Bar Chart) ─────
-        # Truy vấn riêng group by theo Cụm địa lý
         conn_tmp = sqlite3.connect(str(DB_PATH))
         try:
             cum_f = None if cum == "Tất cả" else cum
@@ -383,6 +630,15 @@ def register_kpi_callbacks(app):
             tmdt_n, tmdt_s, tmdt_p, tmdt_y,
             qt_n,   qt_s,   qt_p,   qt_y,
             kh_n,   kh_s,   kh_p,   kh_y,
-            fig_pie, fig_trend, fig_bar
+            sl_n,   sl_s,   sl_p,   sl_y,
+            plan_val_str, plan_subtext,
+            fig_gauge,
+            khm_card_children,
+            vanglai_card_children,
+            fig_pie_dv,
+            fig_pie_kh,
+            fig_trend,
+            fig_bar
         ]
+
 

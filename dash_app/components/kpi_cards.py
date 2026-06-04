@@ -34,26 +34,35 @@ def make_kpi_card_layout(card_id, title, icon):
 def create_kpi_grid():
     """
     Tạo Layout Grid KPI trang /bccp:
-    - Phần 1: 4 KPI cards chi tiết cấu phần BCCP (TT, TMĐT, QT, PHBC)
-    - Phần 2: Card Khách hàng
+    - Phần 1: 5 KPI cards (TT, TMĐT, QT, PHBC, SL)
+    - Phần 2: 2 KPI cards (Khách hàng, % Kế hoạch)
 
     Returns:
         html.Div: Layout Grid các thẻ KPI.
     """
     return html.Div([
 
-        # ── Phần 1: Chi tiết cấu phần BCCP (4 thành phần) ─────────────────
-        html.Div("📦 Chi tiết cấu phần BCCP", className="section-header", style={"marginTop": 0}),
+        # ── Phần 1: Chi tiết cấu phần & Sản lượng BCCP (5 thành phần) ─────────────────
+        html.Div("📦 Chi tiết cấu phần & Sản lượng BCCP", className="section-header", style={"marginTop": 0}),
         dbc.Row([
-            dbc.Col(make_kpi_card_layout("kpi-tt",   "Bưu chính Truyền thống", "📮"), md=3),
-            dbc.Col(make_kpi_card_layout("kpi-tmdt", "Bưu chính TMĐT",         "🛒"), md=3),
-            dbc.Col(make_kpi_card_layout("kpi-qt",   "Bưu chính Quốc tế",      "🌍"), md=3),
-            dbc.Col(make_kpi_card_layout("kpi-phbc", "Phát hành báo chí",       "📰"), md=3),
-        ], style={"marginBottom": "20px"}),
+            dbc.Col(make_kpi_card_layout("kpi-tt",   "Bưu chính Truyền thống", "📮"), lg=2, md=4, sm=6, className="mb-3"),
+            dbc.Col(make_kpi_card_layout("kpi-tmdt", "Bưu chính TMĐT",         "🛒"), lg=2, md=4, sm=6, className="mb-3"),
+            dbc.Col(make_kpi_card_layout("kpi-qt",   "Bưu chính Quốc tế",      "🌍"), lg=2, md=4, sm=6, className="mb-3"),
+            dbc.Col(make_kpi_card_layout("kpi-phbc", "Phát hành báo chí",       "📰"), lg=2, md=4, sm=6, className="mb-3"),
+            dbc.Col(make_kpi_card_layout("kpi-sl",   "Sản lượng tổng",         "📦"), lg=2, md=4, sm=6, className="mb-3"),
+        ], className="g-2", style={"marginBottom": "20px"}),
 
-        # ── Phần 2: Phát triển Khách hàng ───────────────────────────────────
-        html.Div("👥 Phát triển Khách hàng", className="section-header"),
+        # ── Phần 2: Phát triển Khách hàng & Kế hoạch ───────────────────────────────────
+        html.Div("👥 Phát triển Khách hàng & Kế hoạch", className="section-header"),
         dbc.Row([
-            dbc.Col(make_kpi_card_layout("kpi-kh", "Khách hàng phát sinh (Có HĐ)", "👥"), md=4),
-        ]),
+            dbc.Col(make_kpi_card_layout("kpi-kh", "Khách hàng phát sinh (Có HĐ)", "👥"), lg=6, md=6, className="mb-3"),
+            dbc.Col(html.Div([
+                html.Div([
+                    html.Div("% Hoàn thành Kế hoạch", className="kpi-title"),
+                    html.Span("🎯", style={"fontSize": "20px", "float": "right", "marginTop": "-24px"})
+                ]),
+                html.Div("— %", id="kpi-plan-value", className="kpi-value"),
+                html.Div(id="kpi-plan-subtext", className="delta-row", style={"marginTop": "8px", "color": "#64748B", "fontSize": "12px"})
+            ], className="kpi-card"), lg=6, md=6, className="mb-3"),
+        ], className="g-3")
     ])
