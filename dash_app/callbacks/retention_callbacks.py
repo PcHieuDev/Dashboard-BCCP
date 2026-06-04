@@ -86,7 +86,10 @@ def register_retention_callbacks(app):
     )
     def update_retention_page(n_clicks, tab_val, year, month, cum_val):
         bdx_val = None  # Không còn lọc theo BĐX
-        if tab_val != "tab-retention" or tab_val is None:
+        if tab_val is None or tab_val != "tab-retention":
+            return [dash.no_update] * 11
+        # Guard: chưa có giá trị bộ lọc hợp lệ
+        if not year or not month:
             return [dash.no_update] * 11
             
         db_str = str(DB_PATH)
@@ -338,7 +341,9 @@ def register_retention_callbacks(app):
     )
     def export_retention_excel(n_clicks, tab_val, year, month, cum_val):
         bdx_val = None  # Không còn lọc theo BĐX
-        if not n_clicks or tab_val != "tab-retention" or tab_val is None:
+        if not n_clicks or tab_val is None or tab_val != "tab-retention":
+            return dash.no_update
+        if not year or not month:
             return dash.no_update
             
         db_str = str(DB_PATH)
@@ -505,7 +510,9 @@ def register_retention_callbacks(app):
     )
     def export_churn_alerts_excel(n_clicks, tab_val, year, month, cum_val):
         bdx_val = None  # Không còn lọc theo BĐX
-        if not n_clicks or tab_val != "tab-retention" or tab_val is None:
+        if not n_clicks or tab_val is None or tab_val != "tab-retention":
+            return dash.no_update
+        if not year or not month:
             return dash.no_update
             
         db_str = str(DB_PATH)

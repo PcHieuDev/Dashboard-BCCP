@@ -191,12 +191,12 @@ def register_kpi_callbacks(app):
          State("sidebar-week-select", "value"),
          State("sidebar-month-select", "value"),
          State("sidebar-compare-mode", "value"),
-         State("sidebar-nhom-dv", "value"),
+         State("sidebar-nhom-dv", "data"),
          State("sidebar-cum", "value"),
          State("sidebar-bdx", "value"),
          State("sidebar-buu-cuc", "value"),
-         State("sidebar-loai-kh", "value"),
-         State("sidebar-hop-dong", "value")]
+         State("sidebar-loai-kh", "data"),
+         State("sidebar-hop-dong", "data")]
     )
     def update_kpi_cards(n_clicks, tab_val, year, period, start_date, end_date, week_idx, month_val, compare_mode,
                          nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):

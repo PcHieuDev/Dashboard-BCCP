@@ -409,12 +409,12 @@ def register_hcc_revenue_callbacks(app):
          Input("sidebar-date-range", "end_date"),
          Input("sidebar-week-select", "value"),
          Input("sidebar-month-select", "value"),
-         Input("sidebar-nhom-dv", "value"),
+         Input("sidebar-nhom-dv", "data"),
          Input("sidebar-cum", "value"),
          Input("sidebar-bdx", "value"),
          Input("sidebar-buu-cuc", "value"),
-         Input("sidebar-loai-kh", "value"),
-         Input("sidebar-hop-dong", "value")]
+         Input("sidebar-loai-kh", "data"),
+         Input("sidebar-hop-dong", "data")]
     )
     def update_hcc_revenue_table(pathname, g1, g2, compare_opt, year, period, start_date, end_date, week_idx, month_val,
                                  nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
@@ -458,12 +458,12 @@ def register_hcc_revenue_callbacks(app):
          State("sidebar-date-range", "end_date"),
          State("sidebar-week-select", "value"),
          State("sidebar-month-select", "value"),
-         State("sidebar-nhom-dv", "value"),
+         State("sidebar-nhom-dv", "data"),
          State("sidebar-cum", "value"),
          State("sidebar-bdx", "value"),
          State("sidebar-buu-cuc", "value"),
-         State("sidebar-loai-kh", "value"),
-         State("sidebar-hop-dong", "value")],
+         State("sidebar-loai-kh", "data"),
+         State("sidebar-hop-dong", "data")],
         prevent_initial_call=True
     )
     def export_hcc_revenue_table(btn_excel, pathname, g1, g2, compare_opt, year, period, start_date, end_date, week_idx, month_val,

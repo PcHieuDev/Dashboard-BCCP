@@ -43,12 +43,12 @@ def register_alerts_callbacks(app):
          State("sidebar-date-range", "end_date"),
          State("sidebar-week-select", "value"),
          State("sidebar-month-select", "value"),
-         State("sidebar-nhom-dv", "value"),
+         State("sidebar-nhom-dv", "data"),
          State("sidebar-cum", "value"),
          State("sidebar-bdx", "value"),
          State("sidebar-buu-cuc", "value"),
-         State("sidebar-loai-kh", "value"),
-         State("sidebar-hop-dong", "value")]
+         State("sidebar-loai-kh", "data"),
+         State("sidebar-hop-dong", "data")]
     )
     def update_alerts_list(n_clicks, tab_val, selected_service, year, period, start_date, end_date, week_idx, month_val,
                            nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
