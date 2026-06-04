@@ -205,7 +205,7 @@ def register_retention_callbacks(app):
         
         df_display = df_table.copy()
         df_display['count'] = df_display['count'].apply(lambda x: f"{x:,}")
-        df_display['change_dt'] = df_display['change_dt'].apply(lambda x: f"{x:+, .0f} đ" if x != 0 else "0 đ")
+        df_display['change_dt'] = df_display['change_dt'].apply(lambda x: f"{x:+,.0f} đ" if x != 0 else "0 đ")
         df_display['change_dt'] = df_display['change_dt'].str.replace("+ -", "-", regex=False).str.replace("+ ", "", regex=False)
         
         columns = [
