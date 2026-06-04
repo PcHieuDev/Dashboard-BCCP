@@ -155,39 +155,26 @@ def register_customer_callbacks(app):
         if df.empty or len(df) == 0:
             return dbc.Alert("Không tìm thấy dữ liệu phù hợp với bộ lọc hiện tại.", color="warning", className="m-3")
             
-        # 3. Xác định cấu trúc cột hiển thị
-        col_labels = {
-            'cms': 'Mã CMS',
-            'loai_kh': 'Tên Khách hàng', # Thay thế tạm vì không có cột tên
-            'nhom_dv_chinh': 'Nhóm DV chính',
-            'Tổng SL': 'Sản lượng',
-            'Tổng Cước TT': 'Cước không VAT'
-        }
+        # 3. Loại bỏ cột không cần thiết (giữ lại sản lượng + cước từng dịch vụ)
+        drop_cols = ['hop_dong', 'buu_cuc_list']
+        for col in drop_cols:
+            if col in df.columns:
+                df = df.drop(columns=[col])
         
-        if not df.empty:
-            cuoc_cols = [c for c in df.columns if '] Cước TT' in c]
-            def get_main_dv(row):
-                max_val = 0
-                main_dv = 'Chưa rõ'
-                for c in cuoc_cols:
-                    if row[c] > max_val:
-                        max_val = row[c]
-                        main_dv = c.split(']')[0].replace('[', '')
-                return main_dv
-            df['nhom_dv_chinh'] = df.apply(get_main_dv, axis=1) if cuoc_cols else 'Chưa rõ'
-        
-        keep_cols = ['cms', 'loai_kh', 'nhom_dv_chinh', 'Tổng SL', 'Tổng Cước TT']
+        # 4. Xác định cấu trúc cột hiển thị
         columns = []
-        for c in keep_cols:
-            if c in df.columns:
-                name = col_labels.get(c, c)
-                col_def = {"name": name, "id": c}
-                if c not in ['cms', 'loai_kh', 'nhom_dv_chinh']:
-                    col_def["type"] = "numeric"
-                    col_def["format"] = Format(group=Group.yes)
-                columns.append(col_def)
+        for c in df.columns:
+            col_def = {"name": c, "id": c}
+            if c == 'cms':
+                col_def["name"] = "Mã CMS"
+            elif c == 'loai_kh':
+                col_def["name"] = "Loại KH"
+            elif 'Cước' in c or 'SL' in c or 'KL' in c:
+                col_def["type"] = "numeric"
+                col_def["format"] = Format(group=Group.yes)
+            columns.append(col_def)
             
-        # 4. Trả về bảng DataTable được định dạng
+        # 5. Trả về bảng DataTable được định dạng
         table = dash_table.DataTable(
             id='customer-detail-datatable',
             columns=columns,
@@ -261,26 +248,14 @@ def register_customer_callbacks(app):
             return dash.no_update
             
         if not df.empty:
-            cuoc_cols = [c for c in df.columns if '] Cước TT' in c]
-            def get_main_dv(row):
-                max_val = 0
-                main_dv = 'Chưa rõ'
-                for c in cuoc_cols:
-                    if row[c] > max_val:
-                        max_val = row[c]
-                        main_dv = c.split(']')[0].replace('[', '')
-                return main_dv
-            df['nhom_dv_chinh'] = df.apply(get_main_dv, axis=1) if cuoc_cols else 'Chưa rõ'
-            
-        keep_cols = ['cms', 'loai_kh', 'nhom_dv_chinh', 'Tổng SL', 'Tổng Cước TT']
-        df = df[[c for c in keep_cols if c in df.columns]]
+            drop_cols = ['hop_dong', 'buu_cuc_list']
+            for col in drop_cols:
+                if col in df.columns:
+                    df = df.drop(columns=[col])
         
         col_rename = {
             'cms': 'Mã CMS',
-            'loai_kh': 'Tên Khách hàng',
-            'nhom_dv_chinh': 'Nhóm DV chính',
-            'Tổng SL': 'Sản lượng',
-            'Tổng Cước TT': 'Cước không VAT'
+            'loai_kh': 'Loại KH',
         }
         df = df.rename(columns=col_rename)
         

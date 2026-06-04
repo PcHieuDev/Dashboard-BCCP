@@ -370,34 +370,73 @@ def register_import_callbacks(app):
             content_type, content_string = contents.split(',')
             decoded = base64.b64decode(content_string)
             
-            # Đọc thử file CSV để kiểm tra cấu trúc cột
+            # Đọc thử file CSV để kiểm tra cấu trúc cột (hỗ trợ cả dấu phẩy và dấu chấm phẩy)
             import io
             df_test = None
-            for enc in ["utf-8-sig", "utf-8", "cp1252", "latin-1"]:
-                try:
-                    df_test = pd.read_csv(io.BytesIO(decoded), encoding=enc)
+            for sep in [",", ";"]:
+                for enc in ["utf-8-sig", "utf-8", "cp1252", "latin-1"]:
+                    try:
+                        df_test = pd.read_csv(io.BytesIO(decoded), sep=sep, encoding=enc)
+                        # Chuẩn hóa tên cột
+                        df_test.columns = [c.strip().lower() for c in df_test.columns]
+                        if "nhom_chinh" in df_test.columns:
+                            break
+                    except Exception:
+                        continue
+                if df_test is not None and "nhom_chinh" in df_test.columns:
                     break
-                except Exception:
-                    continue
                     
-            if df_test is None:
-                return dbc.Alert("❌ Không thể đọc tệp CSV. Vui lòng kiểm tra mã hóa (encoding)!", color="danger"), True
+            if df_test is None or "nhom_chinh" not in df_test.columns:
+                return dbc.Alert("❌ Tệp CSV thiếu cột bắt buộc 'nhom_chinh'! Vui lòng kiểm tra lại cấu trúc file.", color="danger"), True
                 
-            # Chuẩn hóa tên cột
-            df_test.columns = [c.strip().lower() for c in df_test.columns]
-            
-            if "nhom_chinh" not in df_test.columns:
-                return dbc.Alert("❌ Tệp CSV thiếu cột bắt buộc 'nhom_chinh' làm cột đầu tiên!", color="danger"), True
-                
-            # Ghi đè vào data/mapping-spdv.csv
+            # Đọc file mapping hiện tại nếu có để gộp (tránh ghi đè làm mất dữ liệu cũ)
             dest_path = project_root / "data" / "mapping-spdv.csv"
-            with open(dest_path, "wb") as f:
-                f.write(decoded)
+            df_existing = None
+            if dest_path.exists():
+                for sep in [",", ";"]:
+                    for enc in ["utf-8-sig", "utf-8", "cp1252", "latin-1"]:
+                        try:
+                            df_existing = pd.read_csv(dest_path, sep=sep, encoding=enc)
+                            df_existing.columns = [c.strip().lower() for c in df_existing.columns]
+                            if "ma_spdv" in df_existing.columns:
+                                break
+                        except Exception:
+                            continue
+                    if df_existing is not None and "ma_spdv" in df_existing.columns:
+                        break
+            
+            # Gộp và loại bỏ trùng lặp dựa trên 'ma_spdv'
+            cols = ["nhom_chinh", "ma_spdv", "ten_spdv", "nhom_dich_vu", "ghi_chu"]
+            
+            # Định dạng và chuẩn hóa df_test
+            for col in cols:
+                if col not in df_test.columns:
+                    df_test[col] = None
+            df_test = df_test[cols]
+            
+            if df_existing is not None:
+                for col in cols:
+                    if col not in df_existing.columns:
+                        df_existing[col] = None
+                df_existing = df_existing[cols]
+                
+                df_combined = pd.concat([df_existing, df_test], ignore_index=True)
+            else:
+                df_combined = df_test
+                
+            # Chuẩn hóa cột ma_spdv để drop trùng lặp chính xác
+            df_combined['ma_spdv'] = df_combined['ma_spdv'].astype(str).str.strip()
+            df_combined = df_combined.drop_duplicates(subset=["ma_spdv"], keep="last")
+            
+            # Ghi đè vào data/mapping-spdv.csv dưới dạng chuẩn hóa dấu phẩy và utf-8-sig
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            df_combined.to_csv(dest_path, index=False, sep=",", encoding="utf-8-sig")
                 
             num_rows = len(df_test)
+            total_rows = len(df_combined)
             success_msg = html.Div([
-                html.Span(f"✅ Đã tải lên: ", style={"fontWeight": "bold"}),
-                html.Span(f"{filename} ({num_rows} dòng). Sẵn sàng đồng bộ.", style={"color": "#0F766E", "fontWeight": "bold"})
+                html.Span(f"✅ Đã tải lên và gộp thành công: ", style={"fontWeight": "bold"}),
+                html.Span(f"{filename} (thêm/cập nhật {num_rows} dòng). Tổng danh mục hiện tại: {total_rows} dòng. Sẵn sàng đồng bộ.", style={"color": "#0F766E", "fontWeight": "bold"})
             ], style={
                 'padding': '8px 12px', 
                 'backgroundColor': '#F0FDFA', 

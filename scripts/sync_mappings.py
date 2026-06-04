@@ -26,22 +26,25 @@ def sync_spdv(conn):
         print(f"⚠️  Không tìm thấy file mapping sản phẩm tại: {MAPPING_PATH}")
         return 0
 
-    # Đọc CSV mapping (thử nhiều encoding)
+    # Đọc CSV mapping (thử nhiều separator và encoding)
     df = None
-    for enc in ["utf-8-sig", "utf-8", "cp1252", "latin-1"]:
-        try:
-            df = pd.read_csv(MAPPING_PATH, encoding=enc)
+    for sep in [",", ";"]:
+        for enc in ["utf-8-sig", "utf-8", "cp1252", "latin-1"]:
+            try:
+                df_temp = pd.read_csv(MAPPING_PATH, sep=sep, encoding=enc)
+                df_temp.columns = [c.strip().lower() for c in df_temp.columns]
+                if "ma_spdv" in df_temp.columns:
+                    df = df_temp
+                    break
+            except Exception:
+                continue
+        if df is not None:
             break
-        except (UnicodeDecodeError, UnicodeError):
-            continue
             
     if df is None:
-        print(f"❌ Lỗi: Không thể đọc file mapping sản phẩm {MAPPING_PATH} với bất kỳ encoding nào.")
+        print(f"❌ Lỗi: Không thể đọc file mapping sản phẩm {MAPPING_PATH} hoặc thiếu cột bắt buộc.")
         return 0
         
-    # Chuẩn hóa tên cột
-    df.columns = [c.strip().lower() for c in df.columns]
-    
     expected_cols = ["nhom_chinh", "ma_spdv", "ten_spdv", "nhom_dich_vu"]
     for col in expected_cols:
         if col not in df.columns:
@@ -119,22 +122,25 @@ def sync_buucuc(conn):
         print(f"⚠️  Không tìm thấy file mapping bưu cục tại: {MAPPING_GEOGRAPHY_PATH}")
         return 0
 
-    # Đọc CSV mapping (thử nhiều encoding)
+    # Đọc CSV mapping (thử nhiều separator và encoding)
     df = None
-    for enc in ["utf-8-sig", "utf-8", "cp1252", "latin-1"]:
-        try:
-            df = pd.read_csv(MAPPING_GEOGRAPHY_PATH, encoding=enc, dtype=str)
+    for sep in [",", ";"]:
+        for enc in ["utf-8-sig", "utf-8", "cp1252", "latin-1"]:
+            try:
+                df_temp = pd.read_csv(MAPPING_GEOGRAPHY_PATH, sep=sep, encoding=enc, dtype=str)
+                df_temp.columns = [c.strip().lower() for c in df_temp.columns]
+                if "ma_bc" in df_temp.columns:
+                    df = df_temp
+                    break
+            except Exception:
+                continue
+        if df is not None:
             break
-        except (UnicodeDecodeError, UnicodeError):
-            continue
             
     if df is None:
-        print(f"❌ Lỗi: Không thể đọc file mapping bưu cục {MAPPING_GEOGRAPHY_PATH} với bất kỳ encoding nào.")
+        print(f"❌ Lỗi: Không thể đọc file mapping bưu cục {MAPPING_GEOGRAPHY_PATH} hoặc thiếu cột bắt buộc.")
         return 0
         
-    # Chuẩn hóa tên cột
-    df.columns = [c.strip().lower() for c in df.columns]
-    
     # Kiểm tra cột bắt buộc
     required_cols = ['ma_bc', 'ten_buu_cuc', 'ma_bdx', 'ten_bdx', 'ten_cum']
     for col in required_cols:

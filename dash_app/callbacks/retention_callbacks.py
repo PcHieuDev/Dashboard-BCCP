@@ -130,7 +130,7 @@ def register_retention_callbacks(app):
         
         # Format Block 1 (KPI Cards)
         val_prev_count = f"{stats['khhh_prev_count']:,} KH"
-        sub_prev_count = f"Có phát sinh 1 trong 3 tháng trước"
+        sub_prev_count = f"KHHH = KH có GD trừ KH mới"
         
         val_retained_rev = format_revenue(stats['dt_retained'])
         sub_retained_rev = f"Doanh thu tháng {month:02d} từ KH duy trì"

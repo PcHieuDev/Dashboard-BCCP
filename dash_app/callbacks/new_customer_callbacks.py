@@ -426,8 +426,6 @@ def register_new_customer_callbacks(app):
         if not df_top_khm.empty:
             if cum_val and cum_val != "Tất cả":
                 df_top_khm = df_top_khm[df_top_khm['ten_cum'] == cum_val]
-            if bdx_val and bdx_val != "Tất cả":
-                df_top_khm = df_top_khm[df_top_khm['ten_bdx'] == bdx_val]
                 
             df_top_khm = df_top_khm.nlargest(10, 'tong_doanh_thu')
             df_top_khm_display = df_top_khm.copy()
@@ -472,8 +470,6 @@ def register_new_customer_callbacks(app):
         if not df_chart.empty:
             if cum_val and cum_val != "Tất cả":
                 df_chart = df_chart[df_chart['ten_cum'] == cum_val]
-            if bdx_val and bdx_val != "Tất cả":
-                df_chart = df_chart[df_chart['ten_bdx'] == bdx_val]
                 
             df_khm_dv = df_chart.groupby('nhom_dv')['tong_doanh_thu'].sum().reset_index()
             
