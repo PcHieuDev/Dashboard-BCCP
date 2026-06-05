@@ -63,6 +63,7 @@ def create_sidebar_layout(filter_opts):
                 dcc.Link("🔍 Chi tiết khách hàng", href="/bccp/customer", id="nav-bccp-customer", className="sidebar-menu-item"),
                 dcc.Link("🆕 Khách hàng mới", href="/bccp/new-customer", id="nav-bccp-new-customer", className="sidebar-menu-item"),
                 dcc.Link("🔄 KH hiện hữu", href="/bccp/retention", id="nav-bccp-retention", className="sidebar-menu-item"),
+                dcc.Link("📦 Thống kê SP-DV", href="/bccp/service-analysis", id="nav-bccp-service-analysis", className="sidebar-menu-item"),
                 dcc.Link("🚨 Cảnh báo doanh thu", href="/bccp/alerts", id="nav-bccp-alerts", className="sidebar-menu-item"),
             ], title="📦 Bưu chính chuyển phát", item_id="menu-bccp"),
             

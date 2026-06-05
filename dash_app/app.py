@@ -31,6 +31,7 @@ from pages.import_data import create_import_page_layout
 from pages.hcc_revenue import create_hcc_revenue_layout
 from pages.new_customer import create_new_customer_layout
 from pages.retention import create_retention_layout
+from pages.service_analysis import create_service_analysis_layout
 
 # Import các Callbacks đăng ký
 from callbacks.sidebar_callbacks import register_sidebar_callbacks
@@ -43,6 +44,7 @@ from callbacks.service_callbacks import register_service_callbacks
 from callbacks.hcc_revenue_callbacks import register_hcc_revenue_callbacks
 from callbacks.new_customer_callbacks import register_new_customer_callbacks
 from callbacks.retention_callbacks import register_retention_callbacks
+from callbacks.service_analysis_callbacks import register_service_analysis_callbacks
 
 # Cấu hình UTF-8 cho Windows output để hiển thị log tiếng Việt chính xác
 if sys.platform.startswith('win'):
@@ -248,6 +250,8 @@ def sync_url_to_tabs_navigation(pathname):
         return "tab-retention"
     elif pathname == "/bccp/alerts":
         return "tab-alerts"
+    elif pathname == "/bccp/service-analysis":
+        return "tab-service-analysis"
     elif pathname == "/import":
         return "tab-import"
     return None # Default
@@ -283,6 +287,8 @@ def render_page(pathname):
         return create_new_customer_layout(), "📊 Bưu chính chuyển phát - Khách hàng mới"
     elif pathname == "/bccp/retention":
         return create_retention_layout(), "📊 Bưu chính chuyển phát - Duy trì khách hàng"
+    elif pathname == "/bccp/service-analysis":
+        return create_service_analysis_layout(), "📊 Bưu chính chuyển phát - Thống kê SP-DV"
     elif pathname == "/bccp/alerts":
         try:
             from pages.alerts import create_alerts_page_layout
@@ -384,6 +390,7 @@ register_service_callbacks(app)
 register_hcc_revenue_callbacks(app)
 register_new_customer_callbacks(app)
 register_retention_callbacks(app)
+register_service_analysis_callbacks(app)
 
 # --------------------------------------------------------------------------
 # CHẠY ỨNG DỤNG
