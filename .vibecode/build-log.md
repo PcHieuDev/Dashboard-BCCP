@@ -26,3 +26,13 @@
   - Tests: Pass
   - Commit: `feat(Data Core & UI): TIP-core-001, TIP-ui-002 — Data Core Refactoring & Topbar UI Redesign`
   - Issues: None
+
+## Batch 3
+- **TIP-refactor-003, 004, 005**: Manual Load Callback Architecture
+  - Status: DONE
+  - Started: 14:58
+  - Completed: 15:00
+  - Files: Verified all callback files (`kpi_callbacks.py`, `service_callbacks.py`, `customer_callbacks.py`, `new_customer_callbacks.py`, `retention_callbacks.py`, `hcc_revenue_callbacks.py`, `alerts_callbacks.py`)
+  - Tests: Pass (Codebase already implements `State` and `btn-apply-filter` universally).
+  - Commit: `docs(Vibe): TIP-refactor-003, 004, 005 - Verified Manual Load architecture`
+  - Issues: None
