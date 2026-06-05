@@ -1,15 +1,26 @@
-# Feature Context: UX Topbar & Manual Load
+# PROJECT CONTEXT: Dashboard Doanh thu BCCP
+Generated: 2026-06-05 | For: Builder (Thợ thi công)
 
-## Mục tiêu chính
-Nâng cấp trải nghiệm người dùng bằng cách dời toàn bộ bộ lọc toàn cục (Thời gian, Cụm, v.v.) từ menu dọc bên trái (Sidebar) sang thanh nằm ngang (Topbar) phía trên nội dung, giúp giải phóng không gian màn hình ngang cho Datatable và Chart.
+## 1. Project Overview
+Dự án Dashboard Doanh thu BCCP phục vụ BĐVN. Đợt nâng cấp này tập trung vào cấu trúc lại Topbar thành 2 hàng bộ lọc, đổi cơ chế từ tự động load biểu đồ sang "Manual Load" (ấn nút mới load) để giảm tải, đồng thời làm 1 trang mới là Thống kê SP-DV.
 
-Đồng thời, chấm dứt tình trạng auto-load của mọi biểu đồ/bảng khi chuyển trang hay thay đổi một Dropdown. Hệ thống giờ chuyển sang **Manual Load 100%**: người dùng bắt buộc phải bấm nút "Lọc dữ liệu" màu xanh (duy nhất 1 nút) thì dữ liệu mới được tải và hiển thị.
+## 2. Tech Stack & Conventions
+- Language: Python 3.13
+- Framework: Dash + Dash Bootstrap Components
+- Database: SQLite
+- Data processing: pandas
 
-## Yêu cầu Kiến trúc
-- **Layout**: `app.py` chia thành Sidebar (trái) và main content (phải). Trong main content, chia thành Topbar (trên) và page-content (dưới).
-- **Callbacks**: Tất cả trigger cũ (`tabs-navigation`, `customer-filter-...`) phải bị giáng cấp từ `Input` xuống `State`.
-- **Trạng thái khởi tạo**: Bổ sung `prevent_initial_call=True` để ngăn query DB khi khởi động/chuyển trang.
+## 3. Architecture (tóm tắt)
+- Data Layer: Các truy vấn SQLite nằm ở `analytics/revenue.py`, được gói qua cache layer ở `dash_app/callbacks/utils.py`. Data Layer nhận tham số `start_date`, `end_date`.
+- UI Layer: Layout chính định nghĩa bởi `app.py` và `components/topbar.py`.
+- Controllers: Nằm trong folder `dash_app/callbacks/`. Toàn bộ sẽ phải listen `btn-apply-filter` bằng `Input` và đọc các bộ lọc bằng `State`.
 
-## Chú ý quan trọng
-- Không di chuyển các bộ lọc con (Inline filters) của trang Customer Detail hay HCC lên Topbar. Chúng vẫn ở vị trí cũ, nhưng bị tắt tính năng auto-trigger (đổi thành State).
-- Nút "Lọc dữ liệu" đặt ở tận cùng bên phải của Topbar.
+## 4. Key Decisions (từ RRI)
+| Decision | Chosen | Rationale |
+|----------|--------|-----------|
+| D-001  | Topbar 2 hàng | Rõ ràng phân tách thời gian vs không gian. |
+| D-002  | Manual Load | Không load lung tung khi đổi 1 filter nhỏ. |
+| D-003  | So sánh Delta Days | Khoảng lùi ngày tỷ lệ thuận với số ngày chọn. |
+| D-004  | Chặn ngày | Max 31 ngày ở các trang chi tiết KH để tránh treo DB. |
+
+> Chi tiết đầy đủ → đọc `.vibecode/blueprint.md`
