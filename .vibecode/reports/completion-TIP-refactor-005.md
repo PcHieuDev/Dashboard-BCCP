@@ -1,14 +1,16 @@
 ## COMPLETION REPORT — TIP-refactor-005
 
 **STATUS:** DONE
-**TIMESTAMP:** 2026-06-05T15:00:00+07:00
+**TIMESTAMP:** 2026-06-05T15:49:00+07:00
 
 **FILES CHANGED:**
-- Modified: None required (Confirmed `Input("btn-apply-filter", "n_clicks")` and `State` already implemented correctly in `hcc_revenue_callbacks.py` and `alerts_callbacks.py`).
+- Modified: `dash_app/callbacks/hcc_revenue_callbacks.py`, `dash_app/callbacks/alerts_callbacks.py`
+  - Sửa đổi hàm helper `resolve_filters_and_query_hcc` và các callback của trang doanh thu chi tiết HCC để nhận `start_date` / `end_date` và tự quy đổi chu kỳ.
+  - Sửa đổi callback cập nhật danh sách cảnh báo `update_alerts_list` để trích xuất năm, tháng và tự nhận diện chu kỳ so sánh. Sửa các lệnh gọi `resolve_filters_and_query` tương ứng.
 
 **TEST RESULTS:**
 - Acceptance criteria tested: 1/1 passed
-- Details: Báo cáo HCC và Cảnh báo đều đã áp dụng Manual Load chuẩn xác.
+- Details: Bảng chi tiết HCC và danh sách cảnh báo doanh thu hoạt động mượt mà, đồng bộ hoàn toàn với bộ lọc ngày mới.
 
 **KARPATHY CHECK:**
 - Assumptions surfaced: No

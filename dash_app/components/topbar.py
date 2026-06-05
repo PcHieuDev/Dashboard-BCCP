@@ -38,34 +38,7 @@ def create_topbar_layout(filter_opts):
 
     return html.Div([
         html.Div([
-            # Nhóm 1: Thời gian
-            html.Div([
-                html.Label("Năm", className="filter-label mb-0 me-2"),
-                dcc.Dropdown(
-                    id="sidebar-year",
-                    options=[{"label": str(y), "value": y} for y in filter_opts["years"]],
-                    value=default_year,
-                    clearable=False,
-                    style={"minWidth": "100px"}
-                )
-            ], className="d-flex align-items-center me-3"),
-            
-            html.Div([
-                html.Label("Chu kỳ", className="filter-label mb-0 me-2"),
-                dcc.Dropdown(
-                    id="sidebar-period",
-                    options=[
-                        {"label": "Ngày", "value": "Ngày"},
-                        {"label": "Tuần", "value": "Tuần"},
-                        {"label": "Tháng", "value": "Tháng"}
-                    ],
-                    value="Tháng",
-                    clearable=False,
-                    style={"minWidth": "100px"}
-                )
-            ], className="d-flex align-items-center me-3"),
-            
-            # Lọc theo Ngày
+            # Nhóm 1: Thời gian (Chỉ giữ Từ ngày - Đến ngày và So sánh)
             html.Div(id="filter-container-day", children=[
                 html.Label("Từ-Đến", className="filter-label mb-0 me-2"),
                 dcc.DatePickerRange(
@@ -76,25 +49,7 @@ def create_topbar_layout(filter_opts):
                     start_date=date(2026, 1, 1),
                     end_date=date(2026, 1, 31)
                 )
-            ], className="d-flex align-items-center me-3"),
-            
-            # Lọc theo Tuần
-            html.Div(id="filter-container-week", children=[
-                html.Label("Tuần", className="filter-label mb-0 me-2"),
-                dcc.Dropdown(id="sidebar-week-select", clearable=False, style={"minWidth": "100px"})
-            ], className="d-flex align-items-center me-3", style={"display": "none"}),
-            
-            # Lọc theo Tháng
-            html.Div(id="filter-container-month", children=[
-                html.Label("Tháng", className="filter-label mb-0 me-2"),
-                dcc.Dropdown(
-                    id="sidebar-month-select",
-                    options=[{"label": f"Tháng {i:02d}", "value": i} for i in range(1, 13)],
-                    value=current_month,
-                    clearable=False,
-                    style={"minWidth": "120px"}
-                )
-            ], className="d-flex align-items-center me-3"),
+            ], className="d-flex align-items-center me-4"),
 
             # Chế độ so sánh
             html.Div([
@@ -106,12 +61,12 @@ def create_topbar_layout(filter_opts):
                         {"label": "Cùng kỳ", "value": "yoy"},
                         {"label": "Kế hoạch", "value": "plan"}
                     ],
-                    value="prev_period",
+                    value=["prev_period"],
                     multi=True,
-                    style={"minWidth": "180px"}
+                    style={"minWidth": "220px"}
                 )
             ], className="d-flex align-items-center me-3"),
-        ], className="d-flex flex-wrap align-items-center mb-2"),
+        ], className="d-flex flex-wrap align-items-center mb-3"),
         
         html.Div([
             # Nhóm 2: Không gian
@@ -161,10 +116,15 @@ def create_topbar_layout(filter_opts):
             
         ], className="d-flex flex-wrap align-items-center")
         
-        # Các filter ẩn cho BCCP
+        # Các filter ẩn để tương thích ngược và chứa các store khác
         ,html.Div(id="bccp-extra-filters", style={"display": "none"}, children=[
             dcc.Store(id="sidebar-nhom-dv", data=None),
             dcc.Store(id="sidebar-loai-kh", data=[]),
-            dcc.Store(id="sidebar-hop-dong", data=[])
+            dcc.Store(id="sidebar-hop-dong", data=[]),
+            # Thêm các ID cũ để tránh lỗi callbacks khi khởi tạo
+            dcc.Store(id="sidebar-year", data=default_year),
+            dcc.Store(id="sidebar-period", data="Ngày"),
+            dcc.Store(id="sidebar-month-select", data=current_month),
+            dcc.Store(id="sidebar-week-select", data=None)
         ])
     ], className="topbar-container bg-white p-3 rounded shadow-sm mb-4 border")

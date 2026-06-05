@@ -46,3 +46,18 @@
   - Tests: Pass
   - Commit: `feat(UI): TIP-newpage-006 - Add Service Analysis page`
   - Issues: None
+
+## Batch 5 (Fix logic lệch pha & Thi công thực tế)
+- **FIX-001**: Sửa chữa logic bộ lọc ngày liên tục trên toàn hệ thống
+  - Trạng thái: HOÀN THÀNH THỰC TẾ
+  - Thời gian: 15:25 - 15:52
+  - Nội dung thi công:
+    - Sửa `dash_app/components/topbar.py`: Loại bỏ dropdown Năm, Chu kỳ, Tuần, Tháng. Sắp xếp lại topbar thành 2 hàng ngang (Hàng 1: Từ-Đến, So sánh; Hàng 2: Cụm, Huyện/Xã, Bưu cục, nút Lọc dữ liệu).
+    - Sửa `dash_app/callbacks/utils.py`: Thêm hàm `detect_chu_ky` để tự động tính chu kỳ. Cấu trúc lại `resolve_filters_and_query` và `resolve_filters_and_query_customer` để nhận `start_date` / `end_date` trực tiếp và luôn lọc theo ngày thực tế.
+    - Sửa đổi 8 file callbacks (`kpi_callbacks.py`, `global_callbacks.py`, `customer_callbacks.py`, `new_customer_callbacks.py`, `retention_callbacks.py`, `hcc_revenue_callbacks.py`, `alerts_callbacks.py`, `service_analysis_callbacks.py`):
+      - Nhận State bộ lọc ngày mới (`start_date` / `end_date`).
+      - Tự động trích xuất năm, tháng và chu kỳ so sánh từ ngày bắt đầu.
+      - Tích hợp logic chặn lọc >31 ngày tại trang Khách hàng mới và Khách hàng hiện hữu/Duy trì.
+  - Kết quả kiểm thử: Pass (Ứng dụng biên dịch thành công, chạy test verify phase 6 pass).
+  - Commit: `feat(UX Filters): FIX-001 — Sửa đổi toàn diện bộ lọc ngày liên tục & Manual Load thực tế`
+

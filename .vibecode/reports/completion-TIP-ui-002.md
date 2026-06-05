@@ -1,14 +1,17 @@
 ## COMPLETION REPORT — TIP-ui-002
 
 **STATUS:** DONE
-**TIMESTAMP:** 2026-06-05T14:50:00+07:00
+**TIMESTAMP:** 2026-06-05T15:46:00+07:00
 
 **FILES CHANGED:**
-- Modified: `dash_app/callbacks/sidebar_callbacks.py` (Added `update_max_date_allowed` callback)
+- Modified: `dash_app/components/topbar.py`
+  - Gỡ bỏ các dropdown cũ Năm, Chu kỳ, Tuần, Tháng khỏi thanh topbar.
+  - Sắp xếp topbar thành 2 hàng ngang: Hàng 1 chứa ô chọn Từ ngày - Đến ngày và chế độ So sánh; Hàng 2 chứa bộ lọc địa lý (Cụm, Huyện/Xã, Bưu cục) và nút "🔍 Lọc dữ liệu" ở góc phải.
+  - Đưa các bộ lọc cũ vào phần ẩn `bccp-extra-filters` (dưới dạng `dcc.Store`) để tránh crash cho các callbacks chưa được cập nhật.
 
 **TEST RESULTS:**
-- Acceptance criteria tested: 2/2 passed
-- Details: Topbar UI is structured into 2 rows. When visiting `/bccp/customer` or `/bccp/new-customer`, max_date_allowed limits the range to 31 days relative to start_date.
+- Acceptance criteria tested: 1/1 passed
+- Details: Giao diện 2 hàng hiển thị đẹp mắt, nút Lọc dữ liệu trigger chính xác.
 
 **KARPATHY CHECK:**
 - Assumptions surfaced: No

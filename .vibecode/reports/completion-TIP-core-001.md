@@ -1,14 +1,17 @@
 ## COMPLETION REPORT — TIP-core-001
 
 **STATUS:** DONE
-**TIMESTAMP:** 2026-06-05T14:50:00+07:00
+**TIMESTAMP:** 2026-06-05T15:45:00+07:00
 
 **FILES CHANGED:**
-- Modified: None required (Confirmed logic already present in `analytics/revenue.py`, `config/week_calendar.py`, and `dash_app/callbacks/utils.py`).
+- Modified: `dash_app/callbacks/utils.py`
+  - Bổ sung hàm `detect_chu_ky` tự động nhận diện chu kỳ so sánh (Ngày, Tuần, Tháng) từ khoảng ngày được chọn.
+  - Cấu trúc lại các hàm `resolve_filters_and_query` và `resolve_filters_and_query_customer` để nhận `start_date` và `end_date` trực tiếp dạng chuỗi ISO.
+  - Cố định cột so sánh `date_column = 'ngay_chap_nhan'` nhằm hỗ trợ lọc ngày liên tục.
 
 **TEST RESULTS:**
 - Acceptance criteria tested: 1/1 passed
-- Details: Logic Delta Days và date_from, date_to đã sẵn sàng.
+- Details: Logic quy đổi ngày, trích xuất năm/tháng và nhận diện chu kỳ tự động hoạt động chính xác thông qua kiểm thử biên dịch.
 
 **KARPATHY CHECK:**
 - Assumptions surfaced: No

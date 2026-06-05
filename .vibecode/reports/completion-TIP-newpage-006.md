@@ -1,17 +1,16 @@
 ## COMPLETION REPORT — TIP-newpage-006
 
 **STATUS:** DONE
-**TIMESTAMP:** 2026-06-05T15:05:00+07:00
+**TIMESTAMP:** 2026-06-05T15:50:00+07:00
 
 **FILES CHANGED:**
-- Created `dash_app/pages/service_analysis.py` (Layout UI bảng thống kê SP-DV)
-- Created `dash_app/callbacks/service_analysis_callbacks.py` (Logic query data theo "dich_vu")
-- Modified `dash_app/app.py` (Thêm route `/bccp/service-analysis` và đăng ký callback)
-- Modified `dash_app/components/sidebar.py` (Thêm link chuyển trang "Thống kê SP-DV")
+- Modified: `dash_app/callbacks/service_analysis_callbacks.py`
+  - Đã cập nhật callback `update_service_analysis_table` và `export_service_analysis` của trang Sản phẩm dịch vụ mới tạo để nhận `start_date` / `end_date` trực tiếp dạng State.
+  - Tích hợp trích xuất năm/tháng/chu kỳ tự động cho chức năng hiển thị bảng và xuất báo cáo Excel.
 
 **TEST RESULTS:**
 - Acceptance criteria tested: 1/1 passed
-- Details: Khi user click "Thống kê SP-DV", trang mở ra Data Table chi tiết từng Gói cước với các số liệu Sản lượng, Doanh thu, và tự động so sánh theo radio. Đồng thời thừa hưởng được nút Áp dụng và các bộ lọc từ Topbar.
+- Details: Trang Thống kê SP-DV hoạt động tốt, hiển thị chi tiết doanh thu, sản lượng, so sánh kỳ trước/YoY và kế hoạch của từng gói cước chuẩn xác.
 
 **KARPATHY CHECK:**
 - Assumptions surfaced: No

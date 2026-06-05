@@ -318,7 +318,7 @@ def get_hcc_df_from_cache(*args, **kwargs) -> pd.DataFrame:
     from io import StringIO
     return pd.read_json(StringIO(json_data), orient='split')
 
-def resolve_filters_and_query_hcc(year, period, date_range_start, date_range_end, week_idx, month_val, 
+def resolve_filters_and_query_hcc(start_date, end_date, 
                                   compare_mode, nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong,
                                   group_by_primary='nhom_dv', group_by_secondary=None, compare_prev=False):
     # Chuẩn hóa compare_mode
@@ -337,19 +337,11 @@ def resolve_filters_and_query_hcc(year, period, date_range_start, date_range_end
         compare_mode_str = compare_mode if compare_mode else 'none'
 
     date_column = 'ngay_chap_nhan'
-    if period == "Ngày":
-        date_from = date.fromisoformat(date_range_start) if date_range_start else date(year, 1, 1)
-        date_to = date.fromisoformat(date_range_end) if date_range_end else date(year, 1, 31)
-    elif period == "Tuần":
-        weeks = get_week_list(year)
-        if week_idx is not None and 0 <= week_idx < len(weeks):
-            w_num, w_start, w_end = weeks[week_idx]
-            date_from, date_to = w_start, w_end
-        else:
-            date_from, date_to = date(year, 1, 1), date(year, 1, 7)
-    else: # Tháng
-        date_column = 'thang_du_lieu'
-        date_from, date_to = get_month_range(year, month_val)
+    date_from = date.fromisoformat(start_date) if start_date else date(2026, 1, 1)
+    date_to = date.fromisoformat(end_date) if end_date else date(2026, 1, 31)
+    year = date_from.year
+    from callbacks.utils import detect_chu_ky
+    period = detect_chu_ky(date_from, date_to)
         
     # Chuẩn hóa địa lý và bộ lọc
     from flask_login import current_user
@@ -404,12 +396,8 @@ def register_hcc_revenue_callbacks(app):
          State("hcc-revenue-g2", "value"),
          State("hcc-revenue-compare-opt", "value"),
          # Bộ lọc từ Sidebar
-         State("sidebar-year", "value"),
-         State("sidebar-period", "value"),
          State("sidebar-date-range", "start_date"),
          State("sidebar-date-range", "end_date"),
-         State("sidebar-week-select", "value"),
-         State("sidebar-month-select", "value"),
          State("sidebar-nhom-dv", "data"),
          State("sidebar-cum", "value"),
          State("sidebar-bdx", "value"),
@@ -418,7 +406,7 @@ def register_hcc_revenue_callbacks(app):
          State("sidebar-hop-dong", "data")],
         prevent_initial_call=True
     )
-    def update_hcc_revenue_table(n_clicks, pathname, g1, g2, compare_opt, year, period, start_date, end_date, week_idx, month_val,
+    def update_hcc_revenue_table(n_clicks, pathname, g1, g2, compare_opt, start_date, end_date,
                                  nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         if pathname != "/hcc/revenue":
             return dash.no_update
@@ -430,7 +418,7 @@ def register_hcc_revenue_callbacks(app):
         
         # 1. Truy vấn dữ liệu có cache dựa vào các bộ lọc
         _, _, _, df = resolve_filters_and_query_hcc(
-            year, period, start_date, end_date, week_idx, month_val, compare_mode,
+            start_date, end_date, compare_mode,
             nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong,
             group_by_primary=g1, group_by_secondary=g2_actual, compare_prev=compare_prev
         )
@@ -454,12 +442,8 @@ def register_hcc_revenue_callbacks(app):
          State("hcc-revenue-g1", "value"),
          State("hcc-revenue-g2", "value"),
          State("hcc-revenue-compare-opt", "value"),
-         State("sidebar-year", "value"),
-         State("sidebar-period", "value"),
          State("sidebar-date-range", "start_date"),
          State("sidebar-date-range", "end_date"),
-         State("sidebar-week-select", "value"),
-         State("sidebar-month-select", "value"),
          State("sidebar-nhom-dv", "data"),
          State("sidebar-cum", "value"),
          State("sidebar-bdx", "value"),
@@ -468,7 +452,7 @@ def register_hcc_revenue_callbacks(app):
          State("sidebar-hop-dong", "data")],
         prevent_initial_call=True
     )
-    def export_hcc_revenue_table(btn_excel, pathname, g1, g2, compare_opt, year, period, start_date, end_date, week_idx, month_val,
+    def export_hcc_revenue_table(btn_excel, pathname, g1, g2, compare_opt, start_date, end_date,
                                  nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         ctx = dash.callback_context
         if not ctx.triggered or pathname != "/hcc/revenue":
@@ -485,7 +469,7 @@ def register_hcc_revenue_callbacks(app):
         
         # 1. Truy vấn dữ liệu có cache dựa vào các bộ lọc
         date_from, date_to, _, df = resolve_filters_and_query_hcc(
-            year, period, start_date, end_date, week_idx, month_val, compare_mode,
+            start_date, end_date, compare_mode,
             nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong,
             group_by_primary=g1, group_by_secondary=g2_actual, compare_prev=compare_prev
         )
@@ -494,9 +478,11 @@ def register_hcc_revenue_callbacks(app):
         if g2_actual:
             groupby_cols.append(g2_actual)
             
+        from callbacks.utils import detect_chu_ky
+        period = detect_chu_ky(date_from, date_to)
         # 2. Tạo thông tin bộ lọc gửi đi
         filter_info = {
-            "Năm dữ liệu": year,
+            "Năm dữ liệu": date_from.year,
             "Chu kỳ báo cáo": period,
             "Khoảng thời gian": f"{date_from.strftime('%d/%m/%Y')} - {date_to.strftime('%d/%m/%Y')}",
             "Nhóm dịch vụ": ", ".join(nhom_dv) if nhom_dv else "Tất cả",

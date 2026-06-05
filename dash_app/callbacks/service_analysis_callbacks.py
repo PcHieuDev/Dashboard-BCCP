@@ -16,12 +16,8 @@ def register_service_analysis_callbacks(app):
         [Input("btn-apply-filter", "n_clicks"),
          Input("service-analysis-compare-opt", "value")],
         [State("url", "pathname"),
-         State("sidebar-year", "value"),
-         State("sidebar-period", "value"),
          State("sidebar-date-range", "start_date"),
          State("sidebar-date-range", "end_date"),
-         State("sidebar-week-select", "value"),
-         State("sidebar-month-select", "value"),
          State("sidebar-nhom-dv", "data"),
          State("sidebar-cum", "value"),
          State("sidebar-bdx", "value"),
@@ -30,7 +26,7 @@ def register_service_analysis_callbacks(app):
          State("sidebar-hop-dong", "data")],
         prevent_initial_call=True
     )
-    def update_service_analysis_table(n_clicks, compare_opt, pathname, year, period, start_date, end_date, week_idx, month_val,
+    def update_service_analysis_table(n_clicks, compare_opt, pathname, start_date, end_date,
                                       nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         if pathname != "/bccp/service-analysis":
             return dash.no_update
@@ -40,7 +36,7 @@ def register_service_analysis_callbacks(app):
         compare_mode = compare_opt if compare_prev else "prev_period"
         
         _, _, _, df = resolve_filters_and_query(
-            year, period, start_date, end_date, week_idx, month_val, compare_mode,
+            start_date, end_date, compare_mode,
             nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong,
             group_by_primary='dich_vu', group_by_secondary=None, compare_prev=compare_prev
         )
@@ -55,12 +51,8 @@ def register_service_analysis_callbacks(app):
         [Input("service-analysis-btn-export", "n_clicks")],
         [State("url", "pathname"),
          State("service-analysis-compare-opt", "value"),
-         State("sidebar-year", "value"),
-         State("sidebar-period", "value"),
          State("sidebar-date-range", "start_date"),
          State("sidebar-date-range", "end_date"),
-         State("sidebar-week-select", "value"),
-         State("sidebar-month-select", "value"),
          State("sidebar-nhom-dv", "data"),
          State("sidebar-cum", "value"),
          State("sidebar-bdx", "value"),
@@ -69,7 +61,7 @@ def register_service_analysis_callbacks(app):
          State("sidebar-hop-dong", "data")],
         prevent_initial_call=True
     )
-    def export_service_analysis(n_clicks, pathname, compare_opt, year, period, start_date, end_date, week_idx, month_val,
+    def export_service_analysis(n_clicks, pathname, compare_opt, start_date, end_date,
                                 nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         if not n_clicks or pathname != "/bccp/service-analysis":
             return dash.no_update
@@ -79,13 +71,16 @@ def register_service_analysis_callbacks(app):
         compare_mode = compare_opt if compare_prev else "prev_period"
         
         date_from, date_to, _, df = resolve_filters_and_query(
-            year, period, start_date, end_date, week_idx, month_val, compare_mode,
+            start_date, end_date, compare_mode,
             nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong,
             group_by_primary='dich_vu', group_by_secondary=None, compare_prev=compare_prev
         )
         
+        from callbacks.utils import detect_chu_ky
+        period = detect_chu_ky(date_from, date_to)
+        
         filter_info = {
-            "Năm dữ liệu": year,
+            "Năm dữ liệu": date_from.year,
             "Chu kỳ báo cáo": period,
             "Khoảng thời gian": f"{date_from.strftime('%d/%m/%Y')} - {date_to.strftime('%d/%m/%Y')}",
             "Nhóm dịch vụ": ", ".join(nhom_dv) if nhom_dv else "Tất cả",

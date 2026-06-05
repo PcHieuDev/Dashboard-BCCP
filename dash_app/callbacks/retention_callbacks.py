@@ -80,12 +80,28 @@ def register_retention_callbacks(app):
          Output("ret-churn-table-container", "children")],
         [Input("btn-apply-filter", "n_clicks")],
         [State("tabs-navigation", "value"),
-         State("sidebar-year", "value"),
-         State("sidebar-month-select", "value"),
+         State("sidebar-date-range", "start_date"),
+         State("sidebar-date-range", "end_date"),
          State("sidebar-cum", "value")],
         prevent_initial_call=True
     )
-    def update_retention_page(n_clicks, tab_val, year, month, cum_val):
+    def update_retention_page(n_clicks, tab_val, start_date, end_date, cum_val):
+        bdx_val = None  # Không còn lọc theo BĐX
+        if tab_val is None or tab_val != "tab-retention":
+            return [dash.no_update] * 11
+        if not start_date or not end_date:
+            return [dash.no_update] * 11
+            
+        from datetime import date
+        d_from = date.fromisoformat(start_date)
+        d_to = date.fromisoformat(end_date)
+        if (d_to - d_from).days + 1 > 31:
+            alert = dbc.Alert("⚠️ Cảnh báo: Vui lòng chọn khoảng thời gian tối đa 31 ngày để xem dữ liệu duy trì.", color="danger", className="m-3")
+            import plotly.graph_objects as go
+            return ["—"] * 6 + [go.Figure(), go.Figure(), go.Figure(), alert, html.Div()]
+            
+        year = d_from.year
+        month = d_from.month
         bdx_val = None  # Không còn lọc theo BĐX
         if tab_val is None or tab_val != "tab-retention":
             return [dash.no_update] * 11
@@ -335,12 +351,26 @@ def register_retention_callbacks(app):
         Output("ret-download", "data"),
         [Input("ret-btn-export-excel", "n_clicks")],
         [State("tabs-navigation", "value"),
-         State("sidebar-year", "value"),
-         State("sidebar-month-select", "value"),
+         State("sidebar-date-range", "start_date"),
+         State("sidebar-date-range", "end_date"),
          State("sidebar-cum", "value")],
         prevent_initial_call=True
     )
-    def export_retention_excel(n_clicks, tab_val, year, month, cum_val):
+    def export_retention_excel(n_clicks, tab_val, start_date, end_date, cum_val):
+        bdx_val = None  # Không còn lọc theo BĐX
+        if not n_clicks or tab_val is None or tab_val != "tab-retention":
+            return dash.no_update
+        if not start_date or not end_date:
+            return dash.no_update
+
+        from datetime import date
+        d_from = date.fromisoformat(start_date)
+        d_to = date.fromisoformat(end_date)
+        if (d_to - d_from).days + 1 > 31:
+            return dash.no_update
+            
+        year = d_from.year
+        month = d_from.month
         bdx_val = None  # Không còn lọc theo BĐX
         if not n_clicks or tab_val is None or tab_val != "tab-retention":
             return dash.no_update
@@ -504,12 +534,26 @@ def register_retention_callbacks(app):
         Output("ret-download-churn", "data"),
         [Input("ret-btn-export-churn", "n_clicks")],
         [State("tabs-navigation", "value"),
-         State("sidebar-year", "value"),
-         State("sidebar-month-select", "value"),
+         State("sidebar-date-range", "start_date"),
+         State("sidebar-date-range", "end_date"),
          State("sidebar-cum", "value")],
         prevent_initial_call=True
     )
-    def export_churn_alerts_excel(n_clicks, tab_val, year, month, cum_val):
+    def export_churn_alerts_excel(n_clicks, tab_val, start_date, end_date, cum_val):
+        bdx_val = None  # Không còn lọc theo BĐX
+        if not n_clicks or tab_val is None or tab_val != "tab-retention":
+            return dash.no_update
+        if not start_date or not end_date:
+            return dash.no_update
+
+        from datetime import date
+        d_from = date.fromisoformat(start_date)
+        d_to = date.fromisoformat(end_date)
+        if (d_to - d_from).days + 1 > 31:
+            return dash.no_update
+            
+        year = d_from.year
+        month = d_from.month
         bdx_val = None  # Không còn lọc theo BĐX
         if not n_clicks or tab_val is None or tab_val != "tab-retention":
             return dash.no_update
