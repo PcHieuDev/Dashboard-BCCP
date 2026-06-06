@@ -190,36 +190,25 @@ def clear_customer_query_cache():
     run_customer_query_cached.cache_clear()
 
 
-def detect_chu_ky(date_from: date, date_to: date) -> str:
-    """
-    Tự động nhận diện chu kỳ so sánh dựa trên khoảng ngày được chọn.
-    - Trọn vẹn 1 tháng -> 'Tháng'
-    - Đúng 7 ngày -> 'Tuần'
-    - Khác -> 'Ngày'
-    """
-    import calendar
-    delta_days = (date_to - date_from).days + 1
-    if delta_days == 7:
-        return 'Tuần'
-        
-    is_start_of_month = (date_from.day == 1)
-    _, last_day_num = calendar.monthrange(date_to.year, date_to.month)
-    is_end_of_month = (date_to.day == last_day_num)
-    is_same_month_year = (date_from.month == date_to.month) and (date_from.year == date_to.year)
-    
-    if is_start_of_month and is_end_of_month and is_same_month_year:
-        return 'Tháng'
-    return 'Ngày'
-
-def resolve_filters_and_query_customer(start_date, end_date, 
+def resolve_filters_and_query_customer(year, period, date_range_start, date_range_end, week_idx, month_val, 
                                      nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong):
     """
     Chuyển đổi các thông số bộ lọc từ UI sang các đối tượng Date và thực hiện truy vấn chi tiết khách hàng qua Cache.
     """
     date_column = 'ngay_chap_nhan'
-    date_from = date.fromisoformat(start_date) if start_date else date(2026, 1, 1)
-    date_to = date.fromisoformat(end_date) if end_date else date(2026, 1, 31)
-    year = date_from.year
+    if period == "Ngày":
+        date_from = date.fromisoformat(date_range_start) if date_range_start else date(year, 1, 1)
+        date_to = date.fromisoformat(date_range_end) if date_range_end else date(year, 1, 31)
+    elif period == "Tuần":
+        weeks = get_week_list(year)
+        if week_idx is not None and 0 <= week_idx < len(weeks):
+            w_num, w_start, w_end = weeks[week_idx]
+            date_from, date_to = w_start, w_end
+        else:
+            date_from, date_to = date(year, 1, 1), date(year, 1, 7)
+    else: # Tháng
+        date_column = 'thang_du_lieu'
+        date_from, date_to = get_month_range(year, month_val)
         
     # Chuẩn hóa giá trị bộ lọc
     from flask_login import current_user
@@ -260,7 +249,7 @@ def resolve_filters_and_query_customer(start_date, end_date,
 # --------------------------------------------------------------------------
 # GIẢI QUYẾT BỘ LỌC VÀ TRUY VẤN
 # --------------------------------------------------------------------------
-def resolve_filters_and_query(start_date, end_date, 
+def resolve_filters_and_query(year, period, date_range_start, date_range_end, week_idx, month_val, 
                               compare_mode, nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong,
                               group_by_primary='nhom_dv', group_by_secondary=None, compare_prev=False):
     """
@@ -282,10 +271,19 @@ def resolve_filters_and_query(start_date, end_date,
         compare_mode_str = compare_mode if compare_mode else 'none'
 
     date_column = 'ngay_chap_nhan'
-    date_from = date.fromisoformat(start_date) if start_date else date(2026, 1, 1)
-    date_to = date.fromisoformat(end_date) if end_date else date(2026, 1, 31)
-    year = date_from.year
-    period = detect_chu_ky(date_from, date_to)
+    if period == "Ngày":
+        date_from = date.fromisoformat(date_range_start) if date_range_start else date(year, 1, 1)
+        date_to = date.fromisoformat(date_range_end) if date_range_end else date(year, 1, 31)
+    elif period == "Tuần":
+        weeks = get_week_list(year)
+        if week_idx is not None and 0 <= week_idx < len(weeks):
+            w_num, w_start, w_end = weeks[week_idx]
+            date_from, date_to = w_start, w_end
+        else:
+            date_from, date_to = date(year, 1, 1), date(year, 1, 7)
+    else: # Tháng
+        date_column = 'thang_du_lieu'
+        date_from, date_to = get_month_range(year, month_val)
         
     # Chuẩn hóa giá trị bộ lọc
     from flask_login import current_user

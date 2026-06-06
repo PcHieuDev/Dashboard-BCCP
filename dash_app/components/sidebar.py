@@ -63,7 +63,6 @@ def create_sidebar_layout(filter_opts):
                 dcc.Link("🔍 Chi tiết khách hàng", href="/bccp/customer", id="nav-bccp-customer", className="sidebar-menu-item"),
                 dcc.Link("🆕 Khách hàng mới", href="/bccp/new-customer", id="nav-bccp-new-customer", className="sidebar-menu-item"),
                 dcc.Link("🔄 KH hiện hữu", href="/bccp/retention", id="nav-bccp-retention", className="sidebar-menu-item"),
-                dcc.Link("📦 Thống kê SP-DV", href="/bccp/service-analysis", id="nav-bccp-service-analysis", className="sidebar-menu-item"),
                 dcc.Link("🚨 Cảnh báo doanh thu", href="/bccp/alerts", id="nav-bccp-alerts", className="sidebar-menu-item"),
             ], title="📦 Bưu chính chuyển phát", item_id="menu-bccp"),
             
@@ -90,5 +89,146 @@ def create_sidebar_layout(filter_opts):
         profile_box if profile_box else html.Div(),
         
         # Menu điều hướng mới
-        nav_menu
+        nav_menu,
+        
+        # Container chứa toàn bộ bộ lọc
+        html.Div([
+            html.Hr(),
+            html.Div([
+                html.H3("📅 Thời gian", className="section-header", style={"marginTop": 0}),
+                
+                # Chọn Năm
+                html.Div([
+                    html.Label("Năm", className="filter-label"),
+                    dcc.Dropdown(
+                        id="sidebar-year",
+                        options=[{"label": str(y), "value": y} for y in filter_opts["years"]],
+                        value=default_year,
+                        clearable=False
+                    )
+                ], className="filter-group"),
+                
+                # Chọn Chu kỳ (Ngày / Tuần / Tháng)
+                html.Div([
+                    html.Label("Chu kỳ", className="filter-label"),
+                    dcc.Dropdown(
+                        id="sidebar-period",
+                        options=[
+                            {"label": "Ngày", "value": "Ngày"},
+                            {"label": "Tuần", "value": "Tuần"},
+                            {"label": "Tháng", "value": "Tháng"}
+                        ],
+                        value="Tháng",
+                        clearable=False
+                    )
+                ], className="filter-group"),
+                
+                # Lọc theo Ngày (DatePickerRange)
+                html.Div(id="filter-container-day", children=[
+                    html.Label("Khoảng ngày", className="filter-label"),
+                    dcc.DatePickerRange(
+                        id="sidebar-date-range",
+                        display_format="DD/MM/YYYY",
+                        min_date_allowed=date(2025, 1, 1),
+                        max_date_allowed=date(2027, 12, 31),
+                        start_date=date(2026, 1, 1),
+                        end_date=date(2026, 1, 31),
+                        style={"width": "100%"}
+                    )
+                ], className="filter-group"),
+                
+                # Lọc theo Tuần
+                html.Div(id="filter-container-week", children=[
+                    html.Label("Chọn Tuần", className="filter-label"),
+                    dcc.Dropdown(id="sidebar-week-select", clearable=False)
+                ], className="filter-group", style={"display": "none"}),
+                
+                # Lọc theo Tháng
+                html.Div(id="filter-container-month", children=[
+                    html.Label("Chọn Tháng", className="filter-label"),
+                    dcc.Dropdown(
+                        id="sidebar-month-select",
+                        options=[{"label": f"Tháng {i:02d}", "value": i} for i in range(1, 13)],
+                        value=current_month,
+                        clearable=False
+                    )
+                ], className="filter-group"),
+                
+                # Chế độ so sánh (Kỳ trước / Cùng kỳ năm trước / Cả hai)
+                html.Div([
+                    html.Label("Chế độ so sánh", className="filter-label"),
+                    # Sẽ đổi thành Checklist ở TIP-010, hiện tại giữ Radio
+                    dbc.Checklist(
+                        id="sidebar-compare-mode",
+                        options=[
+                            {"label": " Kỳ trước", "value": "prev_period"},
+                            {"label": " Cùng kỳ năm trước", "value": "yoy"},
+                            {"label": " Kế hoạch", "value": "plan"}
+                        ],
+                        value=["prev_period"],
+                        inline=False,
+                        labelStyle={"display": "block", "marginBottom": "4px"}
+                    )
+                ], className="filter-group"),
+                
+            ], style={"marginBottom": "20px"}),
+            
+            html.Hr(),
+            
+            html.Div([
+                html.H3("🗺️ Bộ lọc chiều", className="section-header"),
+                
+                # Lọc Cụm (Có phân quyền)
+                html.Div([
+                    html.Label("Cụm", className="filter-label"),
+                    dcc.Dropdown(
+                        id="sidebar-cum",
+                        options=cum_options,
+                        value=cum_value,
+                        disabled=cum_disabled,
+                        clearable=False
+                    )
+                ], className="filter-group"),
+                
+                # Lọc Bưu điện Huyện/Xã (BDX)
+                html.Div([
+                    html.Label("Bưu điện Huyện/Xã", className="filter-label"),
+                    dcc.Dropdown(
+                        id="sidebar-bdx",
+                        options=[{"label": "Tất cả BĐX", "value": "Tất cả"}] + [{"label": b, "value": b} for b in filter_opts["bdx"]],
+                        value="Tất cả",
+                        clearable=False
+                    )
+                ], className="filter-group"),
+                
+                # Lọc Bưu cục chấp nhận
+                html.Div([
+                    html.Label("Mã bưu cục", className="filter-label"),
+                    dcc.Dropdown(
+                        id="sidebar-buu-cuc",
+                        options=[{"label": "Tất cả Bưu cục", "value": "Tất cả"}] + filter_opts["buu_cuc"],
+                        value="Tất cả",
+                        clearable=False
+                    )
+                ], className="filter-group"),
+            ]),
+            
+            # Nút Áp dụng bộ lọc
+            html.Div([
+                dbc.Button(
+                    "🔍 Áp dụng bộ lọc",
+                    id="btn-apply-filter",
+                    color="primary",
+                    className="w-100 mt-2",
+                    style={"fontWeight": "bold"}
+                )
+            ], id="apply-filter-container", style={"padding": "10px 0"}),
+            
+            # Bộ lọc dịch vụ BCCP dịch vụ BCCP cũ ẩn đi để tương thích ngược với các callback khác
+            html.Div(id="bccp-extra-filters", style={"display": "none"}, children=[
+                dcc.Store(id="sidebar-nhom-dv", data=None),
+                dcc.Store(id="sidebar-loai-kh", data=[]),
+                dcc.Store(id="sidebar-hop-dong", data=[])
+            ])
+        ], id="sidebar-filters-container", style={"display": "block"})
     ], className="sidebar")

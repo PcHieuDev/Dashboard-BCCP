@@ -24,8 +24,7 @@ from callbacks.utils import (
     format_revenue,
     generate_svg_sparkline_src,
     resolve_filters_and_query,
-    get_bccp_week_number,
-    detect_chu_ky
+    get_bccp_week_number
 )
 from analytics.retention_metrics import get_retention_stats
 
@@ -183,34 +182,27 @@ def register_kpi_callbacks(app):
          # Top 10 CMS Table
          Output("top-cms-table-container", "children")],
 
-        [Input("btn-apply-filter", "n_clicks")],
-        [State("tabs-navigation", "value"),
+        [Input("btn-apply-filter", "n_clicks"),
+         Input("tabs-navigation", "value")],
+        [State("sidebar-year", "value"),
+         State("sidebar-period", "value"),
          State("sidebar-date-range", "start_date"),
          State("sidebar-date-range", "end_date"),
+         State("sidebar-week-select", "value"),
+         State("sidebar-month-select", "value"),
          State("sidebar-compare-mode", "value"),
          State("sidebar-nhom-dv", "data"),
          State("sidebar-cum", "value"),
          State("sidebar-bdx", "value"),
          State("sidebar-buu-cuc", "value"),
          State("sidebar-loai-kh", "data"),
-         State("sidebar-hop-dong", "data")],
-        prevent_initial_call=True
+         State("sidebar-hop-dong", "data")]
     )
-    def update_kpi_cards(n_clicks, tab_val, start_date, end_date, compare_mode,
+    def update_kpi_cards(n_clicks, tab_val, year, period, start_date, end_date, week_idx, month_val, compare_mode,
                          nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         # Chỉ xử lý khi đang ở Tab Tổng quan KPI
         if tab_val != "tab-kpi" or tab_val is None:
             return [dash.no_update] * 35
-
-        from datetime import date
-        dt = date.fromisoformat(start_date)
-        year = dt.year
-        month_val = dt.month
-        
-        date_from_obj = date.fromisoformat(start_date)
-        date_to_obj = date.fromisoformat(end_date)
-        period = detect_chu_ky(date_from_obj, date_to_obj)
-        week_idx = None
 
         spdv = None
 
@@ -229,7 +221,7 @@ def register_kpi_callbacks(app):
 
         # 1. Truy vấn dữ liệu kỳ hiện tại
         date_from, date_to, date_column, df_cur = resolve_filters_and_query(
-            start_date, end_date, compare_mode,
+            year, period, start_date, end_date, week_idx, month_val, compare_mode,
             nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong,
             group_by_primary='nhom_dv', compare_prev=False
         )

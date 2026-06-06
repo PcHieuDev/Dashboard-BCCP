@@ -191,27 +191,15 @@ def register_new_customer_callbacks(app):
          Output("new-cust-leaderboard-container", "children"),
          Output("new-cust-chart-dv", "figure"),
          Output("new-cust-top-khm-container", "children")],
-        [Input("btn-apply-filter", "n_clicks")],
-        [State("tabs-navigation", "value"),
-         State("sidebar-date-range", "start_date"),
-         State("sidebar-date-range", "end_date"),
-         State("sidebar-cum", "value")],
-        prevent_initial_call=True
+        [Input("btn-apply-filter", "n_clicks"),
+         Input("tabs-navigation", "value")],
+        [State("sidebar-year", "value"),
+         State("sidebar-month-select", "value"),
+         State("sidebar-cum", "value")]
     )
-    def update_new_cust_page(n_clicks, tab_val, start_date, end_date, cum_val):
+    def update_new_cust_page(n_clicks, tab_val, year, month, cum_val):
         if tab_val != "tab-new-customer" or tab_val is None:
             return [dash.no_update] * 18
-
-        from datetime import date
-        d_from = date.fromisoformat(start_date)
-        d_to = date.fromisoformat(end_date)
-        if (d_to - d_from).days + 1 > 31:
-            alert = dbc.Alert("⚠️ Cảnh báo: Vui lòng chọn khoảng thời gian tối đa 31 ngày để xem Khách hàng mới.", color="danger", className="m-3")
-            import plotly.graph_objects as go
-            return ["—"] * 6 + ["—"] * 8 + [alert, html.Div(), go.Figure(), html.Div()]
-            
-        year = d_from.year
-        month = d_from.month
             
         # Gọi hàm xử lý dữ liệu (luôn dùng bdx="Tất cả")
         df_result, kpi_tot, kpi_svc = query_and_process_new_customers(year, month, cum_val, "Tất cả")
@@ -524,23 +512,14 @@ def register_new_customer_callbacks(app):
         Output("new-cust-download-khm", "data"),
         [Input("new-cust-btn-export-khm", "n_clicks")],
         [State("tabs-navigation", "value"),
-         State("sidebar-date-range", "start_date"),
-         State("sidebar-date-range", "end_date"),
+         State("sidebar-year", "value"),
+         State("sidebar-month-select", "value"),
          State("sidebar-cum", "value")],
         prevent_initial_call=True
     )
-    def export_all_khm(n_clicks, tab_val, start_date, end_date, cum_val):
+    def export_all_khm(n_clicks, tab_val, year, month, cum_val):
         if not n_clicks or tab_val != "tab-new-customer":
             return dash.no_update
-
-        from datetime import date
-        d_from = date.fromisoformat(start_date)
-        d_to = date.fromisoformat(end_date)
-        if (d_to - d_from).days + 1 > 31:
-            return dash.no_update
-            
-        year = d_from.year
-        month = d_from.month
         
         if not DB_PATH.exists():
             return dash.no_update
@@ -636,23 +615,14 @@ def register_new_customer_callbacks(app):
         Output("new-cust-download", "data"),
         [Input("new-cust-btn-export-excel", "n_clicks")],
         [State("tabs-navigation", "value"),
-         State("sidebar-date-range", "start_date"),
-         State("sidebar-date-range", "end_date"),
+         State("sidebar-year", "value"),
+         State("sidebar-month-select", "value"),
          State("sidebar-cum", "value")],
         prevent_initial_call=True
     )
-    def export_new_cust_excel(n_clicks, tab_val, start_date, end_date, cum_val):
+    def export_new_cust_excel(n_clicks, tab_val, year, month, cum_val):
         if not n_clicks or tab_val != "tab-new-customer" or tab_val is None:
             return dash.no_update
-
-        from datetime import date
-        d_from = date.fromisoformat(start_date)
-        d_to = date.fromisoformat(end_date)
-        if (d_to - d_from).days + 1 > 31:
-            return dash.no_update
-            
-        year = d_from.year
-        month = d_from.month
             
         # Query và xử lý dữ liệu (luôn dùng bdx="Tất cả")
         df_result, kpi_tot, _ = query_and_process_new_customers(year, month, cum_val, "Tất cả")

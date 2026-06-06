@@ -243,20 +243,3 @@ def register_sidebar_callbacks(app):
             bccp_filter_style
         )
 
-    # 6. Callback chặn khoảng ngày > 31 ngày ở các trang chi tiết KH
-    @app.callback(
-        Output("sidebar-date-range", "max_date_allowed"),
-        [Input("sidebar-date-range", "start_date"),
-         Input("url", "pathname")]
-    )
-    def update_max_date_allowed(start_date, pathname):
-        from datetime import date, timedelta
-        if pathname in ["/bccp/customer", "/bccp/new-customer"] and start_date:
-            try:
-                start = date.fromisoformat(start_date)
-                max_date = start + timedelta(days=31)
-                global_max = date(2027, 12, 31)
-                return min(max_date, global_max).isoformat()
-            except ValueError:
-                return date(2027, 12, 31).isoformat()
-        return date(2027, 12, 31).isoformat()

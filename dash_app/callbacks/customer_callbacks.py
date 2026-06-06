@@ -20,7 +20,7 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from config.settings import DB_PATH
-from callbacks.utils import resolve_filters_and_query, resolve_filters_and_query_customer, detect_chu_ky
+from callbacks.utils import resolve_filters_and_query, resolve_filters_and_query_customer
 from components.data_table import render_revenue_datatable
 from callbacks.export_helpers import generate_customer_excel, generate_excel_report
 
@@ -66,24 +66,29 @@ def register_customer_callbacks(app):
     # ==============================================================================
     @app.callback(
         Output("revenue-table-container", "children"),
-        [Input("btn-apply-filter", "n_clicks")],
-        [State("tabs-navigation", "value"),
-         State("revenue-g1", "value"),
-         State("revenue-g2", "value"),
-         State("revenue-compare-opt", "value"),
-         State("customer-filter-nhom-dv", "value"),
-         State("customer-filter-loai-kh", "value"),
-         State("customer-filter-hop-dong", "value"),
-         State("customer-filter-spdv", "value"),
+        [Input("btn-apply-filter", "n_clicks"),
+         Input("tabs-navigation", "value"),
+         Input("revenue-g1", "value"),
+         Input("revenue-g2", "value"),
+         Input("revenue-compare-opt", "value"),
+         # Bộ lọc dịch vụ inline mới
+         Input("customer-filter-nhom-dv", "value"),
+         Input("customer-filter-loai-kh", "value"),
+         Input("customer-filter-hop-dong", "value"),
+         Input("customer-filter-spdv", "value")],
+        [# Bộ lọc địa lý từ Sidebar (State)
+         State("sidebar-year", "value"),
+         State("sidebar-period", "value"),
          State("sidebar-date-range", "start_date"),
          State("sidebar-date-range", "end_date"),
+         State("sidebar-week-select", "value"),
+         State("sidebar-month-select", "value"),
          State("sidebar-cum", "value"),
          State("sidebar-bdx", "value"),
-         State("sidebar-buu-cuc", "value")],
-        prevent_initial_call=True
+         State("sidebar-buu-cuc", "value")]
     )
     def update_revenue_table(n_clicks, tab_val, g1, g2, compare_opt, nhom_dv, loai_kh, hop_dong, spdv,
-                             start_date, end_date, cum, bdx, buu_cuc):
+                             year, period, start_date, end_date, week_idx, month_val, cum, bdx, buu_cuc):
         # Chạy khi ở tab Chi tiết Khách hàng (do đã gộp trang)
         if tab_val != "tab-customer" or tab_val is None:
             return dash.no_update
@@ -94,7 +99,7 @@ def register_customer_callbacks(app):
         
         # 1. Truy vấn dữ liệu có cache dựa vào các bộ lọc
         _, _, _, df = resolve_filters_and_query(
-            start_date, end_date, compare_mode,
+            year, period, start_date, end_date, week_idx, month_val, compare_mode,
             nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong,
             group_by_primary=g1, group_by_secondary=g2_actual, compare_prev=compare_prev
         )
@@ -116,35 +121,33 @@ def register_customer_callbacks(app):
     # ==============================================================================
     @app.callback(
         Output("customer-table-container", "children"),
-        [Input("btn-apply-filter", "n_clicks")],
-        [State("tabs-navigation", "value"),
-         State("customer-filter-nhom-dv", "value"),
-         State("customer-filter-loai-kh", "value"),
-         State("customer-filter-hop-dong", "value"),
-         State("customer-filter-spdv", "value"),
+        [Input("btn-apply-filter", "n_clicks"),
+         Input("tabs-navigation", "value"),
+         # Bộ lọc dịch vụ inline mới
+         Input("customer-filter-nhom-dv", "value"),
+         Input("customer-filter-loai-kh", "value"),
+         Input("customer-filter-hop-dong", "value"),
+         Input("customer-filter-spdv", "value")],
+        [# Bộ lọc địa lý từ Sidebar (State)
+         State("sidebar-year", "value"),
+         State("sidebar-period", "value"),
          State("sidebar-date-range", "start_date"),
          State("sidebar-date-range", "end_date"),
+         State("sidebar-week-select", "value"),
+         State("sidebar-month-select", "value"),
          State("sidebar-cum", "value"),
          State("sidebar-bdx", "value"),
-         State("sidebar-buu-cuc", "value")],
-        prevent_initial_call=True
+         State("sidebar-buu-cuc", "value")]
     )
     def update_customer_table(n_clicks, tab_val, nhom_dv, loai_kh, hop_dong, spdv,
-                              start_date, end_date, cum, bdx, buu_cuc):
+                              year, period, start_date, end_date, week_idx, month_val, cum, bdx, buu_cuc):
         # Chỉ chạy khi đang ở Tab Chi tiết Khách hàng
         if tab_val != "tab-customer" or tab_val is None:
             return dash.no_update
-
-        # Chặn nếu khoảng ngày > 31 ngày ở trang Khách hàng
-        from datetime import date
-        d_from = date.fromisoformat(start_date)
-        d_to = date.fromisoformat(end_date)
-        if (d_to - d_from).days + 1 > 31:
-            return dbc.Alert("⚠️ Cảnh báo: Vui lòng chọn khoảng thời gian tối đa 31 ngày để xem Chi tiết Khách hàng.", color="danger", className="m-3")
             
         # 1. Truy vấn dữ liệu qua Cache
         _, _, _, df = resolve_filters_and_query_customer(
-            start_date, end_date,
+            year, period, start_date, end_date, week_idx, month_val,
             nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong
         )
         
@@ -212,8 +215,13 @@ def register_customer_callbacks(app):
         Output("customer-download", "data"),
         [Input("customer-btn-export-excel", "n_clicks")],
         [State("tabs-navigation", "value"),
+         # Bộ lọc địa lý từ Sidebar
+         State("sidebar-year", "value"),
+         State("sidebar-period", "value"),
          State("sidebar-date-range", "start_date"),
          State("sidebar-date-range", "end_date"),
+         State("sidebar-week-select", "value"),
+         State("sidebar-month-select", "value"),
          # Bộ lọc dịch vụ inline mới
          State("customer-filter-nhom-dv", "value"),
          State("sidebar-cum", "value"),
@@ -224,26 +232,15 @@ def register_customer_callbacks(app):
          State("customer-filter-spdv", "value")],
         prevent_initial_call=True
     )
-    def export_customer_table(n_clicks, tab_val, start_date, end_date,
+    def export_customer_table(n_clicks, tab_val, year, period, start_date, end_date, week_idx, month_val,
                               nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong, spdv):
         ctx = dash.callback_context
         if not ctx.triggered or tab_val != "tab-customer" or tab_val is None:
             return dash.no_update
-
-        # Chặn xuất nếu khoảng ngày > 31 ngày
-        from datetime import date
-        d_from = date.fromisoformat(start_date)
-        d_to = date.fromisoformat(end_date)
-        if (d_to - d_from).days + 1 > 31:
-            return dash.no_update
-            
-        year = d_from.year
-        period = detect_chu_ky(d_from, d_to)
-        month_val = d_from.month
             
         # 1. Truy vấn toàn bộ dữ liệu
         _, _, _, df = resolve_filters_and_query_customer(
-            start_date, end_date,
+            year, period, start_date, end_date, week_idx, month_val,
             nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong
         )
         

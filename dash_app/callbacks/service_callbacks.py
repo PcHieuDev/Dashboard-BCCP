@@ -232,14 +232,12 @@ def register_service_callbacks(app):
          Output("service-bar-chart", "figure"),
          Output("service-table-title", "children"),
          Output("service-table-container", "children")],
-        [Input("btn-apply-filter", "n_clicks")],
-        [State("service-type-store", "data"),
-         State("service-filter-year", "value"),
-         State("service-filter-month", "value"),
-         State("service-filter-cum", "value")],
-        prevent_initial_call=True
+        [Input("service-type-store", "data"),
+         Input("service-filter-year", "value"),
+         Input("service-filter-month", "value"),
+         Input("service-filter-cum", "value")]
     )
-    def update_service_page(n_clicks, service_type, year, month, cum):
+    def update_service_page(service_type, year, month, cum):
         if not service_type:
             return html.Div(), go.Figure(), "", html.Div()
             
