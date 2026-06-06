@@ -11,11 +11,6 @@ Dashboard doanh thu bưu chính chuyển phát (BCCP) hỗ trợ bộ lọc đa 
 - **Encoding**: UTF-8 toàn bộ
 
 ## Current State
-- **Hoàn thành & Gộp nhánh `feat-ux-filters` (06/06/2026)**:
-  - **Bố cục Topbar mới (2 hàng):** Tách biệt thời gian/so sánh và bộ lọc địa giới/nút áp dụng. Loại bỏ các dropdown cũ (Năm, Tháng, Tuần, Chu kỳ) và lưu trữ ngầm qua `dcc.Store` để tương thích ngược.
-  - **Manual Load:** Chuyển đổi toàn bộ callback từ tự động chạy (`Input`) sang chỉ chạy khi bấm nút "Lọc dữ liệu" (`State` nhận trigger từ `btn-apply-filter`).
-  - **Chặn khoảng ngày:** Tích hợp logic chặn khoảng ngày > 31 ngày ở các phân hệ Khách hàng (hiển thị `dbc.Alert` cảnh báo màu đỏ).
-  - **Trang SP-DV:** Thêm trang "Thống kê Sản phẩm Dịch vụ" cung cấp báo cáo tổng thể kèm so sánh cùng kỳ/kỳ trước và tính năng xuất Excel.
 - **Sửa lỗi Import CSV Mapping (04/06/2026)**:
   - Khắc phục lỗi `❌ Tệp CSV thiếu cột bắt buộc 'nhom_chinh' làm cột đầu tiên!` do Sếp lưu file CSV từ Excel trên Windows dùng dấu phân tách `;`.
   - Hỗ trợ cả dấu phân tách `;` và `,` khi đọc file CSV trong `import_callbacks.py` và `sync_mappings.py`.
@@ -51,9 +46,9 @@ E:\Projects\Dashboard-BCCP\
 ├── dash_app/       ← APP CHÍNH (Dash modularized)
 │   ├── app.py              (Khởi chạy & định tuyến tab)
 │   ├── assets/style.css    (CSS style)
-│   ├── components/         (sidebar.py, kpi_cards.py, data_table.py, topbar.py)
-│   ├── callbacks/          (sidebar_callbacks.py, kpi_callbacks.py, customer_callbacks.py, global_callbacks.py, hcc_revenue_callbacks.py, import_callbacks.py, new_customer_callbacks.py, retention_callbacks.py, alerts_callbacks.py, utils.py, export_helpers.py, service_analysis_callbacks.py)
-│   ├── pages/              (kpi_page.py, customer_detail.py, global_overview.py, hcc_revenue.py, import_data.py, new_customer.py, retention.py, service_overview.py, service_analysis.py, alerts.py)
+│   ├── components/         (sidebar.py, kpi_cards.py, data_table.py)
+│   ├── callbacks/          (sidebar_callbacks.py, kpi_callbacks.py, customer_callbacks.py, global_callbacks.py, hcc_revenue_callbacks.py, import_callbacks.py, new_customer_callbacks.py, retention_callbacks.py, alerts_callbacks.py, utils.py, export_helpers.py)
+│   ├── pages/              (kpi_page.py, customer_detail.py, global_overview.py, hcc_revenue.py, import_data.py, new_customer.py, retention.py, service_overview.py, alerts.py)
 │   ├── db/                 (connection.py, auth.py)
 │   └── requirements.txt
 ├── run_dashboard.bat

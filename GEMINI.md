@@ -18,5 +18,5 @@ Dashboard doanh thu bưu chính chuyển phát (BCCP) hỗ trợ bộ lọc đa 
 ## Active Workspace & Links
 - **Mã nguồn chính**: [Dashboard-BCCP](file:///E:/Projects/Dashboard-BCCP)
 - **Cơ sở dữ liệu**: [dashboard.db](file:///E:/OneDrive/z.Database-TTKD-Data/dashboard.db)
-- **Trang thái hiện tại**: Đã hoàn thành và gộp nhánh `feat-ux-filters` vào `main`. Xem chi tiết toàn bộ lịch sử và trạng thái dự án tại [project_state.md](file:///E:/Projects/Dashboard-BCCP/project_state.md).
+- **Trang thái hiện tại**: Đã hoàn thành Phase 11 (Tối ưu giao diện & Performance) và rollback nhánh `feat-ux-filters`. Xem chi tiết toàn bộ lịch sử và trạng thái dự án tại [project_state.md](file:///E:/Projects/Dashboard-BCCP/project_state.md).
 - **Cloudflare Tunnel (Truy cập từ xa)**: Tên miền `dashboard.bdna.io.vn` trỏ về `http://127.0.0.1:8050`. Windows Service `cloudflared` đang hoạt động ổn định.
