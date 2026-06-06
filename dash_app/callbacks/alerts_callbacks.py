@@ -15,7 +15,7 @@ project_root = Path(__file__).resolve().parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from callbacks.utils import resolve_filters_and_query, format_revenue
+from callbacks.utils import resolve_filters_and_query, format_revenue, detect_chu_ky
 from config.settings import DB_PATH
 import sqlite3
 import dash_bootstrap_components as dbc
@@ -34,29 +34,33 @@ def register_alerts_callbacks(app):
     """
     @app.callback(
         Output("alerts-list-container", "children"),
-        [Input("btn-apply-filter", "n_clicks"),
-         Input("tabs-navigation", "value"),
-         Input("alerts-nhom-dv-select", "value")],
-        [State("sidebar-year", "value"),
-         State("sidebar-period", "value"),
+        [Input("btn-apply-filter", "n_clicks")],
+        [State("tabs-navigation", "value"),
+         State("alerts-nhom-dv-select", "value"),
          State("sidebar-date-range", "start_date"),
          State("sidebar-date-range", "end_date"),
-         State("sidebar-week-select", "value"),
-         State("sidebar-month-select", "value"),
          State("sidebar-nhom-dv", "data"),
          State("sidebar-cum", "value"),
          State("sidebar-bdx", "value"),
          State("sidebar-buu-cuc", "value"),
          State("sidebar-loai-kh", "data"),
-         State("sidebar-hop-dong", "data")]
+         State("sidebar-hop-dong", "data")],
+        prevent_initial_call=True
     )
-    def update_alerts_list(n_clicks, tab_val, selected_service, year, period, start_date, end_date, week_idx, month_val,
+    def update_alerts_list(n_clicks, tab_val, selected_service, start_date, end_date,
                            nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         # Chỉ chạy khi đang ở Tab Cảnh báo
         if tab_val != "tab-alerts" or tab_val is None:
             return dash.no_update
-        spdv = None
             
+        from datetime import date
+        dt = date.fromisoformat(start_date)
+        year = dt.year
+        month_val = dt.month
+        period = detect_chu_ky(dt, date.fromisoformat(end_date))
+        week_idx = None
+        
+        spdv = None
         alerts = []
         
         # ----------------------------------------------------------------------
@@ -164,7 +168,7 @@ GROUP BY b.ten_cum
             
             # PHÂN TÍCH 1: CẢNH BÁO THEO CỤM ĐỊA LÝ
             _, _, _, df_cum = resolve_filters_and_query(
-                year, period, start_date, end_date, week_idx, month_val, compare_mode,
+                start_date, end_date, compare_mode,
                 nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong,
                 group_by_primary='cum', group_by_secondary=None, compare_prev=compare_prev
             )
@@ -201,7 +205,7 @@ GROUP BY b.ten_cum
                             
             # PHÂN TÍCH 2: CẢNH BÁO THEO NHÓM DỊCH VỤ CHÍNH
             _, _, _, df_dv = resolve_filters_and_query(
-                year, period, start_date, end_date, week_idx, month_val, compare_mode,
+                start_date, end_date, compare_mode,
                 nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong,
                 group_by_primary='nhom_dv', group_by_secondary=None, compare_prev=compare_prev
             )
@@ -238,7 +242,7 @@ GROUP BY b.ten_cum
      
             # PHÂN TÍCH 3: CẢNH BÁO THEO TOP 10 KHÁCH HÀNG LỚN NHẤT
             _, _, _, df_kh = resolve_filters_and_query(
-                year, period, start_date, end_date, week_idx, month_val, compare_mode,
+                start_date, end_date, compare_mode,
                 nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong,
                 group_by_primary='cms', group_by_secondary=None, compare_prev=compare_prev
             )

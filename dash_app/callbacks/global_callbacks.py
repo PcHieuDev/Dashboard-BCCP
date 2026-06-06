@@ -160,14 +160,20 @@ def register_global_callbacks(app):
          Output("ytd-table-container", "children"),
          Output("global-cum-table-container", "children")],
         [Input("btn-apply-filter", "n_clicks")],
-        [State("sidebar-year", "value"),
-         State("sidebar-month-select", "value"),
+        [State("sidebar-date-range", "start_date"),
+         State("sidebar-date-range", "end_date"),
          State("sidebar-compare-mode", "value"),
-         State("sidebar-cum", "value")]
+         State("sidebar-cum", "value")],
+        prevent_initial_call=True
     )
-    def update_global_overview(n_clicks, year, month, compare_mode, cum):
-        if not year or not month:
+    def update_global_overview(n_clicks, start_date, end_date, compare_mode, cum):
+        if not start_date or not end_date:
             return ["—"] * 8 + [go.Figure(), go.Figure(), html.Div(), html.Div("Vui lòng chọn bộ lọc thời gian.")]
+            
+        from datetime import date
+        dt = date.fromisoformat(start_date)
+        year = dt.year
+        month = dt.month
             
         # 1. Lấy doanh thu thực tế kỳ hiện tại
         rev_cur = get_total_revenue_by_service(DB_PATH, year, month, cum)
