@@ -1,5 +1,8 @@
 # GEMINI.md - Project State & Agent Handover (Concise Summary)
 
+> [!IMPORTANT]
+> Đây là bản tóm tắt ngắn gọn của dự án. Để nắm bắt toàn bộ nội dung chi tiết về lịch sử phát triển, cấu trúc thư mục, sơ đồ dữ liệu (schema), logic phân loại và các tác vụ đang chờ xử lý, vui lòng đọc tài liệu chi tiết tại [project_state.md](file:///E:/Projects/Dashboard-BCCP/project_state.md).
+
 ## Project Goal
 Dashboard doanh thu bưu chính chuyển phát (BCCP) hỗ trợ bộ lọc đa chiều, phân loại khách hàng tự động, import dữ liệu từ Excel vào SQLite. Phục vụ **20+ người dùng** từ nhiều phòng ban, dự kiến deploy lên **server nội bộ**.
 
