@@ -22,6 +22,7 @@ import dash_bootstrap_components as dbc
 
 # Import Sidebar layout
 from components.sidebar import create_sidebar_layout
+from components.topbar import create_topbar_layout
 
 # Import các trang Layouts
 from pages.kpi_page import create_kpi_page_layout
@@ -33,6 +34,7 @@ from pages.retention import create_retention_layout
 
 # Import các Callbacks đăng ký
 from callbacks.sidebar_callbacks import register_sidebar_callbacks
+from callbacks.topbar_callbacks import register_topbar_callbacks
 from callbacks.kpi_callbacks import register_kpi_callbacks
 from callbacks.customer_callbacks import register_customer_callbacks
 from callbacks.import_callbacks import register_import_callbacks
@@ -198,11 +200,14 @@ def serve_layout():
         # Input tabs-navigation ẩn để tương thích ngược với các callback cũ
         dcc.Input(id="tabs-navigation", type="text", style={"display": "none"}, value="tab-kpi"),
         
-        # Sidebar lọc dữ liệu
-        create_sidebar_layout(FILTER_OPTS),
+        # Sidebar chỉ chứa menu điều hướng (không chứa bộ lọc)
+        create_sidebar_layout(),
         
         # Vùng hiển thị nội dung chính bên phải
         html.Div([
+            # Topbar bộ lọc toàn cục
+            create_topbar_layout(FILTER_OPTS),
+            
             # Header Tiêu đề
             html.Div([
                 html.Div([
@@ -371,6 +376,7 @@ def handle_logout(n_clicks):
 # ĐĂNG KÝ TOÀN BỘ CALLBACKS MODULAR
 # --------------------------------------------------------------------------
 register_sidebar_callbacks(app)
+register_topbar_callbacks(app)
 register_kpi_callbacks(app)
 register_customer_callbacks(app)
 register_import_callbacks(app)

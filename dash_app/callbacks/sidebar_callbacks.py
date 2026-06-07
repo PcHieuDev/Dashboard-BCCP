@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Các callbacks quản lý hành vi và tương tác của bộ lọc trên Sidebar.
+Các callbacks quản lý hành vi điều hướng của Sidebar, highlight menu hoạt động,
+và xử lý đăng xuất.
 """
 
-import sqlite3
-import pandas as pd
-from datetime import date, datetime
+from datetime import datetime
 from dash import Output, Input, html
 import sys
 from pathlib import Path
@@ -15,7 +14,6 @@ project_root = Path(__file__).resolve().parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from config.settings import DB_PATH
 from config.week_calendar import get_week_list
 
 def register_sidebar_callbacks(app):
@@ -23,129 +21,23 @@ def register_sidebar_callbacks(app):
     Đăng ký các callback của Sidebar với ứng dụng Dash.
     """
     
-    # 1. Callback chuyển đổi hiển thị của DatePickerRange, Tuần, Tháng theo chu kỳ chọn và gán default values
-    @app.callback(
-        [Output("filter-container-day", "style"),
-         Output("filter-container-week", "style"),
-         Output("filter-container-month", "style"),
-         Output("sidebar-date-range", "start_date"),
-         Output("sidebar-date-range", "end_date"),
-         Output("sidebar-month-select", "value")],
-        [Input("sidebar-period", "value"),
-         Input("sidebar-year", "value")]
-    )
-    def toggle_period_filters(period, year):
-        import dash
-        from datetime import date
-        today = date.today()
-        
-        ctx = dash.callback_context
-        triggered_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else ""
-        
-        # Mặc định giữ nguyên các giá trị
-        start_date = dash.no_update
-        end_date = dash.no_update
-        month_val = dash.no_update
-        
-        # Chỉ thiết lập default value khi thay đổi chu kỳ (sidebar-period) hoặc lần đầu load
-        if triggered_id == "sidebar-period" or not triggered_id:
-            if period == "Ngày":
-                start_date = today.isoformat()
-                end_date = today.isoformat()
-            elif period == "Tháng":
-                month_val = today.month
-                
-        if period == "Ngày":
-            return {"display": "block"}, {"display": "none"}, {"display": "none"}, start_date, end_date, month_val
-        elif period == "Tuần":
-            return {"display": "none"}, {"display": "block"}, {"display": "none"}, start_date, end_date, month_val
-        else:  # Tháng
-            return {"display": "none"}, {"display": "none"}, {"display": "block"}, start_date, end_date, month_val
-
-    # 2. Callback cập nhật danh sách Tuần theo Năm đã chọn (Đã sửa lỗi ValueError unpack 3-tuple)
-    @app.callback(
-        [Output("sidebar-week-select", "options"),
-         Output("sidebar-week-select", "value")],
-        [Input("sidebar-year", "value")]
-    )
-    def update_week_dropdown(year):
-        if not year:
-            return [], None
-        weeks = get_week_list(int(year))
-        options = []
-        for i, (w_num, w_from, w_to) in enumerate(weeks):
-            options.append({
-                "label": f"Tuần {w_num:02d} ({w_from.strftime('%d/%m')} - {w_to.strftime('%d/%m')})",
-                "value": i
-            })
-        # Mặc định chọn tuần đầu tiên (index 0)
-        return options, 0 if options else None
-
-    # 3. Callback lọc động địa lý: Cụm -> BĐX -> Bưu cục
-    @app.callback(
-        [Output("sidebar-bdx", "options"),
-         Output("sidebar-buu-cuc", "options")],
-        [Input("sidebar-cum", "value"),
-         Input("sidebar-bdx", "value")]
-    )
-    def update_geographic_filters(cum_val, bdx_val):
-        if not DB_PATH.exists():
-            return [{"label": "Tất cả BĐX", "value": "Tất cả"}], [{"label": "Tất cả Bưu cục", "value": "Tất cả"}]
-            
-        conn = sqlite3.connect(str(DB_PATH))
-        try:
-            # Lọc danh sách BĐX theo Cụm
-            query_bdx = "SELECT DISTINCT ten_bdx FROM dim_buucuc WHERE ten_bdx IS NOT NULL"
-            params_bdx = []
-            if cum_val and cum_val != "Tất cả":
-                query_bdx += " AND ten_cum = ?"
-                params_bdx.append(cum_val)
-            query_bdx += " ORDER BY ten_bdx"
-            df_bdx = pd.read_sql_query(query_bdx, conn, params=params_bdx)
-            bdx_opts = [{"label": "Tất cả BĐX", "value": "Tất cả"}] + [{"label": b, "value": b} for b in df_bdx["ten_bdx"].tolist()]
-            
-            # Lọc danh sách Bưu cục theo Cụm và BĐX
-            query_bc = "SELECT ma_bc, ten_buu_cuc FROM dim_buucuc WHERE ma_bc IS NOT NULL"
-            params_bc = []
-            if cum_val and cum_val != "Tất cả":
-                query_bc += " AND ten_cum = ?"
-                params_bc.append(cum_val)
-            # Chỉ lọc theo BĐX nếu bdx_val hợp lệ và nằm trong Cụm được chọn
-            if bdx_val and bdx_val != "Tất cả" and bdx_val in df_bdx["ten_bdx"].tolist():
-                query_bc += " AND ten_bdx = ?"
-                params_bc.append(bdx_val)
-            query_bc += " ORDER BY ma_bc"
-            df_bc = pd.read_sql_query(query_bc, conn, params=params_bc)
-            bc_opts = [{"label": "Tất cả Bưu cục", "value": "Tất cả"}] + [{"label": f"{r['ma_bc']} - {r['ten_buu_cuc']}", "value": r['ma_bc']} for _, r in df_bc.iterrows()]
-            
-        except Exception as e:
-            print(f"Error dynamic filters: {e}")
-            bdx_opts = [{"label": "Tất cả BĐX", "value": "Tất cả"}]
-            bc_opts = [{"label": "Tất cả Bưu cục", "value": "Tất cả"}]
-        finally:
-            conn.close()
-            
-        return bdx_opts, bc_opts
-
-    # 4. Callback cập nhật phụ đề Tiêu đề thời kỳ ở Header
+    # 1. Callback cập nhật phụ đề Tiêu đề thời kỳ ở Header dựa trên các bộ lọc ở Topbar
     @app.callback(
         Output("header-sub-title", "children"),
         [Input("sidebar-year", "value"),
          Input("sidebar-period", "value"),
-         Input("sidebar-date-range", "start_date"),
-         Input("sidebar-date-range", "end_date"),
          Input("sidebar-week-select", "value"),
          Input("sidebar-month-select", "value")]
     )
-    def update_header_subtitle(year, period, start_date, end_date, week_idx, month_val):
+    def update_header_subtitle(year, period, week_val, month_val):
         if not year:
             return ""
-        if period == "Ngày":
-            df = f"từ {datetime.fromisoformat(start_date).strftime('%d/%m/%Y') if start_date else ''} đến {datetime.fromisoformat(end_date).strftime('%d/%m/%Y') if end_date else ''}"
-        elif period == "Tuần":
+        if period == "Tuần":
             weeks = get_week_list(int(year))
-            if week_idx is not None and 0 <= week_idx < len(weeks):
-                w_num, w_start, w_end = weeks[week_idx]
+            # Tìm tuần tương ứng (week_val là số tuần 1-indexed)
+            w_info = next((w for w in weeks if w[0] == week_val), None)
+            if w_info:
+                w_num, w_start, w_end = w_info
                 df = f"Tuần {w_num:02d} ({w_start.strftime('%d/%m/%Y')} - {w_end.strftime('%d/%m/%Y')})"
             else:
                 df = f"Tuần trong năm {year}"
@@ -153,18 +45,17 @@ def register_sidebar_callbacks(app):
             df = f"Tháng {month_val:02d}/{year}"
         return html.Span(["Báo cáo doanh thu thời kỳ ", html.B(df), f" ({period})"])
 
-    # 5. Callback ẩn/hiện bộ lọc và highlight menu item theo URL pathname
+    # 2. Callback ẩn/hiện Topbar và highlight menu item theo URL pathname
     @app.callback(
-        [Output("sidebar-filters-container", "style"),
+        [Output("topbar-container", "style"),
          Output("sidebar-accordion", "active_item"),
          Output("nav-global-overview", "className"),
          Output("nav-bccp-kpi", "className"),
          Output("nav-bccp-customer", "className"),
          Output("nav-bccp-new-customer", "className"),
          Output("nav-bccp-retention", "className"),
-         Output("nav-bccp-alerts", "className"),
+         Output("nav-bccp-service-detail", "className"),
          Output("nav-hcc-overview", "className"),
-         Output("nav-hcc-revenue", "className"),
          Output("nav-tcbc-overview", "className"),
          Output("nav-ppbl-overview", "className"),
          Output("bccp-extra-filters", "style")],
@@ -178,16 +69,15 @@ def register_sidebar_callbacks(app):
             "bccp-cust": "sidebar-menu-item",
             "bccp-new-cust": "sidebar-menu-item",
             "bccp-ret": "sidebar-menu-item",
-            "bccp-alert": "sidebar-menu-item",
+            "bccp-detail": "sidebar-menu-item",
             "hcc-over": "sidebar-menu-item",
-            "hcc-rev": "sidebar-menu-item",
             "tcbc-over": "sidebar-menu-item",
             "ppbl-over": "sidebar-menu-item"
         }
         
         # Ẩn hiện bộ lọc: Chỉ hiện cho Tổng quan chung và các trang BCCP
         show_filters = (pathname == "/" or pathname == "" or (pathname and pathname.startswith("/bccp")))
-        filter_style = {"display": "block"} if show_filters else {"display": "none"}
+        topbar_style = {"display": "block"} if show_filters else {"display": "none"}
         
         bccp_filter_style = {"display": "block"} if (pathname and pathname.startswith("/bccp")) else {"display": "none"}
         
@@ -216,30 +106,26 @@ def register_sidebar_callbacks(app):
             classes["bccp-new-cust"] = "sidebar-menu-item active active-bccp"
         elif pathname == "/bccp/retention":
             classes["bccp-ret"] = "sidebar-menu-item active active-bccp"
-        elif pathname == "/bccp/alerts":
-            classes["bccp-alert"] = "sidebar-menu-item active active-bccp"
+        elif pathname == "/bccp/service-detail":
+            classes["bccp-detail"] = "sidebar-menu-item active active-bccp"
         elif pathname == "/hcc":
             classes["hcc-over"] = "sidebar-menu-item active active-hcc"
-        elif pathname == "/hcc/revenue":
-            classes["hcc-rev"] = "sidebar-menu-item active active-hcc"
         elif pathname == "/tcbc":
             classes["tcbc-over"] = "sidebar-menu-item active active-tcbc"
         elif pathname == "/ppbl":
             classes["ppbl-over"] = "sidebar-menu-item active active-ppbl"
             
         return (
-            filter_style,
+            topbar_style,
             active_accordion,
             classes["global"],
             classes["bccp-kpi"],
             classes["bccp-cust"],
             classes["bccp-new-cust"],
             classes["bccp-ret"],
-            classes["bccp-alert"],
+            classes["bccp-detail"],
             classes["hcc-over"],
-            classes["hcc-rev"],
             classes["tcbc-over"],
             classes["ppbl-over"],
             bccp_filter_style
         )
-
