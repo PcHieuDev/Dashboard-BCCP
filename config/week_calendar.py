@@ -48,6 +48,39 @@ def get_week_list(year: int) -> list[tuple[int, date, date]]:
         
     return weeks
 
+def allocate_weekly_plan(year: int) -> list[tuple[int, date, date, list[tuple[int, int, int, int]]]]:
+    """
+    Phân bổ tuần trong năm cho các tháng tương ứng dựa trên số ngày của tuần nằm trong mỗi tháng.
+    Trả về danh sách tuple:
+    [
+      (tuan_so, start_date, end_date, [
+        (thang, nam_cua_thang, so_ngay_trong_tuan_thuoc_thang, tong_so_ngay_trong_thang)
+      ])
+    ]
+    """
+    weeks = get_week_list(year)
+    allocation_list = []
+    
+    for w_num, w_start, w_end in weeks:
+        # Tuần có thể nằm trọn trong 1 tháng hoặc vắt qua 2 tháng
+        months_distribution = []
+        
+        current_date = w_start
+        # Gom các ngày trong tuần này theo (thang, nam)
+        days_per_month = {}
+        while current_date <= w_end:
+            key = (current_date.month, current_date.year)
+            days_per_month[key] = days_per_month.get(key, 0) + 1
+            current_date += timedelta(days=1)
+            
+        for (m, y), days_count in days_per_month.items():
+            _, total_days_in_month = calendar.monthrange(y, m)
+            months_distribution.append((m, y, days_count, total_days_in_month))
+            
+        allocation_list.append((w_num, w_start, w_end, months_distribution))
+        
+    return allocation_list
+
 def get_month_range(year: int, month: int) -> tuple[date, date]:
     """
     Trả về ngày đầu tiên và ngày cuối cùng của tháng.

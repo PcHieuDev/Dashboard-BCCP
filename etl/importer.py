@@ -237,6 +237,22 @@ def import_excel_file(db_path, excel_path, thang=None):
     conn.commit()
     conn.close()
     
+    # Auto-refresh summary tables cho tháng vừa import (Yêu cầu từ TIP-db-004)
+    try:
+        thang_int = int(thang[1:]) if thang.startswith('T') else int(thang)
+        from etl.aggregator import rebuild_monthly, rebuild_monthly_customer
+        # Tạo kết nối mới để rebuild
+        rebuild_conn = sqlite3.connect(db_path)
+        try:
+            rebuild_monthly(rebuild_conn, nam, thang_int)
+            rebuild_monthly_customer(rebuild_conn, nam, thang_int)
+            print(f"[Summary] Đã cập nhật agg_monthly cho T{thang_int:02d}/{nam}")
+        finally:
+            rebuild_conn.close()
+    except Exception as e:
+        print(f"[Summary] Lỗi cập nhật summary: {e}")
+        logger.error(f"[Summary] Lỗi cập nhật summary: {e}")
+        
     return {
         'batch_id': batch_id,
         'file': filename,
@@ -461,6 +477,22 @@ def import_raw_excel_file(db_path, excel_path, thang=None):
     conn.commit()
     conn.close()
     
+    # Auto-refresh summary tables cho tháng vừa import (Yêu cầu từ TIP-db-004)
+    try:
+        thang_int = int(thang[1:]) if thang.startswith('T') else int(thang)
+        from etl.aggregator import rebuild_monthly, rebuild_monthly_customer
+        # Tạo kết nối mới để rebuild
+        rebuild_conn = sqlite3.connect(db_path)
+        try:
+            rebuild_monthly(rebuild_conn, nam_du_lieu, thang_int)
+            rebuild_monthly_customer(rebuild_conn, nam_du_lieu, thang_int)
+            print(f"[Summary] Đã tự động cập nhật agg_monthly cho T{thang_int:02d}/{nam_du_lieu} từ RAW")
+        finally:
+            rebuild_conn.close()
+    except Exception as e:
+        print(f"[Summary] Lỗi cập nhật summary sau khi import RAW: {e}")
+        logger.error(f"[Summary] Lỗi cập nhật summary sau khi import RAW: {e}")
+        
     return {
         'batch_id': batch_id,
         'file': filename,

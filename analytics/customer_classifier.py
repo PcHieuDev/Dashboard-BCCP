@@ -38,12 +38,13 @@ def classify_customers(conn: sqlite3.Connection, target_date: date) -> dict[str,
     start_of_month = get_start_of_month(target_date)
     end_of_month = get_end_of_month(target_date)
     
-    # 1. Lấy tất cả CMS có giao dịch trong tháng này
+    # 1. Lấy tất cả CMS có giao dịch và doanh thu dương trong tháng này
     # Định dạng ngày trong DB là YYYY-MM-DD (ISO)
     cursor = conn.cursor()
     cursor.execute("""
         SELECT DISTINCT cms FROM transactions 
         WHERE ngay_chap_nhan BETWEEN ? AND ?
+          AND cuoc_tt_tong > 0
     """, (start_of_month.isoformat(), end_of_month.isoformat()))
     
     all_cms_in_month = [row[0] for row in cursor.fetchall() if row[0] is not None]
@@ -65,18 +66,19 @@ def classify_customers(conn: sqlite3.Connection, target_date: date) -> dict[str,
     if not non_vanglai_cms:
         return classification
         
-    # 2. Tìm ngày giao dịch đầu tiên của các CMS phi vãng lai trong DB
+    # 2. Tìm ngày giao dịch đầu tiên có doanh thu dương của các CMS phi vãng lai trong DB
     # Để tối ưu, ta tạo câu lệnh IN
     placeholders = ",".join(["?"] * len(non_vanglai_cms))
     query = f"""
         SELECT cms, MIN(ngay_chap_nhan) FROM transactions 
         WHERE cms IN ({placeholders})
+          AND cuoc_tt_tong > 0
         GROUP BY cms
     """
     cursor.execute(query, non_vanglai_cms)
     first_dates = {row[0]: date.fromisoformat(row[1]) for row in cursor.fetchall() if row[1]}
     
-    # 3. Tìm các CMS có phát sinh giao dịch trong 3 tháng liền trước tháng này
+    # 3. Tìm các CMS có phát sinh giao dịch doanh thu dương trong 3 tháng liền trước tháng này
     # Khoảng ngày: start_of_3_months_ago -> start_of_month - 1 ngày
     start_of_3_months_ago = get_start_of_3_months_ago(start_of_month)
     end_of_prev_month = start_of_month - timedelta(days=1)
@@ -85,6 +87,7 @@ def classify_customers(conn: sqlite3.Connection, target_date: date) -> dict[str,
         SELECT DISTINCT cms FROM transactions 
         WHERE ngay_chap_nhan BETWEEN ? AND ?
           AND cms IN ({placeholders})
+          AND cuoc_tt_tong > 0
     """
     cursor.execute(query_prev, [start_of_3_months_ago.isoformat(), end_of_prev_month.isoformat()] + non_vanglai_cms)
     active_in_prev_3_months = {row[0] for row in cursor.fetchall()}
