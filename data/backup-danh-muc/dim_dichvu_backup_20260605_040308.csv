@@ -1,0 +1,99 @@
+﻿id,nhom_chinh,ma_dich_vu,ten_dich_vu,nhom_dich_vu
+83,BCCP,PHBC_DEFAULT,Phát hành báo chí,Phát hành báo chí
+84,HCC,Chuyển phát HCC,Chuyển phát HCC,Chuyển phát HCC
+"85,HCC,""Chi trả lương hưu, bảo hiểm xã hội"",""Chi trả lương hưu, bảo hiểm xã hội"",""Chi trả lương hưu, bảo hiểm xã hội"""
+86,HCC,Chi trả người có công,Chi trả người có công,Chi trả người có công
+87,HCC,Chi trả bảo trợ xã hội,Chi trả bảo trợ xã hội,Chi trả bảo trợ xã hội
+88,HCC,Quản lý người hưởng,Quản lý người hưởng,Quản lý người hưởng
+89,HCC,CSHT,CSHT,CSHT
+90,TCBC,Tiết kiệm,Tiết kiệm,Tiết kiệm
+91,TCBC,Tín dụng,Tín dụng,Tín dụng
+92,TCBC,PTI,PTI,PTI
+93,TCBC,Thu tiền điện,Thu tiền điện,Thu tiền điện
+94,TCBC,BHXH-BHYT,BHXH-BHYT,BHXH-BHYT
+95,TCBC,Dịch vụ chuyển tiền,Dịch vụ chuyển tiền,Dịch vụ chuyển tiền
+96,PPBL,Hàng bán sỉ,Hàng bán sỉ,Hàng bán sỉ
+97,PPBL,Hàng tiêu dùng bán lẻ,Hàng tiêu dùng bán lẻ,Hàng tiêu dùng bán lẻ
+772,BCCP,CTN001,Chuyển phát tiêu chuẩn,Truyền thống
+773,BCCP,CTN012,Chuyển phát Quà tặng Tiêu chuẩn,Truyền thống
+774,BCCP,CTN015,Chuyển phát Nông sản,Truyền thống
+775,BCCP,CTN016,Chuyển phát Tiêu chuẩn đồng giá,Truyền thống
+776,BCCP,ETN001,EMS Premium Tài liệu,Truyền thống
+777,BCCP,ETN003,EMS hỏa tốc,Truyền thống
+778,BCCP,ETN011,EMS Premium Hàng hóa,Truyền thống
+779,BCCP,ETN013,EMS hỏa tốc,Truyền thống
+780,BCCP,ETN029,EMS Thư đồng giá,Truyền thống
+781,BCCP,ETN030,EMS HSXT,Truyền thống
+782,BCCP,ETN034,EMS tài chính ngân hàng gói tiêu chuẩn,Truyền thống
+783,BCCP,ETN036,EMS tài chính ngân hàng gói vàng,Truyền thống
+784,BCCP,ETN039,EMS chuyên tuyến,Truyền thống
+785,BCCP,ETN044,EMS Last Mile Premium,Truyền thống
+786,BCCP,ETN045,EMS Lastmile Standard A,Truyền thống
+787,BCCP,ETN047,Chuyển phát nhanh EMS Quà Tặng,Truyền thống
+788,BCCP,ETN049,EMS Tài liệu – Gói ưu đãi,Truyền thống
+789,BCCP,ETN050,EMS Hàng hoá nhanh – Gói ưu đãi,Truyền thống
+790,BCCP,KT1001,KT1,Truyền thống
+791,BCCP,KT1002,KT1 Hỏa tốc,Truyền thống
+792,BCCP,KT1003,KT1 Hẹn giờ,Truyền thống
+793,BCCP,KT1004,KT1 Hỏa tốc Hẹn giờ,Truyền thống
+794,BCCP,KT1005,KTI A,Truyền thống
+795,BCCP,KT1006,KT1 B,Truyền thống
+796,BCCP,KT1007,KTI C,Truyền thống
+797,BCCP,KT1008,KT1 Hỏa tốc - A,Truyền thống
+798,BCCP,KT1009,KT1 Hỏa tốc - B,Truyền thống
+799,BCCP,KT1010,KT1 Hỏa tốc - C,Truyền thống
+800,BCCP,KT1011,KT1 Hỏa tốc Hẹn giờ - A,Truyền thống
+801,BCCP,KT1012,KT1 Hỏa tốc Hẹn giờ - B,Truyền thống
+802,BCCP,KT1013,KT1 Hỏa tốc Hẹn giờ - C,Truyền thống
+803,BCCP,KT1014,KT1 Hẹn giờ - A,Truyền thống
+804,BCCP,KT1015,KT1 Hẹn giờ - B,Truyền thống
+805,BCCP,KT1016,KT1 Hẹn giờ - C,Truyền thống
+806,BCCP,RTN001,Bưu phẩm bảo đảm,Truyền thống
+807,BCCP,RTN004,Bưu phẩm bảo đảm đồng giá,Truyền thống
+808,BCCP,TTN001,Bưu phẩm thường - Thư,Truyền thống
+809,BCCP,TTN003,Bưu phẩm thường - Ấn phẩm,Truyền thống
+810,BCCP,TTN006,Bưu phẩm KĐC,Truyền thống
+811,BCCP,CTN007,Chuyển phát Tiêu chuẩn Thương mại điện tử,TMĐT
+812,BCCP,CTN008,Tiêu chuẩn sàn Thương mại điện tử,TMĐT
+813,BCCP,CTN009,Chuyển phát Tiêu chuẩn TMĐT đồng giá - gói Cơ bản,TMĐT
+814,BCCP,CTN019,Chuyển phát Tiêu chuẩn TMĐT đồng giá - Gói Bạc,TMĐT
+815,BCCP,CTN020,Chuyển phát Tiêu chuẩn TMĐT đồng giá - Gói Vàng,TMĐT
+816,BCCP,CTN022,Chuyển phát Tiêu chuẩn TMĐT đồng giá - Gói Kim Cương,TMĐT
+817,BCCP,ETN031,Chuyển phát nhanh EMS Thương mại điện tử,TMĐT
+818,BCCP,ETN037,Chuyển phát nhanh EMS Thương mại điện tử đồng giá,TMĐT
+819,BCCP,ETN048,EMS Thương mại điện tử Eco,TMĐT
+820,BCCP,ETN051,EMS Thương mại điện tử Eco Plus,TMĐT
+821,BCCP,CQT002,Bưu kiện thủy bộ,Quốc tế
+822,BCCP,CQT003,Bưu kiện máy bay,Quốc tế
+823,BCCP,CQT004,Bưu kiện chuyên tuyến,Quốc tế
+824,BCCP,CQT007,Bưu kiện bay - Gói Đồng,Quốc tế
+825,BCCP,CQT008,Bưu kiện máy bay - Gói Bạc,Quốc tế
+826,BCCP,CQT009,Bưu kiện máy bay - Gói Vàng,Quốc tế
+827,BCCP,CQT010,Bưu kiện máy bay - Gói Kim Cương,Quốc tế
+828,BCCP,DHL001,DHL Tài liệu zone10,Quốc tế
+829,BCCP,DHL002,DHL Hàng hoá zone10,Quốc tế
+830,BCCP,EQT001,EMS tài liệu quốc tế,Quốc tế
+831,BCCP,EQT002,EMS hàng hóa quốc tế,Quốc tế
+832,BCCP,EQT003,CPN Chuyên tuyến đi Mỹ,Quốc tế
+833,BCCP,LQT004,Gói nhỏ Epacket,Quốc tế
+834,BCCP,LQT005,Gói nhỏ Asean Pack,Quốc tế
+835,BCCP,PRM004,Gói nhỏ Prime Tracked,Quốc tế
+836,BCCP,RQT001,Tài liệu bảo đảm đi quốc tế,Quốc tế
+837,BCCP,RQT003,Ân phẩm bảo đảm,Quốc tế
+838,BCCP,RQT006,Gói nhỏ đảm bảo,Quốc tế
+839,BCCP,RQT008,Gói nhỏ đảm bảo - Gói bạc,Quốc tế
+840,BCCP,RQT009,Gói nhỏ bảo đảm - Gói vàng,Quốc tế
+841,BCCP,RQT010,Gói nhỏ bảo đảm - Gói kim cương,Quốc tế
+842,BCCP,RQT011,Gói nhỏ đảm bảo - Gói đồng,Quốc tế
+843,BCCP,TQT001,Tài liệu cơ bản đi quốc tế,Quốc tế
+844,BCCP,TQT007,Thư công ích đi Quốc tế,Quốc tế
+845,BCCP,UPS002,UPS Tài liệu,Quốc tế
+846,BCCP,CTN024,Chuển phát Tiêu chuẩn - Giá trị cao,Truyền thống
+847,BCCP,CTN028,Chuyển phát Tiêu chuẩn TMĐT đồng giá - Gói Bạch Kim,TMĐT
+848,BCCP,CTN031,Chuyển phát Tiêu chuẩn TMĐT 48h - Gói Pro,TMĐT
+849,HCC,HCC001,Hành chính công EMS,Hành chính công
+850,HCC,HCC002,Hành chính công EMS có VAT,Hành chính công
+851,HCC,HCC003,Hành chính công BPBĐ,Hành chính công
+852,HCC,HCC004,Hành chính công BPBĐ có VAT,Hành chính công
+853,BCCP,ETN043,EMS Siêu tốc Hà Nội - HCM,Truyền thống
+854,BCCP,CTN052,Chuyển phát nhanh hàng nông sản,Truyền thống

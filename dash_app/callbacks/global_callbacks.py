@@ -343,26 +343,39 @@ def register_global_callbacks(app):
             top10_yoy_layout = create_top10_table(df_top_yoy)
             top10_plan_layout = create_top10_table(df_top_plan)
             
-            # 3. 12 Periods Graph
+            # 3. 12 Periods Graph — Line chart (5 lines: Tổng + 4 nhóm dịch vụ)
             df_12p = get_12_periods_revenue(conn, cycle, period_val, year)
             
             fig = go.Figure()
             if not df_12p.empty:
-                for service in ["BCCP", "HCC", "TCBC", "PPBL"]:
-                    fig.add_trace(go.Bar(
+                # Tính tổng doanh thu
+                df_12p["Tổng"] = df_12p[["BCCP", "HCC", "TCBC", "PPBL"]].sum(axis=1)
+                
+                LINE_COLORS = {
+                    "Tổng": "#1E293B",
+                    "BCCP": SERVICE_COLORS.get("BCCP", "#3B82F6"),
+                    "HCC": SERVICE_COLORS.get("HCC", "#10B981"),
+                    "TCBC": SERVICE_COLORS.get("TCBC", "#F59E0B"),
+                    "PPBL": SERVICE_COLORS.get("PPBL", "#8B5CF6"),
+                }
+                LINE_WIDTHS = {"Tổng": 3, "BCCP": 2, "HCC": 2, "TCBC": 2, "PPBL": 2}
+                
+                for service in ["Tổng", "BCCP", "HCC", "TCBC", "PPBL"]:
+                    fig.add_trace(go.Scatter(
                         name=service,
                         x=df_12p["label"],
                         y=df_12p[service],
-                        marker_color=SERVICE_COLORS.get(service, "#64748B"),
+                        mode="lines+markers",
+                        line=dict(color=LINE_COLORS[service], width=LINE_WIDTHS[service], dash="solid" if service == "Tổng" else "dot"),
+                        marker=dict(size=5 if service == "Tổng" else 4),
                         hovertemplate=f"{service}: %{{y:,.0f}} đ<extra></extra>"
                     ))
                     
             fig.update_layout(
-                barmode="stack",
                 margin=dict(t=20, b=20, l=60, r=10),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
-                legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5),
+                legend=dict(orientation="h", yanchor="bottom", y=-0.28, xanchor="center", x=0.5),
                 height=320,
                 xaxis=dict(showgrid=False),
                 yaxis=dict(showgrid=True, gridcolor="#F1F5F9")

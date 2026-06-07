@@ -15,6 +15,11 @@ Dashboard doanh thu bưu chính chuyển phát (BCCP) hỗ trợ bộ lọc đa 
 
 # toàn bộ các nhánh worktrees của dự án đều phải tạo trong thư mục E:\Projects\worktrees\Dashboard-BCCP
 
+> [!CAUTION]
+> **KHÔNG được tự ý xóa worktree (mục làm việc tạm thời) hoặc xóa nhánh local** khi chưa có yêu cầu rõ ràng từ Sếp.  
+> Các worktree và nhánh local cần được giữ lại để Sếp kiểm tra công việc dễ dàng hơn.  
+> Chỉ thực hiện xóa khi Sếp nói rõ "xóa worktree" hoặc "xóa nhánh" hoặc tương tự.
+
 ## Active Workspace & Links
 - **Mã nguồn chính**: [Dashboard-BCCP](file:///E:/Projects/Dashboard-BCCP)
 - **Cơ sở dữ liệu**: [dashboard.db](file:///E:/OneDrive/z.Database-TTKD-Data/dashboard.db)

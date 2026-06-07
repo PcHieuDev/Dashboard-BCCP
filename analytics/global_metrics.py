@@ -498,27 +498,43 @@ def get_top10_by_comparison(conn, period_type, period_value, year, compare_type,
     
     if compare_type == 'plan':
         # So sánh với Kế hoạch
+        # Plans chỉ chứa kế hoạch BCCP -> chỉ lấy actual BCCP từ agg_monthly
         if period_type == 'Tháng':
+            curr_query = """
+                SELECT buu_cuc, SUM(tong_doanh_thu) as dt_curr
+                FROM agg_monthly
+                WHERE nam = ? AND thang = ? AND nhom_dich_vu = 'BCCP'
+                GROUP BY buu_cuc
+            """
             plan_query = """
                 SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_val
                 FROM plans
-                WHERE nam = ? AND thang = ?
+                WHERE nam = ? AND thang = ? AND nhom_dich_vu = 'BCCP'
                 GROUP BY ma_buu_cuc
             """
             plan_params = (year, period_value)
         else: # Tuần
+            curr_query = """
+                SELECT buu_cuc, SUM(tong_doanh_thu) as dt_curr
+                FROM agg_weekly
+                WHERE nam = ? AND tuan_so = ? AND nhom_dich_vu = 'BCCP'
+                GROUP BY buu_cuc
+            """
             plan_query = """
                 SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_val
                 FROM plans_weekly
-                WHERE nam = ? AND tuan_so = ?
+                WHERE nam = ? AND tuan_so = ? AND nhom_dich_vu = 'BCCP'
                 GROUP BY ma_buu_cuc
             """
             plan_params = (year, period_value)
-            
+        
+        df_curr = pd.read_sql_query(curr_query, conn, params=curr_params)
         df_compare = pd.read_sql_query(plan_query, conn, params=plan_params)
         df_merge = pd.merge(df_curr, df_compare, on='buu_cuc', how='inner')
         df_merge = df_merge[(df_merge['dt_curr'] > 0) & (df_merge['plan_val'] > 0)]
         df_merge['ratio'] = (df_merge['dt_curr'] / df_merge['plan_val']) * 100.0
+        # Giới hạn tỷ lệ ở mức hợp lý (500%) để loại bỏ giá trị phi lý do dữ liệu lệch
+        df_merge = df_merge[df_merge['ratio'] <= 500.0]
     else:
         # So sánh với kỳ trước hoặc cùng kỳ năm trước
         if period_type == 'Tháng':
@@ -602,7 +618,7 @@ def get_12_periods_revenue(conn, period_type, current_period, current_year):
                 FROM agg_monthly a
                 LEFT JOIN dim_dichvu d ON a.nhom_dich_vu = d.nhom_dich_vu OR a.nhom_dich_vu = d.ten_dich_vu OR d.ten_dich_vu LIKE a.nhom_dich_vu || '%'
                 WHERE a.nam = ? AND a.thang = ?
-                GROUP BY nhom_chinh_group
+                GROUP BY COALESCE(d.nhom_chinh, 'Khác')
             """
             params = (yr, val)
         else: # Tuần
@@ -611,7 +627,7 @@ def get_12_periods_revenue(conn, period_type, current_period, current_year):
                 FROM agg_weekly a
                 LEFT JOIN dim_dichvu d ON a.nhom_dich_vu = d.nhom_dich_vu OR a.nhom_dich_vu = d.ten_dich_vu OR d.ten_dich_vu LIKE a.nhom_dich_vu || '%'
                 WHERE a.nam = ? AND a.tuan_so = ?
-                GROUP BY nhom_chinh_group
+                GROUP BY COALESCE(d.nhom_chinh, 'Khác')
             """
             params = (yr, val)
             
@@ -656,7 +672,7 @@ def get_period_detail_by_xa(conn, period_type, period_value, year):
             FROM agg_monthly a
             LEFT JOIN dim_dichvu d ON a.nhom_dich_vu = d.nhom_dich_vu OR a.nhom_dich_vu = d.ten_dich_vu OR d.ten_dich_vu LIKE a.nhom_dich_vu || '%'
             WHERE a.nam = ? AND a.thang = ?
-            GROUP BY a.buu_cuc, nhom_dich_vu
+            GROUP BY a.buu_cuc, COALESCE(d.nhom_chinh, 'Khác')
         """
         curr_params = (year, period_value)
     else: # Tuần
@@ -665,7 +681,7 @@ def get_period_detail_by_xa(conn, period_type, period_value, year):
             FROM agg_weekly a
             LEFT JOIN dim_dichvu d ON a.nhom_dich_vu = d.nhom_dich_vu OR a.nhom_dich_vu = d.ten_dich_vu OR d.ten_dich_vu LIKE a.nhom_dich_vu || '%'
             WHERE a.nam = ? AND a.tuan_so = ?
-            GROUP BY a.buu_cuc, nhom_dich_vu
+            GROUP BY a.buu_cuc, COALESCE(d.nhom_chinh, 'Khác')
         """
         curr_params = (year, period_value)
         
@@ -748,7 +764,7 @@ def get_ytd_detail_by_xa(conn, period_type, period_value, year):
             FROM agg_monthly a
             LEFT JOIN dim_dichvu d ON a.nhom_dich_vu = d.nhom_dich_vu OR a.nhom_dich_vu = d.ten_dich_vu OR d.ten_dich_vu LIKE a.nhom_dich_vu || '%'
             WHERE a.nam = ? AND a.thang BETWEEN 1 AND ?
-            GROUP BY a.buu_cuc, nhom_dich_vu
+            GROUP BY a.buu_cuc, COALESCE(d.nhom_chinh, 'Khác')
         """
         curr_params = (year, period_value)
     else: # Tuần
@@ -757,7 +773,7 @@ def get_ytd_detail_by_xa(conn, period_type, period_value, year):
             FROM agg_weekly a
             LEFT JOIN dim_dichvu d ON a.nhom_dich_vu = d.nhom_dich_vu OR a.nhom_dich_vu = d.ten_dich_vu OR d.ten_dich_vu LIKE a.nhom_dich_vu || '%'
             WHERE a.nam = ? AND a.tuan_so BETWEEN 1 AND ?
-            GROUP BY a.buu_cuc, nhom_dich_vu
+            GROUP BY a.buu_cuc, COALESCE(d.nhom_chinh, 'Khác')
         """
         curr_params = (year, period_value)
         

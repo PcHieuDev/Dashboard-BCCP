@@ -557,7 +557,9 @@ def get_khhh_changes_v2(db_path: str, nam: int, thang: int, cum: str = None, bdx
                        ROW_NUMBER() OVER (PARTITION BY t.cms ORDER BY SUM(t.cuoc_tt_tong) DESC) as rn
                 FROM transactions t
                 LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
-                WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ? AND t.cuoc_tt_tong > 0 {geo_where_str}
+                WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ? AND t.cuoc_tt_tong > 0
+                  AND t.cms IS NOT NULL AND t.cms != ''
+                  AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none' {geo_where_str}
                 GROUP BY t.cms, t.buu_cuc
             )
             SELECT cms, buu_cuc, dt FROM cms_bc WHERE rn = 1
@@ -658,7 +660,9 @@ def get_weekly_changes(db_path: str, year: int, week: int, cum: str = None, bdx:
                    ROW_NUMBER() OVER (PARTITION BY t.cms ORDER BY SUM(t.cuoc_tt_tong) DESC) as rn
             FROM transactions t
             LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
-            WHERE t.ngay_chap_nhan BETWEEN ? AND ? AND t.cuoc_tt_tong > 0 {geo_where_str}
+            WHERE t.ngay_chap_nhan BETWEEN ? AND ? AND t.cuoc_tt_tong > 0
+              AND t.cms IS NOT NULL AND t.cms != ''
+              AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none' {geo_where_str}
             GROUP BY t.cms, t.buu_cuc
         )
         SELECT cms, buu_cuc, dt FROM cms_bc WHERE rn = 1
@@ -673,7 +677,9 @@ def get_weekly_changes(db_path: str, year: int, week: int, cum: str = None, bdx:
                    ROW_NUMBER() OVER (PARTITION BY t.cms ORDER BY SUM(t.cuoc_tt_tong) DESC) as rn
             FROM transactions t
             LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
-            WHERE t.ngay_chap_nhan BETWEEN ? AND ? AND t.cuoc_tt_tong > 0 {geo_where_str}
+            WHERE t.ngay_chap_nhan BETWEEN ? AND ? AND t.cuoc_tt_tong > 0
+              AND t.cms IS NOT NULL AND t.cms != ''
+              AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none' {geo_where_str}
             GROUP BY t.cms, t.buu_cuc
         )
         SELECT cms, buu_cuc, dt FROM cms_bc WHERE rn = 1
