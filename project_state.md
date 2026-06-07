@@ -11,14 +11,19 @@ Dashboard doanh thu bưu chính chuyển phát (BCCP) hỗ trợ bộ lọc đa 
 - **Encoding**: UTF-8 toàn bộ
 
 ## Current State
+- **Hoàn thành Redesign các trang số liệu hiển thị (07/06/2026)**:
+  - Tách biệt và làm mới hoàn toàn các trang Tổng quan chung, KPI, Khách hàng mới/Tái bán, Duy trì khách hàng và Chi tiết khách hàng.
+  - Chuyển đổi các trang này sang đọc trực tiếp từ các bảng summary trung gian (`agg_monthly`, `agg_monthly_customer`, `plans_weekly`, `new_customers`), cải thiện hiệu suất tải trang gấp nhiều lần (gần như tức thì thay vì quét 1 triệu dòng).
+  - Tích hợp mượt mà với Topbar ngang mới (thời gian, địa lý) và đồng bộ thống nhất ID chu kỳ là `sidebar-period`.
+  - Hỗ trợ xuất Excel chuyên nghiệp cho tất cả các trang số liệu chi tiết.
 - **Tái cấu trúc bộ lọc & Phân quyền Cụm (07/06/2026)**:
-  - Loại bỏ hoàn toàn bộ lọc ngày (DatePickerRange), tích hợp bộ lọc Tuần/Tháng ngang (Topbar) cho trang Tổng quan và BCCP.
+  - Loại bộ lọc ngày (DatePickerRange), tích hợp bộ lọc Tuần/Tháng ngang (Topbar) cho trang Tổng quan và BCCP.
   - Phân quyền Cụm: Khóa cứng dropdown Cụm đối với tài khoản được gán Cụm cụ thể, nhưng cho phép chọn sâu hơn ở BĐX và mã Bưu cục.
   - Sidebar được thu gọn từ 320px về 220px, chỉ chứa thông tin tài khoản và menu Accordion điều hướng.
 - **Tối ưu hiệu năng bằng Summary Tables (07/06/2026)**:
-  - Xây dựng các bảng tổng hợp trung gian: `agg_monthly`, `agg_monthly_customer` (theo bưu cục/khách hàng) và `plans_weekly` (phân bổ kế hoạch tuần theo số ngày trong tháng).
-  - Tự động cập nhật bảng summary tương ứng ngay sau khi import file Excel mới (cả RAW CAS và Template).
-  - Cập nhật logic Khách hàng mới (`new_customers`): Chỉ tính các giao dịch có doanh thu dương `cuoc_tt_tong > 0` và thêm cột `ngay_phat_sinh` (ngày giao dịch đầu tiên trong tháng).
+  - Xây dựng các bảng tổng hợp trung gian: `agg_monthly`, `agg_monthly_customer` và `plans_weekly` (phân bổ kế hoạch tuần theo số ngày trong tháng).
+  - Tự động cập nhật bảng summary tương ứng ngay sau khi import file Excel mới.
+  - Cập nhật logic Khách hàng mới (`new_customers`): Chỉ tính các giao dịch có doanh thu dương `cuoc_tt_tong > 0` và thêm cột `ngay_phat_sinh` (ngày giao dịch đầu tiên).
   - Chạy thành công tác vụ rebuild dữ liệu lịch sử từ T10/2025 đến T06/2026.
 - **Đường dẫn Workspace hoạt động**:
   - Mã nguồn: `E:\Projects\Dashboard-BCCP`
@@ -67,7 +72,7 @@ E:\Projects\Dashboard-BCCP\
 - **Hiện hữu**: Có phát sinh giao dịch có doanh thu dương trong 3 tháng liền trước.
 
 ## Pending Tasks
-1. **[IN PROGRESS] Phase 3: Redesign các trang hiển thị (nhánh 3)**: Chuyển đổi các trang `kpi_page.py`, `new_customer.py`, `retention.py`, `customer_detail.py` sang đọc dữ liệu từ các bảng summary mới và điều chỉnh layout theo Topbar/Sidebar mới.
+1. **[COMPLETED] Phase 3: Redesign các trang hiển thị**: Hoàn thành tái cấu trúc giao diện và tối ưu hóa logic của toàn bộ các trang số liệu hiển thị, chuyển sang đọc trực tiếp từ các bảng summary mới.
 2. **[PENDING] Phase 5C**: Thiết lập deploy server nội bộ và chuyển sang PostgreSQL.
 
 ## Issues & Notes
