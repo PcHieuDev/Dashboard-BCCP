@@ -463,7 +463,7 @@ def query_revenue_cached(
 
 def create_empty_result_df_for_customer() -> pd.DataFrame:
     """Trả về DataFrame rỗng có cấu trúc cột cơ bản để tránh crash DataTable."""
-    return pd.DataFrame(columns=['cms', 'loai_kh', 'hop_dong', 'buu_cuc_list', 'Tổng SL', 'Tổng KL', 'Tổng Cước TT', 'Tổng Cước VAT'])
+    return pd.DataFrame(columns=['ten_cum', 'ten_bdx', 'buu_cuc', 'cms', 'san_luong', 'cuoc_tt_tong'])
 
 
 def query_customer_detail_pivot(
@@ -605,68 +605,19 @@ def query_customer_detail_pivot(
     df_raw['hop_dong'] = df_raw['ma_hop_dong'].apply(lambda x: 'Có HĐ' if x and str(x).strip() else 'Không HĐ')
     df_raw['khoi_luong_thuc'] = df_raw['khoi_luong_thuc'].fillna(0) / 1000.0
     
-    # 4. Thực hiện xoay chiều (Pivot)
-    df_pivot = pd.pivot_table(
-        df_raw,
-        values=['san_luong', 'khoi_luong_thuc', 'cuoc_tt_tong', 'cuoc_tt_gom_vat'],
-        index=['cms'],
-        columns=['nhom_dich_vu'],
-        aggfunc='sum',
-        fill_value=0
+    # 4. Gộp nhóm lấy số liệu chi tiết khách hàng phẳng
+    df_raw['ten_cum'] = df_raw['ten_cum'].fillna("Chưa phân loại")
+    df_raw['ten_bdx'] = df_raw['ten_bdx'].fillna("Chưa phân loại")
+    df_raw['buu_cuc'] = df_raw['buu_cuc'].fillna("Chưa phân loại")
+    
+    df_grouped = df_raw.groupby(['ten_cum', 'ten_bdx', 'buu_cuc', 'cms'], as_index=False).agg(
+        san_luong=('san_luong', 'sum'),
+        cuoc_tt_tong=('cuoc_tt_tong', 'sum')
     )
     
-    # Trải phẳng MultiIndex cột
-    metric_mapping = {
-        'san_luong': 'SL',
-        'khoi_luong_thuc': 'KL',
-        'cuoc_tt_tong': 'Cước TT',
-        'cuoc_tt_gom_vat': 'Cước VAT'
-    }
+    # Sắp xếp
+    df_grouped = df_grouped.sort_values(by=['ten_cum', 'ten_bdx', 'buu_cuc', 'cms'])
     
-    new_cols = []
-    for metric, nhom_dv_val in df_pivot.columns:
-        metric_short = metric_mapping.get(metric, metric)
-        new_cols.append(f"[{nhom_dv_val}] {metric_short}")
-        
-    df_pivot.columns = new_cols
-    df_pivot = df_pivot.reset_index()
-    
-    # 5. Tính tổng cộng (Sum ngang các nhóm dịch vụ)
-    df_total = df_raw.groupby('cms').agg(
-        tong_sl=('san_luong', 'sum'),
-        tong_kl=('khoi_luong_thuc', 'sum'),
-        tong_cuoc_tt=('cuoc_tt_tong', 'sum'),
-        tong_cuoc_vat=('cuoc_tt_gom_vat', 'sum')
-    ).reset_index()
-    df_total = df_total.rename(columns={
-        'tong_sl': 'Tổng SL',
-        'tong_kl': 'Tổng KL',
-        'tong_cuoc_tt': 'Tổng Cước TT',
-        'tong_cuoc_vat': 'Tổng Cước VAT'
-    })
-    
-    df_pivot = pd.merge(df_pivot, df_total, on='cms', how='left')
-    
-    # 6. Gom thông tin phụ (lọc lấy loại khách hàng mới nhất trong khoảng ngày)
-    df_raw_sorted = df_raw.sort_values('ngay_chap_nhan')
-    df_info = df_raw_sorted.groupby('cms').agg(
-        loai_kh=('loai_kh', 'last'),
-        hop_dong=('hop_dong', lambda x: 'Có HĐ' if 'Có HĐ' in x.values else 'Không HĐ'),
-        buu_cuc_list=('buu_cuc', lambda x: ", ".join(sorted(list(set(str(val).strip() for val in x if val and str(val).strip())))))
-    ).reset_index()
-    
-    df_final = pd.merge(df_info, df_pivot, on='cms', how='left')
-    
-    # 7. Sắp xếp lại cột theo thứ tự thống nhất
-    pivot_cols = [c for c in df_pivot.columns if c != 'cms' and not c.startswith('Tổng ')]
-    pivot_cols.sort()
-    
-    total_cols = ['Tổng SL', 'Tổng KL', 'Tổng Cước TT', 'Tổng Cước VAT']
-    final_cols = ['cms', 'loai_kh', 'hop_dong', 'buu_cuc_list'] + pivot_cols + total_cols
-    
-    final_cols = [c for c in final_cols if c in df_final.columns]
-    df_final = df_final[final_cols]
-    
-    return df_final
+    return df_grouped
 
 

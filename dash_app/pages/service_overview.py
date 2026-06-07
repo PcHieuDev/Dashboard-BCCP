@@ -19,7 +19,11 @@ def get_sub_services(service_key):
             WHERE nhom_chinh = ? AND nhom_dich_vu IS NOT NULL
             ORDER BY nhom_dich_vu
         """, (service_key,))
-        return [r[0] for r in cursor.fetchall()]
+        lst = [r[0] for r in cursor.fetchall()]
+        if service_key == "BCCP":
+            order = {"Truyền thống": 0, "TMĐT": 1, "Quốc tế": 2, "Phát hành báo chí": 3}
+            lst.sort(key=lambda x: order.get(x, 99))
+        return lst
     except Exception as e:
         print(f"Lỗi truy vấn nhóm con cho {service_key}: {e}")
         return []

@@ -29,9 +29,12 @@ from pages.kpi_page import create_kpi_page_layout
 from pages.customer_detail import create_customer_detail_layout
 from pages.import_data import create_import_page_layout
 from pages.hcc_revenue import create_hcc_revenue_layout
+from pages.tcbc_revenue import create_tcbc_revenue_layout
+from pages.ppbl_revenue import create_ppbl_revenue_layout
 from pages.new_customer import create_new_customer_layout
 from pages.retention import create_retention_layout
 from pages.service_detail import create_service_detail_layout
+
 
 # Import các Callbacks đăng ký
 from callbacks.sidebar_callbacks import register_sidebar_callbacks
@@ -289,25 +292,14 @@ def render_page(pathname):
         return create_service_detail_layout(), "📊 Bưu chính chuyển phát - Chi tiết SPDV"
             
     elif pathname == "/hcc":
-        try:
-            from pages.service_overview import create_service_page_layout
-            return create_service_page_layout("HCC"), "🏢 Hành chính công"
-        except ImportError:
-            return html.Div("Trang Hành chính công đang được xây dựng...", className="empty-state-container"), "🏢 Hành chính công"
+        return create_hcc_revenue_layout(), "🏢 Hành chính công"
             
     elif pathname == "/tcbc":
-        try:
-            from pages.service_overview import create_service_page_layout
-            return create_service_page_layout("TCBC"), "💰 Tài chính Bưu chính"
-        except ImportError:
-            return html.Div("Trang Tài chính Bưu chính đang được xây dựng...", className="empty-state-container"), "💰 Tài chính Bưu chính"
+        return create_tcbc_revenue_layout(), "💰 Tài chính Bưu chính"
             
     elif pathname == "/ppbl":
-        try:
-            from pages.service_overview import create_service_page_layout
-            return create_service_page_layout("PPBL"), "🛍️ Phân phối bán lẻ"
-        except ImportError:
-            return html.Div("Trang Phân phối bán lẻ đang được xây dựng...", className="empty-state-container"), "🛍️ Phân phối bán lẻ"
+        return create_ppbl_revenue_layout(), "🛍️ Phân phối bán lẻ"
+
             
     elif pathname == "/import":
         if not getattr(current_user, 'can_upload', False):
@@ -382,3 +374,5 @@ register_retention_callbacks(app)
 if __name__ == '__main__':
     # Chạy trên cổng mặc định 8050
     app.run(debug=False, port=8050, host='127.0.0.1')
+
+
