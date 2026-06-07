@@ -77,62 +77,10 @@ def create_customer_detail_layout():
                             style={"paddingTop": "8px"}
                         )
                     ], md=3, xs=12)
-                ], style={"marginBottom": "20px"}),
-                html.Hr(),
-                dbc.Row([
-                    # Dropdown chọn chiều phân tích chính (Dòng)
-                    dbc.Col([
-                        html.Label("Chiều phân tích chính (Dòng)", className="filter-label"),
-                        dcc.Dropdown(
-                            id="revenue-g1",
-                            options=[{"label": k, "value": v} for k, v in GROUP_BY_LABEL_MAP.items()],
-                            value="nhom_dv",
-                            clearable=False
-                        )
-                    ], md=4, xs=12),
-                    
-                    # Dropdown chọn chiều phân tích phụ (Cấp 2)
-                    dbc.Col([
-                        html.Label("Chiều phân tích phụ (Cấp 2)", className="filter-label"),
-                        dcc.Dropdown(
-                            id="revenue-g2",
-                            options=[{"label": "Không", "value": "None"}] + [{"label": k, "value": v} for k, v in GROUP_BY_LABEL_MAP.items()],
-                            value="None",
-                            clearable=False
-                        )
-                    ], md=4, xs=12),
-                    
-                    # Radio chọn chế độ so sánh
-                    dbc.Col([
-                        html.Label("So sánh", className="filter-label"),
-                        dcc.RadioItems(
-                            id="revenue-compare-opt",
-                            options=[
-                                {"label": " Không so sánh", "value": "none"},
-                                {"label": " Kỳ trước", "value": "prev_period"},
-                                {"label": " Cùng kỳ năm trước", "value": "yoy"},
-                                {"label": " Cả hai", "value": "both"}
-                            ],
-                            value="none",
-                            inline=True,
-                            labelStyle={"marginRight": "12px"},
-                            style={"paddingTop": "8px"}
-                        )
-                    ], md=4, xs=12)
-                ])
+                ], style={"marginBottom": "0px"})
             ])
         ], style={"marginBottom": "20px", "background": "#F8FAFC", "borderRadius": "8px", "border": "1px solid #E2E8F0"}),
         
-        dbc.Spinner(
-            html.Div(id="revenue-table-container", style={"marginBottom": "30px"}),
-            color="primary"
-        ),
-        
-        html.Hr(style={"margin": "30px 0"}),
-        
-        # ==============================================================================
-        # PHẦN C - PIVOT CMS CHI TIẾT
-        # ==============================================================================
         html.Div("🔍 Chi tiết Doanh thu theo Khách hàng (CMS)", className="section-header"),
         
         dbc.Row([

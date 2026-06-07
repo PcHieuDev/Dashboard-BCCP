@@ -61,62 +61,7 @@ def register_customer_callbacks(app):
             
         return options
 
-    # ==============================================================================
-    # 1. CALLBACK CẬP NHẬT BẢNG DOANH THU XOAY CHIỀU
-    # ==============================================================================
-    @app.callback(
-        Output("revenue-table-container", "children"),
-        [Input("btn-apply-filter", "n_clicks"),
-         Input("tabs-navigation", "value"),
-         Input("revenue-g1", "value"),
-         Input("revenue-g2", "value"),
-         Input("revenue-compare-opt", "value"),
-         # Bộ lọc dịch vụ inline mới
-         Input("customer-filter-nhom-dv", "value"),
-         Input("customer-filter-loai-kh", "value"),
-         Input("customer-filter-hop-dong", "value"),
-         Input("customer-filter-spdv", "value")],
-        [# Bộ lọc địa lý từ Sidebar (State)
-         State("sidebar-year", "value"),
-         State("sidebar-period", "value"),
-         State("sidebar-date-range", "start_date"),
-         State("sidebar-date-range", "end_date"),
-         State("sidebar-week-select", "value"),
-         State("sidebar-month-select", "value"),
-         State("sidebar-cum", "value"),
-         State("sidebar-bdx", "value"),
-         State("sidebar-buu-cuc", "value")]
-    )
-    def update_revenue_table(n_clicks, tab_val, g1, g2, compare_opt, nhom_dv, loai_kh, hop_dong, spdv,
-                             year, period, start_date, end_date, week_idx, month_val, cum, bdx, buu_cuc):
-        # Chạy khi ở tab Chi tiết Khách hàng (do đã gộp trang)
-        if tab_val != "tab-customer" or tab_val is None:
-            return dash.no_update
-            
-        g2_actual = None if g2 == "None" else g2
-        compare_prev = compare_opt != "none"
-        compare_mode = compare_opt if compare_prev else "prev_period"
-        
-        # 1. Truy vấn dữ liệu có cache dựa vào các bộ lọc
-        _, _, _, df = resolve_filters_and_query(
-            year, period, start_date, end_date, week_idx, month_val, compare_mode,
-            nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong,
-            group_by_primary=g1, group_by_secondary=g2_actual, compare_prev=compare_prev
-        )
-        
-        # 2. Xử lý nhóm cột và hiển thị
-        groupby_cols = [g1]
-        if g2_actual:
-            groupby_cols.append(g2_actual)
-            
-        # 3. Trả về bảng DataTable được định dạng
-        return render_revenue_datatable(df, groupby_cols, compare_opt)
-
-    # ==============================================================================
-    # 2. ĐÃ XÓA CALLBACK XUẤT EXCEL BẢNG DOANH THU THEO YÊU CẦU TIP-11-002
-    # ==============================================================================
-
-    # ==============================================================================
+    # ==========    # ==============================================================================
     # 3. CALLBACK CẬP NHẬT BẢNG CHI TIẾT KHÁCH HÀNG (CMS)
     # ==============================================================================
     @app.callback(
@@ -155,26 +100,17 @@ def register_customer_callbacks(app):
         if df.empty or len(df) == 0:
             return dbc.Alert("Không tìm thấy dữ liệu phù hợp với bộ lọc hiện tại.", color="warning", className="m-3")
             
-        # 3. Loại bỏ cột không cần thiết (giữ lại sản lượng + cước từng dịch vụ)
-        drop_cols = ['hop_dong', 'buu_cuc_list']
-        for col in drop_cols:
-            if col in df.columns:
-                df = df.drop(columns=[col])
-        
-        # 4. Xác định cấu trúc cột hiển thị
-        columns = []
-        for c in df.columns:
-            col_def = {"name": c, "id": c}
-            if c == 'cms':
-                col_def["name"] = "Mã CMS"
-            elif c == 'loai_kh':
-                col_def["name"] = "Loại KH"
-            elif 'Cước' in c or 'SL' in c or 'KL' in c:
-                col_def["type"] = "numeric"
-                col_def["format"] = Format(group=Group.yes)
-            columns.append(col_def)
+        # 3. Xác định cấu trúc cột hiển thị phẳng cố định
+        columns = [
+            {"name": "Cụm", "id": "ten_cum"},
+            {"name": "Xã / Phường", "id": "ten_bdx"},
+            {"name": "Bưu cục chấp nhận", "id": "buu_cuc"},
+            {"name": "Mã CMS", "id": "cms"},
+            {"name": "Sản lượng", "id": "san_luong", "type": "numeric", "format": Format(group=Group.yes)},
+            {"name": "Doanh thu không VAT", "id": "cuoc_tt_tong", "type": "numeric", "format": Format(group=Group.yes)}
+        ]
             
-        # 5. Trả về bảng DataTable được định dạng
+        # 4. Trả về bảng DataTable được định dạng
         table = dash_table.DataTable(
             id='customer-detail-datatable',
             columns=columns,
@@ -247,15 +183,13 @@ def register_customer_callbacks(app):
         if df.empty:
             return dash.no_update
             
-        if not df.empty:
-            drop_cols = ['hop_dong', 'buu_cuc_list']
-            for col in drop_cols:
-                if col in df.columns:
-                    df = df.drop(columns=[col])
-        
         col_rename = {
+            'ten_cum': 'Cụm',
+            'ten_bdx': 'Xã / Phường',
+            'buu_cuc': 'Bưu cục chấp nhận',
             'cms': 'Mã CMS',
-            'loai_kh': 'Loại KH',
+            'san_luong': 'Sản lượng',
+            'cuoc_tt_tong': 'Doanh thu không VAT'
         }
         df = df.rename(columns=col_rename)
         
