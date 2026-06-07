@@ -8,6 +8,7 @@ import pandas as pd
 import dash
 from dash import Output, Input, State, html, dash_table
 import plotly.express as px
+import plotly.graph_objects as go
 import sys
 from pathlib import Path
 
@@ -40,7 +41,8 @@ def register_service_detail_callbacks(app):
     @app.callback(
         [
             Output("spdv-table-container", "children"),
-            Output("spdv-pie-chart", "figure")
+            Output("spdv-revenue-chart", "figure"),
+            Output("spdv-volume-chart", "figure")
         ],
         [
             Input("btn-apply-filter", "n_clicks"),
@@ -51,14 +53,16 @@ def register_service_detail_callbacks(app):
             State("sidebar-month-select", "value"),
             State("sidebar-week-select", "value"),
             State("sidebar-period", "value"),
-            State("sidebar-cum", "value")
+            State("sidebar-cum", "value"),
+            State("sidebar-bdx", "value"),
+            State("sidebar-buu-cuc", "value")
         ]
     )
-    def update_service_detail(n_clicks, tab_val, year, month, week, cycle, cum_val):
+    def update_service_detail(n_clicks, tab_val, year, month, week, cycle, cum_val, bdx_val, buu_cuc_val):
         if tab_val is None or tab_val != "tab-service-detail":
-            return dash.no_update, dash.no_update
+            return dash.no_update, dash.no_update, dash.no_update
         if not year:
-            return html.Div("Vui lòng chọn năm dữ liệu", style={"color": "red"}), px.Model()
+            return html.Div("Vui lòng chọn năm dữ liệu", style={"color": "red"}), go.Figure(), go.Figure()
             
         import config.week_calendar as calendar_helper
         
@@ -69,8 +73,14 @@ def register_service_detail_callbacks(app):
         geo_clause = ""
         geo_params = []
         if cum_val and cum_val != "Tất cả":
-            geo_clause = " AND b.ten_cum = ? "
+            geo_clause += " AND b.ten_cum = ? "
             geo_params.append(cum_val)
+        if bdx_val and bdx_val != "Tất cả":
+            geo_clause += " AND b.ten_bdx = ? "
+            geo_params.append(bdx_val)
+        if buu_cuc_val and buu_cuc_val != "Tất cả":
+            geo_clause += " AND t.buu_cuc = ? "
+            geo_params.append(buu_cuc_val)
             
         # Điều kiện thời gian
         curr_time_clause = ""
@@ -80,7 +90,7 @@ def register_service_detail_callbacks(app):
         
         if cycle == 'Tuần':
             if not week:
-                return html.Div("Vui lòng chọn tuần dữ liệu", style={"color": "red"}), px.Model()
+                return html.Div("Vui lòng chọn tuần dữ liệu", style={"color": "red"}), go.Figure(), go.Figure()
             # Lấy ngày tuần này
             weeks_list = calendar_helper.get_week_list(year)
             c_start, c_end = None, None
@@ -98,7 +108,7 @@ def register_service_detail_callbacks(app):
                     break
             
             if not c_start or not p_start:
-                return html.Div("Lỗi định vị ngày tuần", style={"color": "red"}), px.Model()
+                return html.Div("Lỗi định vị ngày tuần", style={"color": "red"}), go.Figure(), go.Figure()
                 
             curr_time_clause = " t.ngay_chap_nhan BETWEEN ? AND ? "
             curr_time_params = [c_start, c_end]
@@ -109,7 +119,7 @@ def register_service_detail_callbacks(app):
             prev_period_name = f"Tuần {prev_w}/{prev_yr}"
         else:
             if not month:
-                return html.Div("Vui lòng chọn tháng dữ liệu", style={"color": "red"}), px.Model()
+                return html.Div("Vui lòng chọn tháng dữ liệu", style={"color": "red"}), go.Figure(), go.Figure()
             curr_time_clause = " t.nam_du_lieu = ? AND t.thang_du_lieu = ? "
             curr_time_params = [year, f"T{month:02d}"]
             
@@ -124,7 +134,7 @@ def register_service_detail_callbacks(app):
         try:
             # Truy vấn kỳ hiện tại
             sql_curr = f"""
-                SELECT d.ma_dich_vu, d.ten_dich_vu, d.nhom_dich_vu, SUM(t.cuoc_tt_tong) as dt_curr
+                SELECT d.ma_dich_vu, d.ten_dich_vu, d.nhom_dich_vu, SUM(t.cuoc_tt_tong) as dt_curr, SUM(t.san_luong) as sl_curr
                 FROM transactions t
                 INNER JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
                 LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
@@ -135,7 +145,7 @@ def register_service_detail_callbacks(app):
             
             # Truy vấn kỳ trước
             sql_prev = f"""
-                SELECT d.ma_dich_vu, SUM(t.cuoc_tt_tong) as dt_prev
+                SELECT d.ma_dich_vu, SUM(t.cuoc_tt_tong) as dt_prev, SUM(t.san_luong) as sl_prev
                 FROM transactions t
                 INNER JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
                 LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
@@ -146,14 +156,16 @@ def register_service_detail_callbacks(app):
             
             # Gộp dữ liệu
             if df_curr.empty:
-                return html.Div("Không có dữ liệu trong kỳ hiện tại.", style={"textAlign": "center", "padding": "20px", "color": "#64748B"}), px.pie(title="Không có dữ liệu")
+                return html.Div("Không có dữ liệu trong kỳ hiện tại.", style={"textAlign": "center", "padding": "20px", "color": "#64748B"}), go.Figure(), go.Figure()
                 
             if df_prev.empty:
-                df_prev = pd.DataFrame(columns=['ma_dich_vu', 'dt_prev'])
+                df_prev = pd.DataFrame(columns=['ma_dich_vu', 'dt_prev', 'sl_prev'])
                 
             df_merged = pd.merge(df_curr, df_prev, on='ma_dich_vu', how='left')
             df_merged['dt_prev'] = df_merged['dt_prev'].fillna(0.0)
             df_merged['dt_curr'] = df_merged['dt_curr'].fillna(0.0)
+            df_merged['sl_prev'] = df_merged['sl_prev'].fillna(0.0)
+            df_merged['sl_curr'] = df_merged['sl_curr'].fillna(0.0)
             
             # Tính phần trăm thay đổi
             def calc_change(row):
@@ -168,6 +180,7 @@ def register_service_detail_callbacks(app):
             
             # 3. Tạo bảng dữ liệu
             df_table = df_merged.copy()
+            df_table['sl_curr_disp'] = df_table['sl_curr'].apply(lambda x: f"{x:,.0f}")
             df_table['dt_curr_disp'] = df_table['dt_curr'].apply(lambda x: f"{x:,.0f} đ")
             df_table['dt_prev_disp'] = df_table['dt_prev'].apply(lambda x: f"{x:,.0f} đ")
             df_table['pct_change_disp'] = df_table['pct_change'].apply(lambda x: f"{x:+.1f}%" if x != 0 else "—")
@@ -176,6 +189,7 @@ def register_service_detail_callbacks(app):
                 {"name": "Mã DV", "id": "ma_dich_vu"},
                 {"name": "Tên dịch vụ", "id": "ten_dich_vu"},
                 {"name": "Nhóm dịch vụ", "id": "nhom_dich_vu"},
+                {"name": f"Sản lượng ({period_name})", "id": "sl_curr_disp"},
                 {"name": f"DT kỳ hiện tại ({period_name})", "id": "dt_curr_disp"},
                 {"name": f"DT kỳ trước ({prev_period_name})", "id": "dt_prev_disp"},
                 {"name": "Thay đổi (%)", "id": "pct_change_disp"}
@@ -222,26 +236,50 @@ def register_service_detail_callbacks(app):
                 ]
             )
             
-            # 4. Tạo biểu đồ Pie
-            df_pie = df_curr.groupby('nhom_dich_vu')['dt_curr'].sum().reset_index()
-            fig_pie = px.pie(
-                df_pie,
-                values='dt_curr',
-                names='nhom_dich_vu',
-                color_discrete_sequence=px.colors.qualitative.Pastel
+            # 4. Tạo biểu đồ Doanh thu theo mã SPDV
+            df_rev_chart = df_curr.sort_values(by='dt_curr', ascending=False)
+            fig_revenue = px.bar(
+                df_rev_chart,
+                x='ma_dich_vu',
+                y='dt_curr',
+                color='nhom_dich_vu',
+                labels={'dt_curr': 'Doanh thu (đ)', 'ma_dich_vu': 'Mã SPDV', 'nhom_dich_vu': 'Nhóm dịch vụ'},
+                color_discrete_sequence=px.colors.qualitative.Safe
             )
-            fig_pie.update_layout(
-                margin=dict(t=20, b=20, l=20, r=20),
-                legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5)
+            fig_revenue.update_layout(
+                margin=dict(t=20, b=20, l=40, r=20),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
+                xaxis=dict(showgrid=False, title=None),
+                yaxis=dict(showgrid=True, gridcolor="#F1F5F9", title=None)
             )
-            fig_pie.update_traces(textposition='inside', textinfo='percent+label')
             
-            return table_element, fig_pie
+            # 5. Tạo biểu đồ Sản lượng theo mã SPDV
+            df_vol_chart = df_curr.sort_values(by='sl_curr', ascending=False)
+            fig_volume = px.bar(
+                df_vol_chart,
+                x='ma_dich_vu',
+                y='sl_curr',
+                color='nhom_dich_vu',
+                labels={'sl_curr': 'Sản lượng (cái)', 'ma_dich_vu': 'Mã SPDV', 'nhom_dich_vu': 'Nhóm dịch vụ'},
+                color_discrete_sequence=px.colors.qualitative.Safe
+            )
+            fig_volume.update_layout(
+                margin=dict(t=20, b=20, l=40, r=20),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                legend=dict(orientation="h", yanchor="bottom", y=-0.3, xanchor="center", x=0.5),
+                xaxis=dict(showgrid=False, title=None),
+                yaxis=dict(showgrid=True, gridcolor="#F1F5F9", title=None)
+            )
+            
+            return table_element, fig_revenue, fig_volume
             
         except Exception as e:
             print(f"Lỗi truy vấn chi tiết SPDV: {e}")
             import traceback
             traceback.print_exc()
-            return html.Div(f"Lỗi truy vấn dữ liệu: {e}", style={"color": "red"}), px.Model()
+            return html.Div(f"Lỗi truy vấn dữ liệu: {e}", style={"color": "red"}), go.Figure(), go.Figure()
         finally:
             conn.close()
