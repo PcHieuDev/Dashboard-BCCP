@@ -11,28 +11,26 @@ Dashboard doanh thu bưu chính chuyển phát (BCCP) hỗ trợ bộ lọc đa 
 - **Encoding**: UTF-8 toàn bộ
 
 ## Current State
-- **Sửa lỗi Import CSV Mapping (04/06/2026)**:
-  - Khắc phục lỗi `❌ Tệp CSV thiếu cột bắt buộc 'nhom_chinh' làm cột đầu tiên!` do Sếp lưu file CSV từ Excel trên Windows dùng dấu phân tách `;`.
-  - Hỗ trợ cả dấu phân tách `;` và `,` khi đọc file CSV trong `import_callbacks.py` và `sync_mappings.py`.
-  - Cải tiến logic upload CSV: tự động gộp (merge) danh mục cũ và danh mục mới thay vì ghi đè, bảo toàn dữ liệu khi chỉ thêm dòng mới.
-- **Phase 11 (Tối ưu giao diện & Performance - 04/06/2026)**:
-  - Sửa logic Top 10 CMS tránh trùng doanh thu (dùng subquery), xóa Area Chart, sửa lỗi logic Tuần 53.
-  - Gom 2 card bộ lọc ở Customer Detail thành 1 card Bộ lọc Nâng cao.
-  - Tối ưu tải trang Retention cực nhanh bằng cách sửa logic KHHH (chỉ dựa vào tháng T trở đi + Khách hàng mới tháng T).
+- **Tái cấu trúc bộ lọc & Phân quyền Cụm (07/06/2026)**:
+  - Loại bỏ hoàn toàn bộ lọc ngày (DatePickerRange), tích hợp bộ lọc Tuần/Tháng ngang (Topbar) cho trang Tổng quan và BCCP.
+  - Phân quyền Cụm: Khóa cứng dropdown Cụm đối với tài khoản được gán Cụm cụ thể, nhưng cho phép chọn sâu hơn ở BĐX và mã Bưu cục.
+  - Sidebar được thu gọn từ 320px về 220px, chỉ chứa thông tin tài khoản và menu Accordion điều hướng.
+- **Tối ưu hiệu năng bằng Summary Tables (07/06/2026)**:
+  - Xây dựng các bảng tổng hợp trung gian: `agg_monthly`, `agg_monthly_customer` (theo bưu cục/khách hàng) và `plans_weekly` (phân bổ kế hoạch tuần theo số ngày trong tháng).
+  - Tự động cập nhật bảng summary tương ứng ngay sau khi import file Excel mới (cả RAW CAS và Template).
+  - Cập nhật logic Khách hàng mới (`new_customers`): Chỉ tính các giao dịch có doanh thu dương `cuoc_tt_tong > 0` và thêm cột `ngay_phat_sinh` (ngày giao dịch đầu tiên trong tháng).
+  - Chạy thành công tác vụ rebuild dữ liệu lịch sử từ T10/2025 đến T06/2026.
 - **Đường dẫn Workspace hoạt động**:
   - Mã nguồn: `E:\Projects\Dashboard-BCCP`
   - Cơ sở dữ liệu: `E:\OneDrive\z.Database-TTKD-Data\dashboard.db`
 - **Cloudflare Tunnel (Truy cập từ xa)**:
-  - Tên miền: `dashboard.bdna.io.vn` trỏ về `http://127.0.0.1:8050` (Đã cấu hình trỏ thẳng về IP 127.0.0.1 để khắc phục triệt để lỗi 502 Bad Gateway do phân giải IPv6 của localhost trên Windows).
-  - Trạng thái: Dịch vụ Windows Service `cloudflared` đang hoạt động ổn định.
+  - Tên miền: `dashboard.bdna.io.vn` trỏ về `http://127.0.0.1:8050`
+  - Trạng thái: Windows Service `cloudflared` đang hoạt động ổn định.
 
 ## Key Decisions & Architecture
 - **Mã nguồn tách biệt khỏi OneDrive**: Tránh xung đột đồng bộ OneDrive khi chạy cơ sở dữ liệu và code. Code chính nằm tại `E:\Projects\Dashboard-BCCP`.
-- **Luồng Import mới**:
-  1. Người dùng chọn file -> file được đọc và hiển thị thông tin ở `selected-file-info`, hiện nút Xác nhận.
-  2. Người dùng bấm Xác nhận -> Spinner quay, file được ghi tạm, gọi `import_any_excel_file` để tự động phân tích và import (cho cả `.xls` và `.xlsx`).
-  3. Kết quả trả về `dbc.Alert` tại `upload-status-message`, đồng thời reset `upload-data` contents để ẩn nút và xóa file info.
-- **Cơ chế Gộp danh mục Dịch vụ tự động**: Khi tải lên file CSV để đồng bộ sản phẩm dịch vụ mới, hệ thống sẽ tự động ghép với danh mục hiện tại và khử trùng theo mã dịch vụ (`ma_spdv`) để đảm bảo không bị ghi đè mất các dịch vụ khác. File CSV mapping trên đĩa sẽ được lưu lại dưới dạng chuẩn hóa dấu phẩy `,` và mã hóa `utf-8-sig`.
+- **Cơ chế Summary Tables**: Để tối ưu hiệu năng cho tập dữ liệu ~1 triệu dòng, các trang Tổng quan và BCCP sẽ đọc dữ liệu từ các bảng tổng hợp trước thay vì quét toàn bộ bảng transactions.
+- **Phân bổ kế hoạch tuần**: Kế hoạch tuần được phân bổ theo tỷ lệ số ngày của tuần nằm trong tháng tương ứng (tính trên tổng số ngày của tháng đó).
 
 ### Cấu trúc thư mục hiện tại:
 ```
@@ -41,36 +39,38 @@ E:\Projects\Dashboard-BCCP\
 ├── data/           (mapping_spdv.csv, mapping-BC-BDX-Cum.csv)  ← DÙNG CHUNG
 ├── database/       (bccp.db)                                   ← DÙNG CHUNG
 ├── etl/            (importer.py, aggregator.py)                ← DÙNG CHUNG
-├── analytics/      (revenue.py, customer_classifier.py)        ← DÙNG CHUNG
-├── scripts/        (generate_tokens.py, migrate_add_year.py, sync_mappings.py)
+├── analytics/      (revenue.py, customer_classifier.py, new_customer_calculator.py) ← DÙNG CHUNG
+├── scripts/        (generate_tokens.py, migrate_add_year.py, sync_mappings.py, rebuild_summaries.py)
 ├── dash_app/       ← APP CHÍNH (Dash modularized)
 │   ├── app.py              (Khởi chạy & định tuyến tab)
 │   ├── assets/style.css    (CSS style)
-│   ├── components/         (sidebar.py, kpi_cards.py, data_table.py)
-│   ├── callbacks/          (sidebar_callbacks.py, kpi_callbacks.py, customer_callbacks.py, global_callbacks.py, hcc_revenue_callbacks.py, import_callbacks.py, new_customer_callbacks.py, retention_callbacks.py, alerts_callbacks.py, utils.py, export_helpers.py)
-│   ├── pages/              (kpi_page.py, customer_detail.py, global_overview.py, hcc_revenue.py, import_data.py, new_customer.py, retention.py, service_overview.py, alerts.py)
-│   ├── db/                 (connection.py, auth.py)
-│   └── requirements.txt
+│   ├── components/         (sidebar.py, topbar.py, kpi_cards.py)
+│   ├── callbacks/          (sidebar_callbacks.py, topbar_callbacks.py, kpi_callbacks.py, customer_callbacks.py, import_callbacks.py)
+│   ├── pages/              (kpi_page.py, customer_detail.py, global_overview.py, hcc_revenue.py, import_data.py, new_customer.py, retention.py)
+│   └── db/                 (connection.py, auth.py)
 ├── run_dashboard.bat
 └── project_state.md
 ```
 
 ### Database Schema:
-- `transactions` — ~307K dòng (5 tháng 2026, ~60K/tháng), cột chính: cms, buu_cuc, san_pham_dv, ngay_chap_nhan, cuoc_tt_tong, nam_du_lieu
-- `dim_spdv` — Ánh xạ mã SPDV → nhom_dich_vu
-- `dim_buucuc` — Ánh xạ mã bưu cục → ten_bdx, ten_cum (18 Cụm)
-- `import_log` — Lịch sử import
+- `transactions` — ~1 triệu dòng (dữ liệu 2025 và 2026), cột chính: cms, buu_cuc, san_pham_dv, ngay_chap_nhan, cuoc_tt_tong, nam_du_lieu
+- `agg_monthly` — Tổng hợp doanh thu, sản lượng, số KH phát sinh theo tháng, bưu cục, nhóm dịch vụ.
+- `agg_monthly_customer` — Tổng hợp doanh thu, sản lượng, số giao dịch theo tháng, bưu cục, khách hàng (CMS), nhóm dịch vụ.
+- `plans_weekly` — Kế hoạch tuần phân bổ từ kế hoạch tháng.
+- `new_customers` — Khách hàng mới theo tháng, có thêm cột `ngay_phat_sinh` và chỉ ghi nhận khách hàng có doanh thu dương.
+- `dim_spdv` / `dim_dichvu` — Ánh xạ mã SPDV → nhóm dịch vụ.
+- `dim_buucuc` — Ánh xạ mã bưu cục → ten_bdx, ten_cum (18 Cụm).
 
 ### Logic phân loại KH (theo tháng, không cộng dồn):
-- **Vãng lai**: CMS null / bắt đầu bằng `VANGLAI_`
-- **KHM/Tái bán**: Không có phát sinh giao dịch nào trong 3 tháng liền trước.
-- **Hiện hữu**: Có phát sinh giao dịch trong 3 tháng liền trước.
+- **Vãng lai**: CMS null / bắt đầu bằng `VANGLAI_` / 'none'
+- **KHM/Tái bán**: Không có phát sinh giao dịch nào có doanh thu dương trong 3 tháng liền trước.
+- **Hiện hữu**: Có phát sinh giao dịch có doanh thu dương trong 3 tháng liền trước.
 
 ## Pending Tasks
-1. **[PENDING] Bổ sung dữ liệu**: Chờ Sếp nạp thêm dữ liệu 2 ngày cuối tháng 5 (30.05 - 31.05) và dữ liệu tháng 6 còn thiếu (từ 03/06 trở đi).
+1. **[IN PROGRESS] Phase 3: Redesign các trang hiển thị (nhánh 3)**: Chuyển đổi các trang `kpi_page.py`, `new_customer.py`, `retention.py`, `customer_detail.py` sang đọc dữ liệu từ các bảng summary mới và điều chỉnh layout theo Topbar/Sidebar mới.
 2. **[PENDING] Phase 5C**: Thiết lập deploy server nội bộ và chuyển sang PostgreSQL.
 
 ## Issues & Notes
-- **Lỗi không hiển thị Alert khi nạp thành công**: Đã sửa triệt để bằng cách đổi `dismissible` thành `dismissable` trong DBC Alert.
-- **Bypass Login**: Hiện tại đang bypass authentication trong `app.py` để phát triển tiện lợi hơn. Cần kích hoạt lại khi deploy chính thức.
-- **Lỗi CSV dấu phân tách ';'**: Đã khắc phục triệt để bằng việc hỗ trợ cả `,` và `;` ở tất cả các module đọc CSV mapping.
+- **RBAC & Authentication**: Chức năng phân quyền đã hoạt động ổn định trên Topbar. Hỗ trợ test login nhanh qua route `/test-login/<username>`.
+- **Database Lock**: Do SQLite sử dụng khóa độc quyền khi viết, trong quá trình chạy script `rebuild_summaries.py` (khoảng 7 phút), database sẽ tạm thời khóa tất cả các truy cập đọc/ghi khác.
+
