@@ -447,7 +447,7 @@ def get_growth_heatmap_data(db_path, year, month, compare_mode="prev", cum=None)
     return df_growth
 
 
-def get_top10_by_comparison(conn, period_type, period_value, year, compare_type):
+def get_top10_by_comparison(conn, period_type, period_value, year, compare_type, cum=None, bdx=None, buu_cuc=None):
     """
     Tính top 10 xã có tỷ lệ tăng trưởng hoặc hoàn thành kế hoạch cao nhất.
     - compare_type: 'prev' (Kỳ trước), 'yoy' (Cùng kỳ năm trước), 'plan' (Kế hoạch)
@@ -551,6 +551,14 @@ def get_top10_by_comparison(conn, period_type, period_value, year, compare_type)
     df_buucuc = pd.read_sql_query("SELECT ma_bc as buu_cuc, ten_bdx, ten_cum FROM dim_buucuc", conn)
     df_final = pd.merge(df_merge, df_buucuc, on='buu_cuc', how='inner')
     
+    # Lọc địa lý nếu có
+    if cum and cum != "Tất cả":
+        df_final = df_final[df_final['ten_cum'] == cum]
+    if bdx and bdx != "Tất cả":
+        df_final = df_final[df_final['ten_bdx'] == bdx]
+    if buu_cuc and buu_cuc != "Tất cả":
+        df_final = df_final[df_final['buu_cuc'] == buu_cuc]
+        
     # Sắp xếp và lấy Top 10
     df_final = df_final.sort_values(by='ratio', ascending=False).head(10)
     return df_final[['ten_cum', 'ten_bdx', 'ratio']]

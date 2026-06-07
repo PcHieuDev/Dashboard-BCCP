@@ -36,7 +36,7 @@ def get_prev_period_info(period_type, period_value, year):
             return prev_val, prev_yr
         return period_value - 1, year
 
-def get_plans_current_period_sub(db_path, service_key, period_type, period_value, year):
+def get_plans_current_period_sub(db_path, service_key, period_type, period_value, year, cum=None, bdx=None, buu_cuc=None):
     """Lấy kế hoạch doanh thu của các dịch vụ con thuộc service_key trong kỳ hiện tại"""
     res = {}
     conn = sqlite3.connect(str(db_path))
@@ -44,24 +44,40 @@ def get_plans_current_period_sub(db_path, service_key, period_type, period_value
         cursor = conn.cursor()
         if period_type == 'Tháng':
             sql = """
-                SELECT nhom_dich_vu, SUM(ke_hoach_doanh_thu) 
-                FROM plans 
-                WHERE nam = ? AND thang = ? AND nhom_dich_vu IN (
+                SELECT p.nhom_dich_vu, SUM(p.ke_hoach_doanh_thu) 
+                FROM plans p
+                INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_bc
+                WHERE p.nam = ? AND p.thang = ? AND p.nhom_dich_vu IN (
                     SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
                 )
-                GROUP BY nhom_dich_vu
             """
-            cursor.execute(sql, (year, period_value, service_key))
         else:
             sql = """
-                SELECT nhom_dich_vu, SUM(ke_hoach_doanh_thu) 
-                FROM plans_weekly 
-                WHERE nam = ? AND tuan_so = ? AND nhom_dich_vu IN (
+                SELECT p.nhom_dich_vu, SUM(p.ke_hoach_doanh_thu) 
+                FROM plans_weekly p
+                INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_bc
+                WHERE p.nam = ? AND p.tuan_so = ? AND p.nhom_dich_vu IN (
                     SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
                 )
-                GROUP BY nhom_dich_vu
             """
-            cursor.execute(sql, (year, period_value, service_key))
+        
+        clauses = []
+        params = [year, period_value, service_key]
+        if cum and cum != "Tất cả":
+            clauses.append("b.ten_cum = ?")
+            params.append(cum)
+        if bdx and bdx != "Tất cả":
+            clauses.append("b.ten_bdx = ?")
+            params.append(bdx)
+        if buu_cuc and buu_cuc != "Tất cả":
+            clauses.append("p.ma_buu_cuc = ?")
+            params.append(buu_cuc)
+            
+        if clauses:
+            sql += " AND " + " AND ".join(clauses)
+        sql += " GROUP BY p.nhom_dich_vu"
+        
+        cursor.execute(sql, tuple(params))
         for r in cursor.fetchall():
             res[r[0]] = r[1] or 0.0
     except Exception as e:
@@ -190,7 +206,7 @@ def create_detail_table_sub(df, sub_services, compare_type):
         ]
     )
 
-def query_sub_service_data(conn, service_key, period_type, period_val, year, sub_services):
+def query_sub_service_data(conn, service_key, period_type, period_val, year, sub_services, cum=None, bdx=None, buu_cuc=None):
     """Query chi tiết doanh thu theo bưu cục xã, phân rã theo nhóm dịch vụ con"""
     # 1. Tìm kỳ trước và cùng kỳ
     prev_val, prev_yr = get_prev_period_info(period_type, period_val, year)
@@ -289,9 +305,22 @@ def query_sub_service_data(conn, service_key, period_type, period_val, year, sub
     df_buucuc = pd.read_sql_query("SELECT ma_bc as buu_cuc, ten_bdx, ten_cum FROM dim_buucuc", conn)
     df_final = pd.merge(df_merge, df_buucuc, on='buu_cuc', how='inner')
     
+    # Lọc địa lý
+    if cum and cum != "Tất cả":
+        df_final = df_final[df_final['ten_cum'] == cum]
+    if bdx and bdx != "Tất cả":
+        df_final = df_final[df_final['ten_bdx'] == bdx]
+    if buu_cuc and buu_cuc != "Tất cả":
+        df_final = df_final[df_final['buu_cuc'] == buu_cuc]
+        
+    # Gộp bưu cục cùng xã lại
+    df_final = df_final.groupby(['ten_cum', 'ten_bdx'], as_index=False)[
+        sub_services + ['tong_dt', 'dt_prev', 'dt_yoy', 'plan_dt']
+    ].sum()
+    
     return df_final
 
-def query_sub_service_data_ytd(conn, service_key, period_type, period_val, year, sub_services):
+def query_sub_service_data_ytd(conn, service_key, period_type, period_val, year, sub_services, cum=None, bdx=None, buu_cuc=None):
     """Query chi tiết doanh thu lũy kế YTD theo bưu cục xã, phân rã theo nhóm dịch vụ con"""
     # 1. Query doanh thu YTD hiện tại
     if period_type == 'Tháng':
@@ -387,6 +416,19 @@ def query_sub_service_data_ytd(conn, service_key, period_type, period_val, year,
     df_buucuc = pd.read_sql_query("SELECT ma_bc as buu_cuc, ten_bdx, ten_cum FROM dim_buucuc", conn)
     df_final = pd.merge(df_merge, df_buucuc, on='buu_cuc', how='inner')
     
+    # Lọc địa lý
+    if cum and cum != "Tất cả":
+        df_final = df_final[df_final['ten_cum'] == cum]
+    if bdx and bdx != "Tất cả":
+        df_final = df_final[df_final['ten_bdx'] == bdx]
+    if buu_cuc and buu_cuc != "Tất cả":
+        df_final = df_final[df_final['buu_cuc'] == buu_cuc]
+        
+    # Gộp bưu cục cùng xã lại
+    df_final = df_final.groupby(['ten_cum', 'ten_bdx'], as_index=False)[
+        sub_services + ['tong_dt', 'dt_prev', 'dt_yoy', 'plan_dt']
+    ].sum()
+    
     return df_final
 
 def register_service_callbacks(app):
@@ -426,10 +468,13 @@ def register_service_callbacks(app):
                     State("sidebar-month-select", "value"),
                     State("sidebar-week-select", "value"),
                     State("sidebar-period", "value"),
-                    State(f"{pfx}-service-key-store", "data")
+                    State(f"{pfx}-service-key-store", "data"),
+                    State("sidebar-cum", "value"),
+                    State("sidebar-bdx", "value"),
+                    State("sidebar-buu-cuc", "value")
                 ]
             )
-            def update_service_dashboard(n_clicks, year, month, week, cycle, store_data):
+            def update_service_dashboard(n_clicks, year, month, week, cycle, store_data, cum, bdx, buu_cuc):
                 # Khởi tạo toàn bộ outputs rỗng (74 outputs = 4 + 7 * 10)
                 empty_kpis = []
                 for _ in range(10):
@@ -441,22 +486,26 @@ def register_service_callbacks(app):
                     
                 service_key = store_data["service_key"]
                 sub_services = store_data["sub_services"]
+                if service_key == "BCCP":
+                    order = {"Truyền thống": 0, "TMĐT": 1, "Quốc tế": 2, "Phát hành báo chí": 3}
+                    sub_services = sorted(sub_services, key=lambda x: order.get(x, 99))
+                
                 period_val = month if cycle == 'Tháng' else week
                 
                 conn = sqlite3.connect(str(DB_PATH))
                 
                 try:
                     # 1. Query Top 10 của dịch vụ chính
-                    df_top_prev = get_top10_by_comparison(conn, cycle, period_val, year, 'prev')
-                    df_top_yoy = get_top10_by_comparison(conn, cycle, period_val, year, 'yoy')
-                    df_top_plan = get_top10_by_comparison(conn, cycle, period_val, year, 'plan')
+                    df_top_prev = get_top10_by_comparison(conn, cycle, period_val, year, 'prev', cum=cum, bdx=bdx, buu_cuc=buu_cuc)
+                    df_top_yoy = get_top10_by_comparison(conn, cycle, period_val, year, 'yoy', cum=cum, bdx=bdx, buu_cuc=buu_cuc)
+                    df_top_plan = get_top10_by_comparison(conn, cycle, period_val, year, 'plan', cum=cum, bdx=bdx, buu_cuc=buu_cuc)
                     
                     top10_prev = create_top10_table_sub(df_top_prev)
                     top10_yoy = create_top10_table_sub(df_top_yoy)
                     top10_plan = create_top10_table_sub(df_top_plan)
                     
                     # 2. Query doanh thu 12 kỳ của các dịch vụ con
-                    df_12p = get_12_periods_revenue_sub(conn, service_key, cycle, period_val, year, sub_services)
+                    df_12p = get_12_periods_revenue_sub(conn, service_key, cycle, period_val, year, sub_services, cum=cum, bdx=bdx, buu_cuc=buu_cuc)
                     
                     fig = go.Figure()
                     sub_colors = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#6366F1", "#14B8A6"]
@@ -484,17 +533,17 @@ def register_service_callbacks(app):
                     
                     # 3. Tính toán các KPI Cards con
                     # Doanh thu kỳ này
-                    rev_cur = query_sub_revenue_total(conn, service_key, cycle, period_val, year)
+                    rev_cur = query_sub_revenue_total(conn, service_key, cycle, period_val, year, cum=cum, bdx=bdx, buu_cuc=buu_cuc)
                     
                     # Doanh thu kỳ trước
                     prev_val, prev_yr = get_prev_period_info(cycle, period_val, year)
-                    rev_prev = query_sub_revenue_total(conn, service_key, cycle, prev_val, prev_yr)
+                    rev_prev = query_sub_revenue_total(conn, service_key, cycle, prev_val, prev_yr, cum=cum, bdx=bdx, buu_cuc=buu_cuc)
                     
                     # Doanh thu cùng kỳ năm trước
-                    rev_yoy = query_sub_revenue_total(conn, service_key, cycle, period_val, year - 1)
+                    rev_yoy = query_sub_revenue_total(conn, service_key, cycle, period_val, year - 1, cum=cum, bdx=bdx, buu_cuc=buu_cuc)
                     
                     # Kế hoạch
-                    rev_plan = get_plans_current_period_sub(DB_PATH, service_key, cycle, period_val, year)
+                    rev_plan = get_plans_current_period_sub(DB_PATH, service_key, cycle, period_val, year, cum=cum, bdx=bdx, buu_cuc=buu_cuc)
                     
                     kpi_outputs = []
                     # Lặp qua tất cả 10 slot KPI cards
@@ -578,20 +627,27 @@ def register_service_callbacks(app):
                     State("sidebar-month-select", "value"),
                     State("sidebar-week-select", "value"),
                     State("sidebar-period", "value"),
-                    State(f"{pfx}-service-key-store", "data")
+                    State(f"{pfx}-service-key-store", "data"),
+                    State("sidebar-cum", "value"),
+                    State("sidebar-bdx", "value"),
+                    State("sidebar-buu-cuc", "value")
                 ]
             )
-            def update_service_table_a(n_clicks, compare_type, year, month, week, cycle, store_data):
+            def update_service_table_a(n_clicks, compare_type, year, month, week, cycle, store_data, cum, bdx, buu_cuc):
                 if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week) or not store_data:
                     return html.Div("Vui lòng chọn bộ lọc thời gian để xem chi tiết.")
                     
                 service_key = store_data["service_key"]
                 sub_services = store_data["sub_services"]
+                if service_key == "BCCP":
+                    order = {"Truyền thống": 0, "TMĐT": 1, "Quốc tế": 2, "Phát hành báo chí": 3}
+                    sub_services = sorted(sub_services, key=lambda x: order.get(x, 99))
+                
                 period_val = month if cycle == 'Tháng' else week
                 
                 conn = sqlite3.connect(str(DB_PATH))
                 try:
-                    df = query_sub_service_data(conn, service_key, cycle, period_val, year, sub_services)
+                    df = query_sub_service_data(conn, service_key, cycle, period_val, year, sub_services, cum=cum, bdx=bdx, buu_cuc=buu_cuc)
                     return create_detail_table_sub(df, sub_services, compare_type)
                 except Exception as e:
                     return html.Div(f"Lỗi load bảng chi tiết xã: {e}")
@@ -609,20 +665,27 @@ def register_service_callbacks(app):
                     State("sidebar-month-select", "value"),
                     State("sidebar-week-select", "value"),
                     State("sidebar-period", "value"),
-                    State(f"{pfx}-service-key-store", "data")
+                    State(f"{pfx}-service-key-store", "data"),
+                    State("sidebar-cum", "value"),
+                    State("sidebar-bdx", "value"),
+                    State("sidebar-buu-cuc", "value")
                 ]
             )
-            def update_service_table_b(n_clicks, compare_type, year, month, week, cycle, store_data):
+            def update_service_table_b(n_clicks, compare_type, year, month, week, cycle, store_data, cum, bdx, buu_cuc):
                 if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week) or not store_data:
                     return html.Div("Vui lòng chọn bộ lọc thời gian để xem chi tiết.")
                     
                 service_key = store_data["service_key"]
                 sub_services = store_data["sub_services"]
+                if service_key == "BCCP":
+                    order = {"Truyền thống": 0, "TMĐT": 1, "Quốc tế": 2, "Phát hành báo chí": 3}
+                    sub_services = sorted(sub_services, key=lambda x: order.get(x, 99))
+                
                 period_val = month if cycle == 'Tháng' else week
                 
                 conn = sqlite3.connect(str(DB_PATH))
                 try:
-                    df = query_sub_service_data_ytd(conn, service_key, cycle, period_val, year, sub_services)
+                    df = query_sub_service_data_ytd(conn, service_key, cycle, period_val, year, sub_services, cum=cum, bdx=bdx, buu_cuc=buu_cuc)
                     return create_detail_table_sub(df, sub_services, compare_type)
                 except Exception as e:
                     return html.Div(f"Lỗi load bảng lũy kế YTD: {e}")
@@ -632,34 +695,50 @@ def register_service_callbacks(app):
         # Chạy hàm khởi tạo callbacks
         make_callbacks(prefix)
 
-def query_sub_revenue_total(conn, service_key, period_type, period_val, year):
+def query_sub_revenue_total(conn, service_key, period_type, period_val, year, cum=None, bdx=None, buu_cuc=None):
     """Tính tổng doanh thu hiện tại theo từng nhóm dịch vụ con"""
     res = {}
     cursor = conn.cursor()
     if period_type == 'Tháng':
         sql = """
-            SELECT nhom_dich_vu, SUM(tong_doanh_thu) 
-            FROM agg_monthly 
-            WHERE nam = ? AND thang = ? AND nhom_dich_vu IN (
+            SELECT a.nhom_dich_vu, SUM(a.tong_doanh_thu) 
+            FROM agg_monthly a
+            INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc
+            WHERE a.nam = ? AND a.thang = ? AND a.nhom_dich_vu IN (
                 SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
             )
-            GROUP BY nhom_dich_vu
         """
     else:
         sql = """
-            SELECT nhom_dich_vu, SUM(tong_doanh_thu) 
-            FROM agg_weekly 
-            WHERE nam = ? AND tuan_so = ? AND nhom_dich_vu IN (
+            SELECT a.nhom_dich_vu, SUM(a.tong_doanh_thu) 
+            FROM agg_weekly a
+            INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc
+            WHERE a.nam = ? AND a.tuan_so = ? AND a.nhom_dich_vu IN (
                 SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
             )
-            GROUP BY nhom_dich_vu
         """
-    cursor.execute(sql, (year, period_val, service_key))
+    clauses = []
+    params = [year, period_val, service_key]
+    if cum and cum != "Tất cả":
+        clauses.append("b.ten_cum = ?")
+        params.append(cum)
+    if bdx and bdx != "Tất cả":
+        clauses.append("b.ten_bdx = ?")
+        params.append(bdx)
+    if buu_cuc and buu_cuc != "Tất cả":
+        clauses.append("a.buu_cuc = ?")
+        params.append(buu_cuc)
+        
+    if clauses:
+        sql += " AND " + " AND ".join(clauses)
+    sql += " GROUP BY a.nhom_dich_vu"
+    
+    cursor.execute(sql, tuple(params))
     for nhom, dt in cursor.fetchall():
         res[nhom] = dt or 0.0
     return res
 
-def get_12_periods_revenue_sub(conn, service_key, period_type, current_period, current_year, sub_services):
+def get_12_periods_revenue_sub(conn, service_key, period_type, current_period, current_year, sub_services, cum=None, bdx=None, buu_cuc=None):
     """Lấy dữ liệu doanh thu của 12 kỳ của các dịch vụ con thuộc service_key"""
     import config.week_calendar as calendar_helper
     periods = []
@@ -692,20 +771,37 @@ def get_12_periods_revenue_sub(conn, service_key, period_type, current_period, c
             
         if period_type == 'Tháng':
             query = """
-                SELECT nhom_dich_vu, SUM(tong_doanh_thu) as dt
-                FROM agg_monthly
-                WHERE nam = ? AND thang = ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
-                GROUP BY nhom_dich_vu
+                SELECT a.nhom_dich_vu, SUM(a.tong_doanh_thu) as dt
+                FROM agg_monthly a
+                INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc
+                WHERE a.nam = ? AND a.thang = ? AND a.nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
             """
         else: # Tuần
             query = """
-                SELECT nhom_dich_vu, SUM(tong_doanh_thu) as dt
-                FROM agg_weekly
-                WHERE nam = ? AND tuan_so = ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
-                GROUP BY nhom_dich_vu
+                SELECT a.nhom_dich_vu, SUM(a.tong_doanh_thu) as dt
+                FROM agg_weekly a
+                INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc
+                WHERE a.nam = ? AND a.tuan_so = ? AND a.nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
             """
+        
+        clauses = []
+        params = [yr, val, service_key]
+        if cum and cum != "Tất cả":
+            clauses.append("b.ten_cum = ?")
+            params.append(cum)
+        if bdx and bdx != "Tất cả":
+            clauses.append("b.ten_bdx = ?")
+            params.append(bdx)
+        if buu_cuc and buu_cuc != "Tất cả":
+            clauses.append("a.buu_cuc = ?")
+            params.append(buu_cuc)
+            
+        if clauses:
+            query += " AND " + " AND ".join(clauses)
+        query += " GROUP BY a.nhom_dich_vu"
+        
         cursor = conn.cursor()
-        cursor.execute(query, (yr, val, service_key))
+        cursor.execute(query, tuple(params))
         for nhom, dt in cursor.fetchall():
             if nhom in row_dict:
                 row_dict[nhom] = dt or 0.0
