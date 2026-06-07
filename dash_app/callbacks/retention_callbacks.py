@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Callbacks xử lý dữ liệu trang Báo cáo Duy trì & Biến động Khách hàng Hiện hữu (/bccp/retention).
+Callbacks xử lý dữ liệu trang Báo cáo Duy trì & Biến động Khách hàng Hiện hữu (/bccp/retention) v2.0.
 """
 
 import sqlite3
@@ -24,576 +24,389 @@ if str(project_root) not in sys.path:
 
 from config.settings import DB_PATH
 from callbacks.utils import format_revenue
-from analytics.retention_metrics import get_retention_stats, get_khhh_changes, get_churn_alerts
+from analytics.retention_metrics import get_khhh_changes_v2, get_weekly_changes
+
+def generate_retention_list_excel(df: pd.DataFrame, title: str, is_roi_bo: bool, period_str: str) -> bytes:
+    """Tạo file Excel xuất báo cáo chi tiết biến động khách hàng"""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Sheet1"
+    ws.views.sheetView[0].showGridLines = True
+    
+    font_name = "Arial"
+    
+    # Tiêu đề báo cáo
+    ws.merge_cells("A1:H1")
+    ws["A1"] = f"{title.upper()} - {period_str.upper()}"
+    ws["A1"].font = Font(name=font_name, size=14, bold=True, color="1E3A8A")
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 40
+    
+    ws["A3"] = f"• Ngày xuất báo cáo: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+    ws["A3"].font = Font(name=font_name, size=10, italic=True)
+    
+    # Headers
+    if is_roi_bo:
+        headers = ["Tên cụm", "Tên xã", "Mã CMS", "SL gần nhất", "DT gần nhất", "Kỳ gần nhất có DT"]
+        cols = ["ten_cum", "ten_bdx", "cms", "sl_gan_nhat", "dt_gan_nhat", "thang_gan_nhat"]
+    else:
+        headers = ["Tên cụm", "Tên xã", "Mã CMS", "SL kỳ này", "DT kỳ này", "SL kỳ trước", "DT kỳ trước", "Chênh lệch DT"]
+        cols = ["ten_cum", "ten_bdx", "cms", "sl_ky_nay", "dt_ky_nay", "sl_ky_truoc", "dt_ky_truoc", "chenh_lech"]
+        
+    header_row = 5
+    ws.row_dimensions[header_row].height = 25
+    header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+    header_font = Font(name=font_name, size=10, bold=True, color="FFFFFF")
+    header_align = Alignment(horizontal="center", vertical="center")
+    thin_border = Border(
+        left=Side(style='thin', color='CBD5E1'),
+        right=Side(style='thin', color='CBD5E1'),
+        top=Side(style='thin', color='CBD5E1'),
+        bottom=Side(style='thin', color='CBD5E1')
+    )
+    
+    for c_idx, h in enumerate(headers, 1):
+        cell = ws.cell(row=header_row, column=c_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+        cell.border = thin_border
+        
+    # Ghi dữ liệu
+    data_start = 6
+    for r_idx, row in enumerate(df.to_dict('records'), data_start):
+        ws.row_dimensions[r_idx].height = 20
+        is_odd = (r_idx % 2 == 1)
+        row_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid") if is_odd else PatternFill(fill_type=None)
+        
+        for c_idx, col in enumerate(cols, 1):
+            val = row.get(col, None)
+            cell = ws.cell(row=r_idx, column=c_idx)
+            cell.border = thin_border
+            if row_fill.fill_type:
+                cell.fill = row_fill
+                
+            cell.font = Font(name=font_name, size=9)
+            if pd.isna(val) or val is None:
+                cell.value = "-"
+                cell.alignment = Alignment(horizontal="center")
+            elif col in ["ten_cum", "ten_bdx"]:
+                cell.value = str(val)
+                cell.alignment = Alignment(horizontal="left", vertical="center")
+            elif col == "cms":
+                cell.value = str(val)
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.font = Font(name=font_name, size=9, bold=True)
+            elif col in ["sl_ky_nay", "sl_ky_truoc", "sl_gan_nhat"]:
+                cell.value = int(val)
+                cell.number_format = '#,##0'
+                cell.alignment = Alignment(horizontal="right", vertical="center")
+            elif col in ["dt_ky_nay", "dt_ky_truoc", "dt_gan_nhat", "chenh_lech"]:
+                cell.value = float(val)
+                cell.number_format = '#,##0" đ"'
+                cell.alignment = Alignment(horizontal="right", vertical="center")
+            else:
+                cell.value = str(val)
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                
+    # Dòng tổng cộng
+    total_row = data_start + len(df)
+    ws.row_dimensions[total_row].height = 22
+    total_fill = PatternFill(start_color="E2E8F0", end_color="E2E8F0", fill_type="solid")
+    total_font = Font(name=font_name, size=9, bold=True)
+    
+    ws.merge_cells(f"A{total_row}:C{total_row}")
+    cell_lbl = ws.cell(row=total_row, column=1, value="Tổng cộng")
+    cell_lbl.font = Font(name=font_name, size=10, bold=True)
+    cell_lbl.alignment = Alignment(horizontal="left", vertical="center")
+    
+    for c_idx in range(1, len(cols) + 1):
+        cell = ws.cell(row=total_row, column=c_idx)
+        cell.fill = total_fill
+        cell.border = thin_border
+        if c_idx > 3:
+            cell.font = total_font
+            col_letter = get_column_letter(c_idx)
+            col_name = cols[c_idx - 1]
+            if col_name in ["sl_ky_nay", "sl_ky_truoc", "sl_gan_nhat"]:
+                cell.value = f"=SUM({col_letter}{data_start}:{col_letter}{total_row-1})"
+                cell.number_format = '#,##0'
+                cell.alignment = Alignment(horizontal="right", vertical="center")
+            elif col_name in ["dt_ky_nay", "dt_ky_truoc", "dt_gan_nhat", "chenh_lech"]:
+                cell.value = f"=SUM({col_letter}{data_start}:{col_letter}{total_row-1})"
+                cell.number_format = '#,##0" đ"'
+                cell.alignment = Alignment(horizontal="right", vertical="center")
+            else:
+                cell.value = ""
+                
+    # Điều chỉnh độ rộng cột tự động
+    for col in ws.columns:
+        max_len = 0
+        col_letter = get_column_letter(col[0].column)
+        for cell in col:
+            if cell.row == 1:
+                continue
+            val_str = str(cell.value or '')
+            if len(val_str) > max_len:
+                max_len = len(val_str)
+        ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
+        
+    output = io.BytesIO()
+    wb.save(output)
+    excel_bytes = output.getvalue()
+    output.close()
+    return excel_bytes
+
+
+def make_data_table(df, is_roi_bo=False):
+    """Tạo DataTable hiển thị danh sách khách hàng"""
+    if df.empty:
+        return html.Div("Không có dữ liệu", style={"textAlign": "center", "padding": "20px", "color": "#64748B"})
+        
+    df_display = df.copy()
+    if is_roi_bo:
+        columns = [
+            {"name": "Cụm", "id": "ten_cum"},
+            {"name": "Xã / Bưu cục", "id": "ten_bdx"},
+            {"name": "Mã CMS", "id": "cms"},
+            {"name": "SL gần nhất", "id": "sl_gan_nhat"},
+            {"name": "DT gần nhất", "id": "dt_gan_nhat_disp"},
+            {"name": "Kỳ gần nhất có DT", "id": "thang_gan_nhat"}
+        ]
+        df_display["dt_gan_nhat_disp"] = df_display["dt_gan_nhat"].apply(lambda x: f"{x:,.0f} đ" if pd.notna(x) else "0 đ")
+    else:
+        columns = [
+            {"name": "Cụm", "id": "ten_cum"},
+            {"name": "Xã / Bưu cục", "id": "ten_bdx"},
+            {"name": "Mã CMS", "id": "cms"},
+            {"name": "SL kỳ này", "id": "sl_ky_nay"},
+            {"name": "DT kỳ này", "id": "dt_ky_nay_disp"},
+            {"name": "SL kỳ trước", "id": "sl_ky_truoc"},
+            {"name": "DT kỳ trước", "id": "dt_ky_truoc_disp"},
+            {"name": "Chênh lệch DT", "id": "chenh_lech_disp"}
+        ]
+        df_display["dt_ky_nay_disp"] = df_display["dt_ky_nay"].apply(lambda x: f"{x:,.0f} đ" if pd.notna(x) else "0 đ")
+        df_display["dt_ky_truoc_disp"] = df_display["dt_ky_truoc"].apply(lambda x: f"{x:,.0f} đ" if pd.notna(x) else "0 đ")
+        df_display["chenh_lech_disp"] = df_display["chenh_lech"].apply(lambda x: f"{x:+,.0f} đ" if pd.notna(x) else "0 đ")
+
+    return dash_table.DataTable(
+        columns=columns,
+        data=df_display.to_dict('records'),
+        sort_action='native',
+        filter_action='native',
+        page_size=10,
+        style_table={'overflowX': 'auto', 'minWidth': '100%'},
+        style_header={
+            'backgroundColor': '#F8FAFC',
+            'fontWeight': 'bold',
+            'color': '#1E293B',
+            'border': '1px solid #E2E8F0',
+            'textAlign': 'left',
+            'fontSize': '12px',
+            'padding': '10px'
+        },
+        style_cell={
+            'border': '1px solid #E2E8F0',
+            'padding': '10px',
+            'fontSize': '12px',
+            'color': '#334155',
+            'fontFamily': 'Inter, sans-serif'
+        },
+        style_data_conditional=[
+            {
+                'if': {'row_index': 'odd'},
+                'backgroundColor': '#F8FAFC'
+            }
+        ]
+    )
+
 
 def register_retention_callbacks(app):
-    """
-    Đăng ký các callback của trang Retention.
-    """
+    """Đăng ký các callback cho trang Retention v2.0"""
 
-    # (Đã xóa cascade callback update_ret_bdx_dropdown - không còn lọc BĐX)
-
-    # ==============================================================================
-    # 2. HELPER XỬ LÝ BẢNG BIẾN ĐỘNG
-    # ==============================================================================
-    def build_changes_df(changes_dict):
-        """Dựng DataFrame từ dict kết quả của get_khhh_changes."""
-        rows = [
-            {
-                'loai': '📈 Doanh thu tăng',
-                'count': changes_dict['tang']['count'],
-                'change_dt': changes_dict['tang']['total_dt_change']
-            },
-            {
-                'loai': '📉 Doanh thu giảm',
-                'count': changes_dict['giam']['count'],
-                'change_dt': changes_dict['giam']['total_dt_change']  # thường là số âm
-            },
-            {
-                'loai': '❌ Khách hàng mất đi',
-                'count': changes_dict['mat']['count'],
-                'change_dt': changes_dict['mat']['total_dt_change']   # thường là số âm
-            },
-            {
-                'loai': '✅ Duy trì (Ổn định)',
-                'count': changes_dict['duy_tri']['count'],
-                'change_dt': 0.0
-            }
-        ]
-        return pd.DataFrame(rows)
-
-    # ==============================================================================
-    # 3. CALLBACK CHÍNH CẬP NHẬT GIAO DIỆN
-    # ==============================================================================
     @app.callback(
-        [# Block 1: KPI Cards
-         Output("ret-kpi-prev-count-value", "children"), Output("ret-kpi-prev-count-subtext", "children"),
-         Output("ret-kpi-retained-revenue-value", "children"), Output("ret-kpi-retained-revenue-subtext", "children"),
-         Output("ret-kpi-lost-count-value", "children"), Output("ret-kpi-lost-count-subtext", "children"),
-         # Block 2: Chỉ số duy trì (Gauges)
-         Output("ret-gauge-sl", "figure"),
-         Output("ret-gauge-dt", "figure"),
-         # Block 3: Waterfall Chart & Bảng phân tích biến động
-         Output("ret-waterfall-chart", "figure"),
-         Output("ret-table-container", "children"),
-         # Block 4: Churn Alerts Table
-         Output("ret-churn-table-container", "children")],
-        [Input("btn-apply-filter", "n_clicks"),
-         Input("tabs-navigation", "value")],
-        [State("sidebar-year", "value"),
-         State("sidebar-month-select", "value"),
-         State("sidebar-cum", "value")]
+        [
+            # KPI Cards
+            Output("ret-kpi-tang-value", "children"), Output("ret-kpi-tang-subtext", "children"),
+            Output("ret-kpi-giam-value", "children"), Output("ret-kpi-giam-subtext", "children"),
+            Output("ret-kpi-roibo-value", "children"), Output("ret-kpi-roibo-subtext", "children"),
+            Output("ret-kpi-duytri-value", "children"), Output("ret-kpi-duytri-subtext", "children"),
+            # Tables
+            Output("ret-table-tang-container", "children"),
+            Output("ret-table-giam-container", "children"),
+            Output("ret-table-roibo-container", "children")
+        ],
+        [
+            Input("btn-apply-filter", "n_clicks"),
+            Input("tabs-navigation", "value")
+        ],
+        [
+            State("sidebar-year", "value"),
+            State("sidebar-month-select", "value"),
+            State("sidebar-week-select", "value"),
+            State("sidebar-cycle", "value"),
+            State("sidebar-cum", "value")
+        ]
     )
-    def update_retention_page(n_clicks, tab_val, year, month, cum_val):
-        bdx_val = None  # Không còn lọc theo BĐX
+    def update_retention_page(n_clicks, tab_val, year, month, week, cycle, cum_val):
         if tab_val is None or tab_val != "tab-retention":
             return [dash.no_update] * 11
-        # Guard: chưa có giá trị bộ lọc hợp lệ
-        if not year or not month:
+        if not year:
             return [dash.no_update] * 11
             
         db_str = str(DB_PATH)
         
-        # 1. Tính toán thống kê duy trì (get_retention_stats)
-        stats = get_retention_stats(db_str, year, month, cum_val, bdx_val)
-        
-        # 2. Tính toán phân tích biến động (get_khhh_changes)
-        changes = get_khhh_changes(db_str, year, month, cum_val, bdx_val)
-        df_changes = build_changes_df(changes)
-        
-        # Format Block 1 (KPI Cards)
-        val_prev_count = f"{stats['khhh_prev_count']:,} KH"
-        sub_prev_count = f"KHHH = KH có GD trừ KH mới"
-        
-        val_retained_rev = format_revenue(stats['dt_retained'])
-        sub_retained_rev = f"Doanh thu tháng {month:02d} từ KH duy trì"
-        
-        val_lost_count = f"{stats['lost_count']:,} KH"
-        sub_lost_count = f"Mất đi (không phát sinh tháng {month:02d})"
-        
-        # Format Block 2 (Gauges)
-        import plotly.graph_objects as go
-        fig_gauge_sl = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=stats['retention_rate_sl'],
-            number={"suffix": "%", "font": {"size": 22}},
-            title={'text': "Retention SL", 'font': {'size': 12, 'color': '#64748B', 'weight': 'bold'}},
-            gauge={
-                'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "#94A3B8"},
-                'bar': {'color': "#0F766E"},
-                'bgcolor': "white",
-                'borderwidth': 1,
-                'bordercolor': "#E2E8F0",
-                'steps': [
-                    {'range': [0, 50], 'color': "#FEE2E2"},
-                    {'range': [50, 80], 'color': "#FEF3C7"},
-                    {'range': [80, 100], 'color': "#D1FAE5"}
-                ],
-                'threshold': {
-                    'line': {'color': "red", 'width': 3},
-                    'thickness': 0.75,
-                    'value': 90
-                }
-            }
-        ))
-        fig_gauge_sl.update_layout(
-            height=140,
-            margin=dict(t=25, b=5, l=10, r=10),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)"
-        )
-        
-        fig_gauge_dt = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=stats['retention_rate_dt'],
-            number={"suffix": "%", "font": {"size": 22}},
-            title={'text': "Retention DT", 'font': {'size': 12, 'color': '#64748B', 'weight': 'bold'}},
-            gauge={
-                'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "#94A3B8"},
-                'bar': {'color': "#2563EB"},
-                'bgcolor': "white",
-                'borderwidth': 1,
-                'bordercolor': "#E2E8F0",
-                'steps': [
-                    {'range': [0, 50], 'color': "#FEE2E2"},
-                    {'range': [50, 80], 'color': "#FEF3C7"},
-                    {'range': [80, 100], 'color': "#D1FAE5"}
-                ],
-                'threshold': {
-                    'line': {'color': "red", 'width': 3},
-                    'thickness': 0.75,
-                    'value': 90
-                }
-            }
-        ))
-        fig_gauge_dt.update_layout(
-            height=140,
-            margin=dict(t=25, b=5, l=10, r=10),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)"
-        )
-        
-        # Waterfall Chart
-        fig_waterfall = go.Figure(go.Waterfall(
-            name="Biến động KHHH",
-            orientation="v",
-            x=["KHHH T-1", "Mất đi", "Giảm DT", "Tăng DT", "KHHH T0"],
-            y=[stats['khhh_prev_count'], -changes['mat']['count'], -changes['giam']['count'], changes['tang']['count'], None],
-            measure=["absolute", "relative", "relative", "relative", "total"],
-            connector={"line": {"color": "#64748B", "width": 1.5}},
-            decreasing={"marker": {"color": "#EF4444"}},
-            increasing={"marker": {"color": "#10B981"}},
-            totals={"marker": {"color": "#3B82F6"}}
-        ))
-        fig_waterfall.update_layout(
-            margin=dict(t=10, b=10, l=40, r=20),
-            height=280,
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)"
-        )
-        
-        # Format Block 3 (Bảng biến động)
-        tot_count = df_changes['count'].sum()
-        tot_change = df_changes['change_dt'].sum()
-        
-        total_row = {
-            'loai': 'TỔNG CỘNG',
-            'count': tot_count,
-            'change_dt': tot_change
-        }
-        df_table = pd.concat([df_changes, pd.DataFrame([total_row])], ignore_index=True)
-        
-        df_display = df_table.copy()
-        df_display['count'] = df_display['count'].apply(lambda x: f"{x:,}")
-        df_display['change_dt'] = df_display['change_dt'].apply(lambda x: f"{x:+,.0f} đ" if x != 0 else "0 đ")
-        df_display['change_dt'] = df_display['change_dt'].str.replace("+ -", "-", regex=False).str.replace("+ ", "", regex=False)
-        
-        columns = [
-            {"name": "Nhóm biến động", "id": "loai"},
-            {"name": "Số lượng khách hàng (CMS)", "id": "count"},
-            {"name": "Doanh thu thay đổi so với tháng trước", "id": "change_dt"}
-        ]
-        
-        table_element = dash_table.DataTable(
-            columns=columns,
-            data=df_display.to_dict('records'),
-            sort_action='native',
-            filter_action='native',
-            style_table={'overflowX': 'auto', 'minWidth': '100%', 'maxHeight': '280px', 'overflowY': 'auto'},
-            style_header={
-                'backgroundColor': '#F1F5F9',
-                'fontWeight': 'bold',
-                'color': '#1E293B',
-                'border': '1px solid #E2E8F0',
-                'textAlign': 'left',
-                'fontSize': '12px',
-                'padding': '8px 10px'
-            },
-            style_cell={
-                'border': '1px solid #E2E8F0',
-                'padding': '8px 10px',
-                'fontSize': '12px',
-                'color': '#334155',
-                'fontFamily': 'Inter, sans-serif'
-            },
-            style_data_conditional=[
-                {
-                    'if': {'filter_query': '{loai} = "📈 Doanh thu tăng"'},
-                    'color': '#15803d',
-                    'fontWeight': 'bold'
-                },
-                {
-                    'if': {'filter_query': '{loai} = "📉 Doanh thu giảm"'},
-                    'color': '#b91c1c',
-                    'fontWeight': 'bold'
-                },
-                {
-                    'if': {'filter_query': '{loai} = "❌ Khách hàng mất đi"'},
-                    'color': '#7f1d1d',
-                    'backgroundColor': '#fef2f2'
-                },
-                {
-                    'if': {'filter_query': '{loai} = "TỔNG CỘNG"'},
-                    'backgroundColor': '#F1F5F9',
-                    'fontWeight': 'bold',
-                    'color': '#0F766E'
-                }
-            ]
-        )
-        
-        # 4. Churn Alerts Table
-        df_churn = get_churn_alerts(db_str, year, month, cum_val, bdx_val)
-        if df_churn.empty:
-            churn_table_element = dbc.Alert("Không phát hiện khách hàng rời bỏ có nguy cơ cao cho bộ lọc hiện tại.", color="success", className="m-3")
+        # 1. Gọi hàm analytics lấy biến động dựa trên chu kỳ lọc
+        if cycle == 'Tuần':
+            if not week:
+                return [dash.no_update] * 11
+            res = get_weekly_changes(db_str, year, week, cum_val)
         else:
-            df_churn_display = df_churn.copy()
-            df_churn_display['DT kỳ này'] = df_churn_display['dt_ky_nay'].apply(lambda x: f"{x:,.0f} đ")
-            df_churn_display['DT TB 3 tháng'] = df_churn_display['dt_tb_3thang'].apply(lambda x: f"{x:,.0f} đ")
-            df_churn_display['% Giảm'] = df_churn_display['pct_giam'].apply(lambda x: f"{x:.1f}%")
+            if not month:
+                return [dash.no_update] * 11
+            res = get_khhh_changes_v2(db_str, year, month, cum_val)
             
-            churn_table_element = dash_table.DataTable(
-                id="churn-alerts-table",
-                columns=[
-                    {"name": "CMS", "id": "cms"},
-                    {"name": "Bưu cục", "id": "ten_buu_cuc"},
-                    {"name": "DT kỳ này", "id": "DT kỳ này"},
-                    {"name": "DT TB 3 tháng", "id": "DT TB 3 tháng"},
-                    {"name": "% Giảm", "id": "% Giảm"},
-                    {"name": "Ngày GD cuối", "id": "ngay_gd_cuoi"},
-                    {"name": "Lý do", "id": "ly_do"},
-                ],
-                data=df_churn_display.to_dict('records'),
-                style_table={'overflowX': 'auto', 'maxHeight': '300px', 'overflowY': 'auto'},
-                style_header={
-                    'backgroundColor': '#F1F5F9',
-                    'fontWeight': 'bold',
-                    'color': '#1E293B',
-                    'border': '1px solid #E2E8F0',
-                    'textAlign': 'left',
-                    'fontSize': '12px',
-                    'padding': '8px'
-                },
-                style_cell={
-                    'border': '1px solid #E2E8F0',
-                    'padding': '6px 8px',
-                    'fontSize': '12px',
-                    'color': '#334155',
-                    'fontFamily': 'Inter, sans-serif'
-                },
-                style_data_conditional=[
-                    {
-                        'if': {'filter_query': '{ly_do} contains "Không GD"'},
-                        'backgroundColor': '#FEE2E2',
-                        'fontWeight': 'bold',
-                        'color': '#991B1B'
-                    },
-                    {
-                        'if': {'filter_query': '{pct_giam} < -30'},
-                        'backgroundColor': '#FEF3C7',
-                        'color': '#92400E'
-                    }
-                ],
-                page_size=15,
-                sort_action="native",
-                filter_action="native"
-            )
+        df_tang = pd.DataFrame(res['tang'])
+        df_giam = pd.DataFrame(res['giam'])
+        df_roi_bo = pd.DataFrame(res['roi_bo'])
+        
+        # 2. Tính toán giá trị KPI Cards
+        # Nhóm Tăng
+        count_tang = len(df_tang)
+        sum_tang = df_tang['chenh_lech'].sum() if not df_tang.empty else 0.0
+        val_tang = f"{count_tang:,} KH"
+        sub_tang = f"+{format_revenue(sum_tang)}"
+        
+        # Nhóm Giảm
+        count_giam = len(df_giam)
+        sum_giam = df_giam['chenh_lech'].sum() if not df_giam.empty else 0.0
+        val_giam = f"{count_giam:,} KH"
+        sub_giam = f"-{format_revenue(abs(sum_giam))}" if sum_giam < 0 else f"{format_revenue(sum_giam)}"
+        
+        # Nhóm Rời bỏ
+        count_roibo = len(df_roi_bo)
+        sum_roibo = df_roi_bo['dt_gan_nhat'].sum() if not df_roi_bo.empty else 0.0
+        val_roibo = f"{count_roibo:,} KH"
+        sub_roibo = f"-{format_revenue(sum_roibo)}"
+        
+        # Nhóm Duy trì
+        val_duytri = f"{res['duy_tri_count']:,} KH"
+        sub_duytri = "Doanh thu không đổi và > 0"
+        
+        # 3. Tạo DataTable cho 3 bảng chi tiết
+        table_tang = make_data_table(df_tang, is_roi_bo=False)
+        table_giam = make_data_table(df_giam, is_roi_bo=False)
+        table_roibo = make_data_table(df_roi_bo, is_roi_bo=True)
         
         return [
-            val_prev_count, sub_prev_count,
-            val_retained_rev, sub_retained_rev,
-            val_lost_count, sub_lost_count,
-            fig_gauge_sl, fig_gauge_dt,
-            fig_waterfall, table_element,
-            churn_table_element
+            val_tang, sub_tang,
+            val_giam, sub_giam,
+            val_roibo, sub_roibo,
+            val_duytri, sub_duytri,
+            table_tang, table_giam, table_roibo
         ]
 
-    # ==============================================================================
-    # 4. CALLBACK EXPORT EXCEL
-    # ==============================================================================
+    # Callback xuất Excel nhóm TĂNG
     @app.callback(
-        Output("ret-download", "data"),
-        [Input("ret-btn-export-excel", "n_clicks")],
-        [State("tabs-navigation", "value"),
-         State("sidebar-year", "value"),
-         State("sidebar-month-select", "value"),
-         State("sidebar-cum", "value")],
+        Output("ret-download-tang", "data"),
+        Input("ret-btn-export-tang", "n_clicks"),
+        [
+            State("tabs-navigation", "value"),
+            State("sidebar-year", "value"),
+            State("sidebar-month-select", "value"),
+            State("sidebar-week-select", "value"),
+            State("sidebar-cycle", "value"),
+            State("sidebar-cum", "value")
+        ],
         prevent_initial_call=True
     )
-    def export_retention_excel(n_clicks, tab_val, year, month, cum_val):
-        bdx_val = None  # Không còn lọc theo BĐX
-        if not n_clicks or tab_val is None or tab_val != "tab-retention":
-            return dash.no_update
-        if not year or not month:
+    def export_tang_excel(n_clicks, tab_val, year, month, week, cycle, cum_val):
+        if not n_clicks or tab_val != "tab-retention" or not year:
             return dash.no_update
             
         db_str = str(DB_PATH)
-        stats = get_retention_stats(db_str, year, month, cum_val, bdx_val)
-        changes = get_khhh_changes(db_str, year, month, cum_val, bdx_val)
-        df_changes = build_changes_df(changes)
-        
-        # Tạo file Excel in-memory bằng openpyxl
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Biến Động KHHH"
-        
-        # Bật hiển thị grid lines
-        ws.views.sheetView[0].showGridLines = True
-        
-        # Tiêu đề báo cáo
-        title_font = Font(name="Arial", size=14, bold=True, color="1E3A8A")
-        sub_font = Font(name="Arial", size=10, italic=True)
-        header_font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
-        data_font = Font(name="Arial", size=10)
-        total_font = Font(name="Arial", size=10, bold=True, color="0F766E")
-        
-        header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
-        total_fill = PatternFill(start_color="E2E8F0", end_color="E2E8F0", fill_type="solid")
-        
-        thin_border = Border(
-            left=Side(style='thin', color='CBD5E1'),
-            right=Side(style='thin', color='CBD5E1'),
-            top=Side(style='thin', color='CBD5E1'),
-            bottom=Side(style='thin', color='CBD5E1')
-        )
-        
-        # Ghi các thông tin tiêu đề
-        ws['A1'] = f"BÁO CÁO DUY TRÌ VÀ BIẾN ĐỘNG KHÁCH HÀNG HIỆN HỮU - THÁNG {month:02d}/{year}"
-        ws['A1'].font = title_font
-        
-        cum_txt = cum_val if cum_val else "Tất cả"
-        bdx_txt = bdx_val if bdx_val else "Tất cả"
-        ws['A2'] = f"Bộ lọc: Cụm: {cum_txt} | BĐX: {bdx_txt}"
-        ws['A2'].font = sub_font
-        
-        # Ghi một số chỉ số KPIs tổng hợp ở đầu
-        ws['A4'] = "CHỈ SỐ DUY TRÌ TỔNG HỢP"
-        ws['A4'].font = Font(name="Arial", size=11, bold=True, color="0F766E")
-        
-        kpis_list = [
-            ("Tập KHHH tháng trước (T-1)", stats['khhh_prev_count'], "KH"),
-            ("Số lượng KH duy trì (T)", stats['retained_count'], "KH"),
-            ("Số lượng KH mất đi (T)", stats['lost_count'], "KH"),
-            ("Tỷ lệ duy trì khách hàng (SL)", stats['retention_rate_sl'] / 100, "0.0%"),
-            ("Doanh thu KH duy trì kỳ trước (T-1)", stats['dt_prev'], "đ"),
-            ("Doanh thu KH duy trì kỳ này (T)", stats['dt_retained'], "đ"),
-            ("Tỷ lệ duy trì doanh thu (DT)", stats['retention_rate_dt'] / 100, "0.0%")
-        ]
-        
-        cur_row = 5
-        for label, val, unit in kpis_list:
-            ws.cell(row=cur_row, column=1, value=label).font = data_font
-            ws.cell(row=cur_row, column=1).border = thin_border
+        if cycle == 'Tuần':
+            if not week: return dash.no_update
+            res = get_weekly_changes(db_str, year, week, cum_val)
+            period_str = f"Tuan {week}_{year}"
+        else:
+            if not month: return dash.no_update
+            res = get_khhh_changes_v2(db_str, year, month, cum_val)
+            period_str = f"Thang {month:02d}_{year}"
             
-            val_cell = ws.cell(row=cur_row, column=2, value=val)
-            val_cell.font = Font(name="Arial", size=10, bold=True)
-            val_cell.border = thin_border
-            val_cell.alignment = Alignment(horizontal="right")
+        df = pd.DataFrame(res['tang'])
+        if df.empty:
+            return dash.no_update
             
-            if unit == "KH":
-                val_cell.number_format = '#,##0" KH"'
-            elif unit == "đ":
-                val_cell.number_format = '#,##0" đ"'
-            elif unit == "0.0%":
-                val_cell.number_format = '0.00%'
-                
-            cur_row += 1
-            
-        cur_row += 1
-        # Headers cho bảng biến động
-        ws.cell(row=cur_row, column=1, value="BẢNG PHÂN TÍCH BIẾN ĐỘNG DOANH THU").font = Font(name="Arial", size=11, bold=True, color="0F766E")
-        
-        cur_row += 1
-        headers = ["Nhóm biến động", "Số lượng khách hàng (CMS)", "Doanh thu thay đổi so với tháng trước"]
-        for col_idx, h in enumerate(headers, 1):
-            cell = ws.cell(row=cur_row, column=col_idx, value=h)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            cell.border = thin_border
-            
-        ws.row_dimensions[cur_row].height = 24
-        
-        # Ghi dữ liệu biến động
-        for idx, r in df_changes.iterrows():
-            cur_row += 1
-            ws.row_dimensions[cur_row].height = 20
-            
-            ws.cell(row=cur_row, column=1, value=r['loai']).alignment = Alignment(horizontal="left", vertical="center")
-            ws.cell(row=cur_row, column=2, value=r['count']).alignment = Alignment(horizontal="right", vertical="center")
-            ws.cell(row=cur_row, column=3, value=r['change_dt']).alignment = Alignment(horizontal="right", vertical="center")
-            
-            # Format
-            for col_idx in range(1, 4):
-                cell = ws.cell(row=cur_row, column=col_idx)
-                cell.font = data_font
-                cell.border = thin_border
-                if col_idx == 2:
-                    cell.number_format = '#,##0'
-                elif col_idx == 3:
-                    cell.number_format = '+#,##0" đ";-#,##0" đ";0" đ"'
-                    
-        # Dòng TỔNG CỘNG cho bảng biến động
-        cur_row += 1
-        ws.row_dimensions[cur_row].height = 22
-        
-        tot_count = df_changes['count'].sum()
-        tot_change = df_changes['change_dt'].sum()
-        
-        ws.cell(row=cur_row, column=1, value="TỔNG CỘNG").alignment = Alignment(horizontal="left", vertical="center")
-        ws.cell(row=cur_row, column=2, value=tot_count)
-        ws.cell(row=cur_row, column=3, value=tot_change)
-        
-        for col_idx in range(1, 4):
-            cell = ws.cell(row=cur_row, column=col_idx)
-            cell.font = total_font
-            cell.fill = total_fill
-            cell.border = thin_border
-            if col_idx == 2:
-                cell.number_format = '#,##0'
-            elif col_idx == 3:
-                cell.number_format = '+#,##0" đ";-#,##0" đ";0" đ"'
-                
-        # Auto-adjust column widths
-        for col in ws.columns:
-            max_len = 0
-            col_letter = get_column_letter(col[0].column)
-            for cell in col:
-                val = str(cell.value or "")
-                if "+#,##0" in str(cell.number_format) and isinstance(cell.value, (int, float)):
-                    val = f"+{cell.value:,.0f} đ" if cell.value > 0 else f"{cell.value:,.0f} đ"
-                max_len = max(max_len, len(val))
-            ws.column_dimensions[col_letter].width = max(max_len + 4, 15)
-            
-        ws.column_dimensions['A'].width = 40
-        
-        # Lưu ra bytes
-        output_stream = io.BytesIO()
-        wb.save(output_stream)
-        excel_bytes = output_stream.getvalue()
-        output_stream.close()
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"bao_cao_bien_dong_khhh_{timestamp}.xlsx"
-        return dcc.send_bytes(excel_bytes, filename=filename)
+        excel_bytes = generate_retention_list_excel(df, "KH Hien Huu Tang Doanh Thu", False, period_str)
+        return dcc.send_bytes(excel_bytes, filename=f"KH_Tang_{period_str}.xlsx")
 
-    # ==============================================================================
-    # 5. CALLBACK EXPORT CHURN ALERTS
-    # ==============================================================================
+    # Callback xuất Excel nhóm GIẢM
     @app.callback(
-        Output("ret-download-churn", "data"),
-        [Input("ret-btn-export-churn", "n_clicks")],
-        [State("tabs-navigation", "value"),
-         State("sidebar-year", "value"),
-         State("sidebar-month-select", "value"),
-         State("sidebar-cum", "value")],
+        Output("ret-download-giam", "data"),
+        Input("ret-btn-export-giam", "n_clicks"),
+        [
+            State("tabs-navigation", "value"),
+            State("sidebar-year", "value"),
+            State("sidebar-month-select", "value"),
+            State("sidebar-week-select", "value"),
+            State("sidebar-cycle", "value"),
+            State("sidebar-cum", "value")
+        ],
         prevent_initial_call=True
     )
-    def export_churn_alerts_excel(n_clicks, tab_val, year, month, cum_val):
-        bdx_val = None  # Không còn lọc theo BĐX
-        if not n_clicks or tab_val is None or tab_val != "tab-retention":
-            return dash.no_update
-        if not year or not month:
+    def export_giam_excel(n_clicks, tab_val, year, month, week, cycle, cum_val):
+        if not n_clicks or tab_val != "tab-retention" or not year:
             return dash.no_update
             
         db_str = str(DB_PATH)
-        df_churn = get_churn_alerts(db_str, year, month, cum_val, bdx_val)
-        
-        if df_churn.empty:
+        if cycle == 'Tuần':
+            if not week: return dash.no_update
+            res = get_weekly_changes(db_str, year, week, cum_val)
+            period_str = f"Tuan {week}_{year}"
+        else:
+            if not month: return dash.no_update
+            res = get_khhh_changes_v2(db_str, year, month, cum_val)
+            period_str = f"Thang {month:02d}_{year}"
+            
+        df = pd.DataFrame(res['giam'])
+        if df.empty:
             return dash.no_update
             
-        # Tạo file Excel openpyxl
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Canh Bao Churn"
-        ws.views.sheetView[0].showGridLines = True
-        
-        title_font = Font(name="Arial", size=14, bold=True, color="B91C1C")
-        sub_font = Font(name="Arial", size=10, italic=True)
-        header_font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
-        data_font = Font(name="Arial", size=10)
-        
-        header_fill = PatternFill(start_color="B91C1C", end_color="B91C1C", fill_type="solid")
-        
-        thin_border = Border(
-            left=Side(style='thin', color='CBD5E1'),
-            right=Side(style='thin', color='CBD5E1'),
-            top=Side(style='thin', color='CBD5E1'),
-            bottom=Side(style='thin', color='CBD5E1')
-        )
-        
-        ws['A1'] = f"DANH SÁCH CẢNH BÁO KHÁCH HÀNG CÓ NGUY CƠ RỜI BỎ - THÁNG {month:02d}/{year}"
-        ws['A1'].font = title_font
-        
-        cum_txt = cum_val if cum_val else "Tất cả"
-        bdx_txt = bdx_val if bdx_val else "Tất cả"
-        ws['A2'] = f"Bộ lọc: Cụm: {cum_txt} | BĐX: {bdx_txt}"
-        ws['A2'].font = sub_font
-        
-        headers = ["CMS", "Bưu cục", "DT Kỳ Này", "DT TB 3 Tháng", "% Giảm", "Ngày GD Cuối", "Lý Do Cảnh Báo"]
-        row_num = 4
-        for col_idx, h in enumerate(headers, 1):
-            cell = ws.cell(row=row_num, column=col_idx, value=h)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            cell.border = thin_border
+        excel_bytes = generate_retention_list_excel(df, "KH Hien Huu Giam Doanh Thu", False, period_str)
+        return dcc.send_bytes(excel_bytes, filename=f"KH_Giam_{period_str}.xlsx")
+
+    # Callback xuất Excel nhóm RỜI BỎ
+    @app.callback(
+        Output("ret-download-roibo", "data"),
+        Input("ret-btn-export-roibo", "n_clicks"),
+        [
+            State("tabs-navigation", "value"),
+            State("sidebar-year", "value"),
+            State("sidebar-month-select", "value"),
+            State("sidebar-week-select", "value"),
+            State("sidebar-cycle", "value"),
+            State("sidebar-cum", "value")
+        ],
+        prevent_initial_call=True
+    )
+    def export_roibo_excel(n_clicks, tab_val, year, month, week, cycle, cum_val):
+        if not n_clicks or tab_val != "tab-retention" or not year:
+            return dash.no_update
             
-        ws.row_dimensions[row_num].height = 24
-        
-        for idx, r in df_churn.iterrows():
-            row_num += 1
-            ws.row_dimensions[row_num].height = 20
+        db_str = str(DB_PATH)
+        if cycle == 'Tuần':
+            if not week: return dash.no_update
+            res = get_weekly_changes(db_str, year, week, cum_val)
+            period_str = f"Tuan {week}_{year}"
+        else:
+            if not month: return dash.no_update
+            res = get_khhh_changes_v2(db_str, year, month, cum_val)
+            period_str = f"Thang {month:02d}_{year}"
             
-            ws.cell(row=row_num, column=1, value=r['cms']).alignment = Alignment(horizontal="left", vertical="center")
-            ws.cell(row=row_num, column=2, value=r['ten_buu_cuc']).alignment = Alignment(horizontal="left", vertical="center")
-            ws.cell(row=row_num, column=3, value=r['dt_ky_nay']).alignment = Alignment(horizontal="right", vertical="center")
-            ws.cell(row=row_num, column=4, value=r['dt_tb_3thang']).alignment = Alignment(horizontal="right", vertical="center")
-            ws.cell(row=row_num, column=5, value=r['pct_giam'] / 100 if pd.notna(r['pct_giam']) else "").alignment = Alignment(horizontal="right", vertical="center")
-            ws.cell(row=row_num, column=6, value=r['ngay_gd_cuoi']).alignment = Alignment(horizontal="center", vertical="center")
-            ws.cell(row=row_num, column=7, value=r['ly_do']).alignment = Alignment(horizontal="left", vertical="center")
+        df = pd.DataFrame(res['roi_bo'])
+        if df.empty:
+            return dash.no_update
             
-            for col_idx in range(1, 8):
-                cell = ws.cell(row=row_num, column=col_idx)
-                cell.font = data_font
-                cell.border = thin_border
-                if col_idx in [3, 4]:
-                    cell.number_format = '#,##0" đ"'
-                elif col_idx == 5:
-                    cell.number_format = '0.0%'
-                    
-        for col in ws.columns:
-            max_len = 0
-            col_letter = get_column_letter(col[0].column)
-            for cell in col:
-                val = str(cell.value or "")
-                max_len = max(max_len, len(val))
-            ws.column_dimensions[col_letter].width = max(max_len + 4, 12)
-            
-        output_stream = io.BytesIO()
-        wb.save(output_stream)
-        excel_bytes = output_stream.getvalue()
-        output_stream.close()
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"danh_sach_canh_bao_churn_{timestamp}.xlsx"
-        return dcc.send_bytes(excel_bytes, filename=filename)
+        excel_bytes = generate_retention_list_excel(df, "KH Hien Huu Roi Bo Churn", True, period_str)
+        return dcc.send_bytes(excel_bytes, filename=f"KH_Roibo_{period_str}.xlsx")

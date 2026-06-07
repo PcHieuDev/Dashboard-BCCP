@@ -446,3 +446,368 @@ def get_growth_heatmap_data(db_path, year, month, compare_mode="prev", cum=None)
             
     return df_growth
 
+
+def get_top10_by_comparison(conn, period_type, period_value, year, compare_type):
+    """
+    Tính top 10 xã có tỷ lệ tăng trưởng hoặc hoàn thành kế hoạch cao nhất.
+    - compare_type: 'prev' (Kỳ trước), 'yoy' (Cùng kỳ năm trước), 'plan' (Kế hoạch)
+    - period_type: 'Tháng' hoặc 'Tuần'
+    - period_value: Số chu kỳ (ví dụ: 5 cho Tháng 5 hoặc 20 cho Tuần 20)
+    - year: Năm hiện tại
+    """
+    cursor = conn.cursor()
+    import config.week_calendar as calendar_helper
+    
+    # Xác định khoảng thời gian và năm cho kỳ so sánh
+    if compare_type == 'prev':
+        if period_type == 'Tháng':
+            prev_month = 12 if period_value == 1 else period_value - 1
+            prev_year = year - 1 if period_value == 1 else year
+            prev_value = prev_month
+        else: # Tuần
+            if period_value == 1:
+                prev_year = year - 1
+                weeks = calendar_helper.get_week_list(prev_year)
+                prev_value = weeks[-1][0] # Tuần cuối của năm trước
+            else:
+                prev_year = year
+                prev_value = period_value - 1
+    elif compare_type == 'yoy':
+        prev_year = year - 1
+        prev_value = period_value
+        
+    # Query lấy doanh thu kỳ hiện tại theo xã (buu_cuc)
+    if period_type == 'Tháng':
+        curr_query = """
+            SELECT buu_cuc, SUM(tong_doanh_thu) as dt_curr
+            FROM agg_monthly
+            WHERE nam = ? AND thang = ?
+            GROUP BY buu_cuc
+        """
+        curr_params = (year, period_value)
+    else: # Tuần
+        curr_query = """
+            SELECT buu_cuc, SUM(tong_doanh_thu) as dt_curr
+            FROM agg_weekly
+            WHERE nam = ? AND tuan_so = ?
+            GROUP BY buu_cuc
+        """
+        curr_params = (year, period_value)
+        
+    df_curr = pd.read_sql_query(curr_query, conn, params=curr_params)
+    
+    if compare_type == 'plan':
+        # So sánh với Kế hoạch
+        if period_type == 'Tháng':
+            plan_query = """
+                SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_val
+                FROM plans
+                WHERE nam = ? AND thang = ?
+                GROUP BY ma_buu_cuc
+            """
+            plan_params = (year, period_value)
+        else: # Tuần
+            plan_query = """
+                SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_val
+                FROM plans_weekly
+                WHERE nam = ? AND tuan_so = ?
+                GROUP BY ma_buu_cuc
+            """
+            plan_params = (year, period_value)
+            
+        df_compare = pd.read_sql_query(plan_query, conn, params=plan_params)
+        df_merge = pd.merge(df_curr, df_compare, on='buu_cuc', how='inner')
+        df_merge = df_merge[(df_merge['dt_curr'] > 0) & (df_merge['plan_val'] > 0)]
+        df_merge['ratio'] = (df_merge['dt_curr'] / df_merge['plan_val']) * 100.0
+    else:
+        # So sánh với kỳ trước hoặc cùng kỳ năm trước
+        if period_type == 'Tháng':
+            prev_query = """
+                SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev
+                FROM agg_monthly
+                WHERE nam = ? AND thang = ?
+                GROUP BY buu_cuc
+            """
+            prev_params = (prev_year, prev_value)
+        else: # Tuần
+            prev_query = """
+                SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev
+                FROM agg_weekly
+                WHERE nam = ? AND tuan_so = ?
+                GROUP BY buu_cuc
+            """
+            prev_params = (prev_year, prev_value)
+            
+        df_compare = pd.read_sql_query(prev_query, conn, params=prev_params)
+        df_merge = pd.merge(df_curr, df_compare, on='buu_cuc', how='inner')
+        # Lọc xã doanh thu dương ở cả 2 kỳ (tránh chia 0 hoặc tăng trưởng âm bất thường từ âm lên dương)
+        df_merge = df_merge[(df_merge['dt_curr'] > 0) & (df_merge['dt_prev'] > 0)]
+        df_merge['ratio'] = ((df_merge['dt_curr'] - df_merge['dt_prev']) / df_merge['dt_prev']) * 100.0
+        
+    if df_merge.empty:
+        return pd.DataFrame(columns=['ten_cum', 'ten_bdx', 'ratio'])
+        
+    # Join thêm thông tin địa lý từ dim_buucuc để có Tên Cụm, Tên Xã (ten_bdx)
+    df_buucuc = pd.read_sql_query("SELECT ma_bc as buu_cuc, ten_bdx, ten_cum FROM dim_buucuc", conn)
+    df_final = pd.merge(df_merge, df_buucuc, on='buu_cuc', how='inner')
+    
+    # Sắp xếp và lấy Top 10
+    df_final = df_final.sort_values(by='ratio', ascending=False).head(10)
+    return df_final[['ten_cum', 'ten_bdx', 'ratio']]
+
+
+def get_12_periods_revenue(conn, period_type, current_period, current_year):
+    """
+    Truy vấn dữ liệu doanh thu của 12 kỳ liên tiếp tính đến kỳ hiện tại.
+    Trả về DataFrame có: label (ví dụ: 'T01/2026' hoặc 'Tuần 12'), BCCP, HCC, TCBC, PPBL
+    """
+    import config.week_calendar as calendar_helper
+    periods = []
+    
+    if period_type == 'Tháng':
+        curr_m, curr_y = current_period, current_year
+        for _ in range(12):
+            periods.append((curr_m, curr_y, f"T{curr_m:02d}/{curr_y}"))
+            curr_m -= 1
+            if curr_m == 0:
+                curr_m = 12
+                curr_y -= 1
+        periods.reverse()
+    else: # Tuần
+        curr_w, curr_y = current_period, current_year
+        for _ in range(12):
+            periods.append((curr_w, curr_y, f"Tuần {curr_w}"))
+            curr_w -= 1
+            if curr_w == 0:
+                curr_y -= 1
+                weeks = calendar_helper.get_week_list(curr_y)
+                curr_w = weeks[-1][0] if weeks else 52
+        periods.reverse()
+        
+    result_data = []
+    for val, yr, label in periods:
+        row_dict = {'label': label, 'BCCP': 0.0, 'HCC': 0.0, 'TCBC': 0.0, 'PPBL': 0.0}
+        
+        if period_type == 'Tháng':
+            query = """
+                SELECT nhom_dich_vu, SUM(tong_doanh_thu) as dt
+                FROM agg_monthly
+                WHERE nam = ? AND thang = ?
+                GROUP BY nhom_dich_vu
+            """
+            params = (yr, val)
+        else: # Tuần
+            query = """
+                SELECT nhom_dich_vu, SUM(tong_doanh_thu) as dt
+                FROM agg_weekly
+                WHERE nam = ? AND tuan_so = ?
+                GROUP BY nhom_dich_vu
+            """
+            params = (yr, val)
+            
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        for nhom, dt in cursor.fetchall():
+            if nhom in row_dict:
+                row_dict[nhom] = dt or 0.0
+                
+        result_data.append(row_dict)
+        
+    return pd.DataFrame(result_data)
+
+
+def get_period_detail_by_xa(conn, period_type, period_value, year):
+    """
+    Lấy chi tiết doanh thu theo bưu cục/xã bao gồm cả 4 dịch vụ ở kỳ hiện tại, kỳ trước, cùng kỳ và kế hoạch.
+    Trả về DataFrame chi tiết cho từng xã để render lên bảng hiển thị.
+    """
+    import config.week_calendar as calendar_helper
+    cursor = conn.cursor()
+    
+    # 1. Định nghĩa kỳ so sánh
+    if period_type == 'Tháng':
+        prev_month = 12 if period_value == 1 else period_value - 1
+        prev_year = year - 1 if period_value == 1 else year
+        prev_value = prev_month
+    else: # Tuần
+        if period_value == 1:
+            prev_year = year - 1
+            weeks = calendar_helper.get_week_list(prev_year)
+            prev_value = weeks[-1][0] if weeks else 52
+        else:
+            prev_year = year
+            prev_value = period_value - 1
+            
+    # 2. Query doanh thu dịch vụ kỳ hiện tại theo xã
+    if period_type == 'Tháng':
+        curr_sql = """
+            SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
+            FROM agg_monthly
+            WHERE nam = ? AND thang = ?
+            GROUP BY buu_cuc, nhom_dich_vu
+        """
+        curr_params = (year, period_value)
+    else: # Tuần
+        curr_sql = """
+            SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
+            FROM agg_weekly
+            WHERE nam = ? AND tuan_so = ?
+            GROUP BY buu_cuc, nhom_dich_vu
+        """
+        curr_params = (year, period_value)
+        
+    df_curr_raw = pd.read_sql_query(curr_sql, conn, params=curr_params)
+    
+    # Pivot dịch vụ để có cấu trúc: buu_cuc | BCCP | HCC | TCBC | PPBL
+    if not df_curr_raw.empty:
+        df_curr = df_curr_raw.pivot(index='buu_cuc', columns='nhom_dich_vu', values='dt').fillna(0.0).reset_index()
+    else:
+        df_curr = pd.DataFrame(columns=['buu_cuc', 'BCCP', 'HCC', 'TCBC', 'PPBL'])
+        
+    for col in ['BCCP', 'HCC', 'TCBC', 'PPBL']:
+        if col not in df_curr.columns:
+            df_curr[col] = 0.0
+            
+    df_curr['tong_dt'] = df_curr[['BCCP', 'HCC', 'TCBC', 'PPBL']].sum(axis=1)
+    
+    # 3. Tính doanh thu tổng kỳ trước theo xã
+    if period_type == 'Tháng':
+        prev_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev FROM agg_monthly WHERE nam = ? AND thang = ? GROUP BY buu_cuc"
+        prev_params = (prev_year, prev_value)
+    else:
+        prev_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev FROM agg_weekly WHERE nam = ? AND tuan_so = ? GROUP BY buu_cuc"
+        prev_params = (prev_year, prev_value)
+        
+    df_prev = pd.read_sql_query(prev_sql, conn, params=prev_params)
+    
+    # 4. Tính doanh thu tổng cùng kỳ năm trước theo xã
+    if period_type == 'Tháng':
+        yoy_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy FROM agg_monthly WHERE nam = ? AND thang = ? GROUP BY buu_cuc"
+        yoy_params = (year - 1, period_value)
+    else:
+        yoy_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy FROM agg_weekly WHERE nam = ? AND tuan_so = ? GROUP BY buu_cuc"
+        yoy_params = (year - 1, period_value)
+        
+    df_yoy = pd.read_sql_query(yoy_sql, conn, params=yoy_params)
+    
+    # 5. Kế hoạch kỳ hiện tại theo xã
+    if period_type == 'Tháng':
+        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans WHERE nam = ? AND thang = ? GROUP BY ma_buu_cuc"
+        plan_params = (year, period_value)
+    else:
+        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans_weekly WHERE nam = ? AND tuan_so = ? GROUP BY ma_buu_cuc"
+        plan_params = (year, period_value)
+        
+    df_plan = pd.read_sql_query(plan_sql, conn, params=plan_params)
+    
+    # 6. Gộp tất cả dữ liệu so sánh vào df_curr
+    df_merge = df_curr
+    for df_c, col_name in [(df_prev, 'dt_prev'), (df_yoy, 'dt_yoy'), (df_plan, 'plan_dt')]:
+        if not df_c.empty:
+            df_merge = pd.merge(df_merge, df_c, on='buu_cuc', how='left')
+        else:
+            df_merge[col_name] = 0.0
+            
+    df_merge = df_merge.fillna(0.0)
+    
+    # 7. Join với danh mục địa lý dim_buucuc
+    df_buucuc = pd.read_sql_query("SELECT ma_bc as buu_cuc, ten_bdx, ten_cum FROM dim_buucuc", conn)
+    df_final = pd.merge(df_merge, df_buucuc, on='buu_cuc', how='inner')
+    
+    return df_final
+
+
+def get_ytd_detail_by_xa(conn, period_type, period_value, year):
+    """
+    Tương tự như get_period_detail_by_xa nhưng tính lũy kế YTD từ đầu năm (tháng 1 hoặc tuần 1) đến kỳ hiện tại.
+    """
+    import config.week_calendar as calendar_helper
+    
+    # 1. Doanh thu lũy kế kỳ hiện tại theo xã
+    if period_type == 'Tháng':
+        curr_sql = """
+            SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
+            FROM agg_monthly
+            WHERE nam = ? AND thang BETWEEN 1 AND ?
+            GROUP BY buu_cuc, nhom_dich_vu
+        """
+        curr_params = (year, period_value)
+    else: # Tuần
+        curr_sql = """
+            SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
+            FROM agg_weekly
+            WHERE nam = ? AND tuan_so BETWEEN 1 AND ?
+            GROUP BY buu_cuc, nhom_dich_vu
+        """
+        curr_params = (year, period_value)
+        
+    df_curr_raw = pd.read_sql_query(curr_sql, conn, params=curr_params)
+    
+    if not df_curr_raw.empty:
+        df_curr = df_curr_raw.pivot(index='buu_cuc', columns='nhom_dich_vu', values='dt').fillna(0.0).reset_index()
+    else:
+        df_curr = pd.DataFrame(columns=['buu_cuc', 'BCCP', 'HCC', 'TCBC', 'PPBL'])
+        
+    for col in ['BCCP', 'HCC', 'TCBC', 'PPBL']:
+        if col not in df_curr.columns:
+            df_curr[col] = 0.0
+            
+    df_curr['tong_dt'] = df_curr[['BCCP', 'HCC', 'TCBC', 'PPBL']].sum(axis=1)
+    
+    # 2. Doanh thu lũy kế kỳ trước (YTD cùng kỳ trước liền kề)
+    # Kỳ trước liền kề của YTD tháng hiện tại chính là YTD tháng trước
+    if period_type == 'Tháng':
+        prev_val = period_value - 1
+        prev_yr = year
+        if prev_val == 0:
+            prev_val = 12
+            prev_yr = year - 1
+            
+        prev_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev FROM agg_monthly WHERE nam = ? AND thang BETWEEN 1 AND ? GROUP BY buu_cuc"
+        prev_params = (prev_yr, prev_val)
+    else: # Tuần
+        prev_val = period_value - 1
+        prev_yr = year
+        if prev_val == 0:
+            prev_yr = year - 1
+            weeks = calendar_helper.get_week_list(prev_yr)
+            prev_val = weeks[-1][0] if weeks else 52
+            
+        prev_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev FROM agg_weekly WHERE nam = ? AND tuan_so BETWEEN 1 AND ? GROUP BY buu_cuc"
+        prev_params = (prev_yr, prev_val)
+        
+    df_prev = pd.read_sql_query(prev_sql, conn, params=prev_params)
+    
+    # 3. Doanh thu lũy kế cùng kỳ năm trước YTD
+    if period_type == 'Tháng':
+        yoy_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy FROM agg_monthly WHERE nam = ? AND thang BETWEEN 1 AND ? GROUP BY buu_cuc"
+    else:
+        yoy_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy FROM agg_weekly WHERE nam = ? AND tuan_so BETWEEN 1 AND ? GROUP BY buu_cuc"
+    yoy_params = (year - 1, period_value)
+    
+    df_yoy = pd.read_sql_query(yoy_sql, conn, params=yoy_params)
+    
+    # 4. Kế hoạch lũy kế YTD
+    if period_type == 'Tháng':
+        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans WHERE nam = ? AND thang BETWEEN 1 AND ? GROUP BY ma_buu_cuc"
+    else:
+        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans_weekly WHERE nam = ? AND tuan_so BETWEEN 1 AND ? GROUP BY ma_buu_cuc"
+    plan_params = (year, period_value)
+    
+    df_plan = pd.read_sql_query(plan_sql, conn, params=plan_params)
+    
+    # Gộp tất cả
+    df_merge = df_curr
+    for df_c, col_name in [(df_prev, 'dt_prev'), (df_yoy, 'dt_yoy'), (df_plan, 'plan_dt')]:
+        if not df_c.empty:
+            df_merge = pd.merge(df_merge, df_c, on='buu_cuc', how='left')
+        else:
+            df_merge[col_name] = 0.0
+            
+    df_merge = df_merge.fillna(0.0)
+    
+    df_buucuc = pd.read_sql_query("SELECT ma_bc as buu_cuc, ten_bdx, ten_cum FROM dim_buucuc", conn)
+    df_final = pd.merge(df_merge, df_buucuc, on='buu_cuc', how='inner')
+    
+    return df_final
+
