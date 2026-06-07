@@ -468,24 +468,34 @@ def register_service_callbacks(app):
                     State("sidebar-month-select", "value"),
                     State("sidebar-week-select", "value"),
                     State("sidebar-period", "value"),
-                    State(f"{pfx}-service-key-store", "data"),
                     State("sidebar-cum", "value"),
                     State("sidebar-bdx", "value"),
                     State("sidebar-buu-cuc", "value")
                 ]
             )
-            def update_service_dashboard(n_clicks, year, month, week, cycle, store_data, cum, bdx, buu_cuc):
+            def update_service_dashboard(n_clicks, year, month, week, cycle, cum, bdx, buu_cuc):
                 # Khởi tạo toàn bộ outputs rỗng (74 outputs = 4 + 7 * 10)
                 empty_kpis = []
                 for _ in range(10):
                     empty_kpis.extend(["—", "—", {"color": "#64748B"}, "—", {"color": "#64748B"}, "—", {"color": "#64748B"}])
                 default_returns = ["Không có dữ liệu", "Không có dữ liệu", "Không có dữ liệu", go.Figure()] + empty_kpis
                 
-                if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week) or not store_data:
+                service_map = {
+                    "bccp-overview": "BCCP",
+                    "hcc-overview": "HCC",
+                    "tcbc-overview": "TCBC",
+                    "ppbl-overview": "PPBL"
+                }
+                service_key = service_map.get(pfx)
+                if not service_key:
                     return default_returns
                     
-                service_key = store_data["service_key"]
-                sub_services = store_data["sub_services"]
+                from pages.service_overview import get_sub_services
+                sub_services = get_sub_services(service_key)
+                
+                if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week):
+                    return default_returns
+                    
                 if service_key == "BCCP":
                     order = {"Truyền thống": 0, "TMĐT": 1, "Quốc tế": 2, "Phát hành báo chí": 3}
                     sub_services = sorted(sub_services, key=lambda x: order.get(x, 99))
@@ -627,18 +637,28 @@ def register_service_callbacks(app):
                     State("sidebar-month-select", "value"),
                     State("sidebar-week-select", "value"),
                     State("sidebar-period", "value"),
-                    State(f"{pfx}-service-key-store", "data"),
                     State("sidebar-cum", "value"),
                     State("sidebar-bdx", "value"),
                     State("sidebar-buu-cuc", "value")
                 ]
             )
-            def update_service_table_a(n_clicks, compare_type, year, month, week, cycle, store_data, cum, bdx, buu_cuc):
-                if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week) or not store_data:
+            def update_service_table_a(n_clicks, compare_type, year, month, week, cycle, cum, bdx, buu_cuc):
+                service_map = {
+                    "bccp-overview": "BCCP",
+                    "hcc-overview": "HCC",
+                    "tcbc-overview": "TCBC",
+                    "ppbl-overview": "PPBL"
+                }
+                service_key = service_map.get(pfx)
+                if not service_key:
+                    return html.Div("Không xác định được loại dịch vụ.")
+                    
+                from pages.service_overview import get_sub_services
+                sub_services = get_sub_services(service_key)
+                
+                if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week):
                     return html.Div("Vui lòng chọn bộ lọc thời gian để xem chi tiết.")
                     
-                service_key = store_data["service_key"]
-                sub_services = store_data["sub_services"]
                 if service_key == "BCCP":
                     order = {"Truyền thống": 0, "TMĐT": 1, "Quốc tế": 2, "Phát hành báo chí": 3}
                     sub_services = sorted(sub_services, key=lambda x: order.get(x, 99))
@@ -665,18 +685,28 @@ def register_service_callbacks(app):
                     State("sidebar-month-select", "value"),
                     State("sidebar-week-select", "value"),
                     State("sidebar-period", "value"),
-                    State(f"{pfx}-service-key-store", "data"),
                     State("sidebar-cum", "value"),
                     State("sidebar-bdx", "value"),
                     State("sidebar-buu-cuc", "value")
                 ]
             )
-            def update_service_table_b(n_clicks, compare_type, year, month, week, cycle, store_data, cum, bdx, buu_cuc):
-                if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week) or not store_data:
+            def update_service_table_b(n_clicks, compare_type, year, month, week, cycle, cum, bdx, buu_cuc):
+                service_map = {
+                    "bccp-overview": "BCCP",
+                    "hcc-overview": "HCC",
+                    "tcbc-overview": "TCBC",
+                    "ppbl-overview": "PPBL"
+                }
+                service_key = service_map.get(pfx)
+                if not service_key:
+                    return html.Div("Không xác định được loại dịch vụ.")
+                    
+                from pages.service_overview import get_sub_services
+                sub_services = get_sub_services(service_key)
+                
+                if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week):
                     return html.Div("Vui lòng chọn bộ lọc thời gian để xem chi tiết.")
                     
-                service_key = store_data["service_key"]
-                sub_services = store_data["sub_services"]
                 if service_key == "BCCP":
                     order = {"Truyền thống": 0, "TMĐT": 1, "Quốc tế": 2, "Phát hành báo chí": 3}
                     sub_services = sorted(sub_services, key=lambda x: order.get(x, 99))

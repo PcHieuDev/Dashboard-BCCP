@@ -82,15 +82,26 @@ def create_service_overview_layout(service_key, service_icon, border_color):
     # Palette màu cho các sub-services
     sub_colors = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#6366F1", "#14B8A6"]
     
-    for i, sub_svc in enumerate(sub_services):
-        color = sub_colors[i % len(sub_colors)]
+    # Luôn tạo đủ 10 KPI cards slot để tránh lỗi thiếu phần tử trong Dash callback
+    for i in range(10):
         card_id = f"sub-{i}"
-        kpi_cols.append(
-            dbc.Col(make_service_kpi_card_layout(prefix, card_id, sub_svc, service_icon, color), lg=3, md=6, className="mb-3")
-        )
-        
-    if not kpi_cols:
-        kpi_cols.append(dbc.Col(html.Div("Không tìm thấy dịch vụ con nào được cấu hình.", style={"color": "#64748B"}), lg=12))
+        if i < len(sub_services):
+            sub_svc = sub_services[i]
+            color = sub_colors[i % len(sub_colors)]
+            kpi_cols.append(
+                dbc.Col(
+                    make_service_kpi_card_layout(prefix, card_id, sub_svc, service_icon, color),
+                    lg=3, md=6, className="mb-3", id=f"{prefix}-card-wrapper-{i}"
+                )
+            )
+        else:
+            kpi_cols.append(
+                dbc.Col(
+                    make_service_kpi_card_layout(prefix, card_id, "", service_icon, "#CCCCCC"),
+                    lg=3, md=6, className="mb-3", id=f"{prefix}-card-wrapper-{i}",
+                    style={"display": "none"}
+                )
+            )
 
     return html.Div([
         # Dùng dcc.Store để lưu trữ cấu hình dịch vụ này cho callbacks nhận diện
@@ -183,3 +194,22 @@ def create_service_overview_layout(service_key, service_icon, border_color):
             dbc.Spinner(html.Div(id=f"{prefix}-table-b-container"))
         ])
     ])
+
+
+def create_service_page_layout(service_key):
+    """Hàm wrapper để ánh xạ mã dịch vụ sang icon/màu sắc tương ứng và trả về layout."""
+    icons = {
+        "BCCP": "📊",
+        "HCC": "🏢",
+        "TCBC": "💰",
+        "PPBL": "🛍️"
+    }
+    colors = {
+        "BCCP": "#3B82F6",
+        "HCC": "#10B981",
+        "TCBC": "#F59E0B",
+        "PPBL": "#8B5CF6"
+    }
+    icon = icons.get(service_key, "📊")
+    color = colors.get(service_key, "#3B82F6")
+    return create_service_overview_layout(service_key, icon, color)
