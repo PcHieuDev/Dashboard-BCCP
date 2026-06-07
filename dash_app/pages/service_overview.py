@@ -1,94 +1,181 @@
 # -*- coding: utf-8 -*-
 """
-Layout trang Dịch vụ dùng chung (HCC, TCBC, PPBL).
-Tự động thay đổi tiêu đề, bộ lọc inline, KPI cards, bảng chi tiết và biểu đồ cột.
+Layout trang Tổng quan dịch vụ (BCCP, HCC, TCBC, PPBL) v2.0.
+Cấu trúc trang hiển thị đồng nhất sử dụng mô hình của trang Tổng quan chung nhưng lọc theo dịch vụ.
 """
 
 from dash import html, dcc
 import dash_bootstrap_components as dbc
+import sqlite3
+from config.settings import DB_PATH
 
-def create_service_page_layout(service_type):
-    """
-    Tạo layout động cho trang dịch vụ cụ thể.
-    
-    Args:
-        service_type (str): HCC / TCBC / PPBL
-    """
-    service_names = {
-        "HCC": "🏢 Hành chính công",
-        "TCBC": "💰 Tài chính Bưu chính",
-        "PPBL": "🛍️ Phân phối bán lẻ"
-    }
-    
-    name = service_names.get(service_type, service_type)
-    
+def get_sub_services(service_key):
+    """Lấy danh sách các nhóm dịch vụ con của nhóm dịch vụ chính từ danh mục"""
+    conn = sqlite3.connect(str(DB_PATH))
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DISTINCT nhom_dich_vu FROM dim_dichvu 
+            WHERE nhom_chinh = ? AND nhom_dich_vu IS NOT NULL
+            ORDER BY nhom_dich_vu
+        """, (service_key,))
+        return [r[0] for r in cursor.fetchall()]
+    except Exception as e:
+        print(f"Lỗi truy vấn nhóm con cho {service_key}: {e}")
+        return []
+    finally:
+        conn.close()
+
+def make_service_kpi_card_layout(prefix, card_id, title, icon, border_color):
+    """Tạo KPI card cho nhóm dịch vụ con"""
     return html.Div([
-        # Lưu trữ service_type hiện tại để callback nhận biết
-        dcc.Store(id="service-type-store", data=service_type),
-        
-        # Block 1: Bộ lọc Inline trên đầu trang
         html.Div([
-            dbc.Row([
-                # Bộ lọc Năm
-                dbc.Col([
-                    html.Label("Năm", className="filter-label"),
-                    dcc.Dropdown(
-                        id="service-filter-year",
-                        options=[{"label": "2026", "value": 2026}],
-                        value=2026,
-                        clearable=False
-                    )
-                ], xs=12, sm=4, md=2),
-                
-                # Bộ lọc Tháng
-                dbc.Col([
-                    html.Label("Tháng", className="filter-label"),
-                    dcc.Dropdown(
-                        id="service-filter-month",
-                        options=[{"label": f"Tháng {i:02d}", "value": i} for i in range(1, 13)],
-                        value=6, # Default tháng 6
-                        clearable=False
-                    )
-                ], xs=12, sm=4, md=2),
-                
-                # Bộ lọc Cụm
-                dbc.Col([
-                    html.Label("Cụm địa lý", className="filter-label"),
-                    dcc.Dropdown(
-                        id="service-filter-cum",
-                        placeholder="Tất cả Cụm",
-                        value="Tất cả",
-                        clearable=False
-                    )
-                ], xs=12, sm=4, md=3),
-                
-                # Nút Xuất Excel bên phải
-                dbc.Col([
-                    dbc.Button("📥 Xuất Excel", id="service-export-excel-btn", color="success", className="w-100", style={"marginTop": "24px"}),
-                    dcc.Download(id="service-download-excel")
-                ], xs=12, sm=12, md=3, className="ms-auto")
-            ], className="align-items-center g-3")
-        ], className="info-box mb-4", style={"padding": "15px 20px"}),
+            html.Span(icon, style={"fontSize": "18px", "marginRight": "8px"}),
+            html.Span(title, className="kpi-title", style={"fontWeight": "bold", "color": "#1E293B", "fontSize": "13px"}),
+        ], style={"display": "flex", "alignItems": "center", "borderBottom": "1px solid #E2E8F0", "paddingBottom": "6px"}),
         
-        # Block 2: KPI & Sparkline
-        html.Div(id="service-kpi-container"),
+        html.Div([
+            html.Div("Doanh thu kỳ này", style={"fontSize": "11px", "color": "#64748B", "marginTop": "4px"}),
+            html.Div("— đ", id=f"{prefix}-{card_id}-value", className="kpi-value", style={"fontSize": "18px", "fontWeight": "bold", "color": "#0F172A"}),
+        ]),
         
-        # Block 3: Biểu đồ cột dịch vụ con & Bảng chi tiết
-        dbc.Row([
-            # Biểu đồ cột dịch vụ con bên trái
-            dbc.Col([
-                html.Div([
-                    html.Div("📊 Cơ cấu theo dịch vụ con", className="section-header"),
-                    dcc.Graph(id="service-bar-chart", config={"displayModeBar": False})
-                ], className="info-box", style={"height": "100%", "padding": "15px"})
-            ], lg=5, md=12, className="mb-3"),
+        html.Div([
+            html.Div([
+                html.Span("Kỳ trước: ", style={"color": "#64748B"}),
+                html.Span("—", id=f"{prefix}-{card_id}-compare-prev", style={"fontWeight": "bold"})
+            ], style={"fontSize": "12px", "marginTop": "4px"}),
             
-            # Bảng chi tiết bên phải
+            html.Div([
+                html.Span("Cùng kỳ: ", style={"color": "#64748B"}),
+                html.Span("—", id=f"{prefix}-{card_id}-compare-yoy", style={"fontWeight": "bold"})
+            ], style={"fontSize": "12px", "marginTop": "2px"}),
+            
+            html.Div([
+                html.Span("Kế hoạch: ", style={"color": "#64748B"}),
+                html.Span("—", id=f"{prefix}-{card_id}-compare-plan", style={"fontWeight": "bold"})
+            ], style={"fontSize": "12px", "marginTop": "2px"}),
+        ], style={"marginTop": "6px", "borderTop": "1px solid #F1F5F9", "paddingTop": "6px"})
+        
+    ], className="kpi-card", style={
+        "borderTop": f"4px solid {border_color}", 
+        "padding": "10px",
+        "backgroundColor": "#FFFFFF",
+        "borderRadius": "8px",
+        "boxShadow": "0 1px 3px rgba(0,0,0,0.1)",
+        "height": "100%"
+    })
+
+def create_service_overview_layout(service_key, service_icon, border_color):
+    """
+    Tạo layout Tổng quan dịch vụ chung cho một nhóm dịch vụ (BCCP, HCC, TCBC, PPBL).
+    Prefix ID sẽ được định nghĩa là: bccp-overview-, hcc-overview-, v.v.
+    """
+    prefix = f"{service_key.lower()}-overview"
+    sub_services = get_sub_services(service_key)
+    
+    # Render KPI Cards cho các dịch vụ con
+    kpi_cols = []
+    # Palette màu cho các sub-services
+    sub_colors = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#6366F1", "#14B8A6"]
+    
+    for i, sub_svc in enumerate(sub_services):
+        color = sub_colors[i % len(sub_colors)]
+        card_id = f"sub-{i}"
+        kpi_cols.append(
+            dbc.Col(make_service_kpi_card_layout(prefix, card_id, sub_svc, service_icon, color), lg=3, md=6, className="mb-3")
+        )
+        
+    if not kpi_cols:
+        kpi_cols.append(dbc.Col(html.Div("Không tìm thấy dịch vụ con nào được cấu hình.", style={"color": "#64748B"}), lg=12))
+
+    return html.Div([
+        # Dùng dcc.Store để lưu trữ cấu hình dịch vụ này cho callbacks nhận diện
+        dcc.Store(id=f"{prefix}-service-key-store", data={"service_key": service_key, "sub_services": sub_services}),
+        
+        # SECTION 1: Các Thẻ KPI
+        html.Div(f"📊 Doanh thu & Tiến độ chi tiết nhóm dịch vụ {service_key}", className="section-header", style={"marginTop": 0, "marginBottom": "12px", "fontWeight": "bold", "fontSize": "16px"}),
+        dbc.Row(kpi_cols, className="g-3"),
+        
+        # SECTION 2: Top 10 Bưu điện xã/phường
+        html.Div(f"🏆 Top 10 Bưu điện Xã / Phường nổi bật ({service_key})", className="section-header", style={"marginTop": "15px", "marginBottom": "12px", "fontWeight": "bold", "fontSize": "16px"}),
+        dbc.Row([
+            # Top 10 tăng trưởng kỳ trước
             dbc.Col([
                 html.Div([
-                    html.Div(id="service-table-title", className="section-header"),
-                    html.Div(id="service-table-container")
-                ], className="info-box", style={"height": "100%", "padding": "15px"})
-            ], lg=7, md=12, className="mb-3")
-        ], className="g-3", style={"marginTop": "10px"})
+                    html.Div("📈 Top 10 tăng trưởng vs Kỳ trước", style={"fontWeight": "bold", "color": "#1E293B", "fontSize": "13px", "marginBottom": "8px"}),
+                    dbc.Spinner(html.Div(id=f"{prefix}-top10-prev-container"))
+                ], className="info-box", style={"padding": "12px", "backgroundColor": "#FFFFFF", "borderRadius": "8px", "boxShadow": "0 1px 3px rgba(0,0,0,0.05)"})
+            ], lg=4, md=12, className="mb-3"),
+            
+            # Top 10 tăng trưởng cùng kỳ (YoY)
+            dbc.Col([
+                html.Div([
+                    html.Div("📅 Top 10 tăng trưởng vs Cùng kỳ", style={"fontWeight": "bold", "color": "#1E293B", "fontSize": "13px", "marginBottom": "8px"}),
+                    dbc.Spinner(html.Div(id=f"{prefix}-top10-yoy-container"))
+                ], className="info-box", style={"padding": "12px", "backgroundColor": "#FFFFFF", "borderRadius": "8px", "boxShadow": "0 1px 3px rgba(0,0,0,0.05)"})
+            ], lg=4, md=12, className="mb-3"),
+            
+            # Top 10 hoàn thành kế hoạch
+            dbc.Col([
+                html.Div([
+                    html.Div("🎯 Top 10 hoàn thành Kế hoạch", style={"fontWeight": "bold", "color": "#1E293B", "fontSize": "13px", "marginBottom": "8px"}),
+                    dbc.Spinner(html.Div(id=f"{prefix}-top10-plan-container"))
+                ], className="info-box", style={"padding": "12px", "backgroundColor": "#FFFFFF", "borderRadius": "8px", "boxShadow": "0 1px 3px rgba(0,0,0,0.05)"})
+            ], lg=4, md=12, className="mb-3")
+        ], className="g-3"),
+        
+        # SECTION 3: Biểu đồ cột doanh thu 12 kỳ liên tiếp
+        dbc.Row([
+            dbc.Col([
+                html.Div([
+                    html.Div(f"📊 Biến động doanh thu {service_key} qua 12 kỳ liên tiếp (Phân nhóm dịch vụ con)", className="section-header", style={"fontWeight": "bold", "fontSize": "14px", "marginBottom": "10px"}),
+                    dcc.Graph(id=f"{prefix}-stacked-bar-12p", config={"displayModeBar": False})
+                ], className="info-box", style={"padding": "15px", "backgroundColor": "#FFFFFF", "borderRadius": "8px", "boxShadow": "0 1px 3px rgba(0,0,0,0.05)"})
+            ], lg=12, className="mb-3")
+        ], className="g-3 mt-1"),
+        
+        # SECTION 4: 2 Bảng doanh thu chi tiết theo xã & lũy kế
+        # Bảng A: Chi tiết kỳ hiện tại
+        html.Div([
+            html.Div([
+                html.Span(f"📋 Chi tiết doanh thu theo Bưu cục Xã ({service_key} - Kỳ hiện tại)", style={"fontWeight": "bold", "fontSize": "15px", "color": "#1E293B"}),
+                html.Div([
+                    html.Span("So sánh với: ", style={"fontSize": "13px", "color": "#64748B", "marginRight": "10px"}),
+                    dbc.RadioItems(
+                        id=f"{prefix}-table-a-compare-selector",
+                        options=[
+                            {"label": "Kỳ trước", "value": "prev"},
+                            {"label": "Cùng kỳ năm trước", "value": "yoy"},
+                            {"label": "Kế hoạch", "value": "plan"}
+                        ],
+                        value="plan",
+                        inline=True,
+                        style={"fontSize": "13px"}
+                    )
+                ], style={"display": "flex", "alignItems": "center"})
+            ], style={"display": "flex", "justifyContent": "between", "alignItems": "center", "flexWrap": "wrap", "marginBottom": "10px", "marginTop": "20px"}),
+            dbc.Spinner(html.Div(id=f"{prefix}-table-a-container"))
+        ]),
+        
+        # Bảng B: Chi tiết lũy kế YTD
+        html.Div([
+            html.Div([
+                html.Span(f"📋 Chi tiết doanh thu lũy kế YTD theo Bưu cục Xã ({service_key} - Đầu năm đến nay)", style={"fontWeight": "bold", "fontSize": "15px", "color": "#1E293B"}),
+                html.Div([
+                    html.Span("So sánh với: ", style={"fontSize": "13px", "color": "#64748B", "marginRight": "10px"}),
+                    dbc.RadioItems(
+                        id=f"{prefix}-table-b-compare-selector",
+                        options=[
+                            {"label": "Kỳ trước", "value": "prev"},
+                            {"label": "Cùng kỳ năm trước", "value": "yoy"},
+                            {"label": "Kế hoạch", "value": "plan"}
+                        ],
+                        value="plan",
+                        inline=True,
+                        style={"fontSize": "13px"}
+                    )
+                ], style={"display": "flex", "alignItems": "center"})
+            ], style={"display": "flex", "justifyContent": "between", "alignItems": "center", "flexWrap": "wrap", "marginBottom": "10px", "marginTop": "30px"}),
+            dbc.Spinner(html.Div(id=f"{prefix}-table-b-container"))
+        ])
     ])

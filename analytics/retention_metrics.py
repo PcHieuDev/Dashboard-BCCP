@@ -25,6 +25,22 @@ def get_prev_month(nam: int, thang: int) -> tuple[int, int]:
         y_prev = nam - 1
     return y_prev, m_prev
 
+def get_prev_period_info(period_type, period_value, year):
+    """Tìm kỳ trước và năm tương ứng"""
+    import config.week_calendar as calendar_helper
+    if period_type == 'Tháng':
+        if period_value == 1:
+            return 12, year - 1
+        return period_value - 1, year
+    else: # Tuần
+        if period_value == 1:
+            prev_yr = year - 1
+            weeks = calendar_helper.get_week_list(prev_yr)
+            prev_val = weeks[-1][0] if weeks else 52
+            return prev_val, prev_yr
+        return period_value - 1, year
+
+
 def get_khhh_list(db_path: str, nam: int, thang: int, cum: str = None, bdx: str = None) -> set[str]:
     """
     KHHH của tháng T là các khách hàng CÓ giao dịch trong tháng T trừ đi Khách hàng mới của tháng T.
@@ -421,4 +437,307 @@ def get_churn_alerts(db_path: str, year: int, month: int, cum: str = None, bdx: 
     if not df_alerts.empty:
         df_alerts = df_alerts.sort_values(by='pct_giam', ascending=True)
     return df_alerts
+
+
+def get_khhh_changes_v2(db_path: str, nam: int, thang: int, cum: str = None, bdx: str = None) -> dict:
+    """
+    Phân tích biến động hiện hữu theo định nghĩa mới v2.0:
+    - Tăng: DT(T) > DT(T-1) > 0
+    - Giảm: 0 < DT(T) < DT(T-1)
+    - Rời bỏ (Churn): 3 tháng gần nhất (T-1, T-2, T-3) có doanh thu dương, nhưng tháng T không có doanh thu (DT(T) = 0)
+    - Duy trì (Ổn định): DT(T) == DT(T-1) và cả hai đều dương (> 0)
+    """
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    # 1. Xác định 3 tháng liền trước (T-1, T-2, T-3)
+    lookback = []
+    curr_m, curr_y = thang, nam
+    for _ in range(3):
+        curr_m -= 1
+        if curr_m == 0:
+            curr_m = 12
+            curr_y -= 1
+        lookback.append((curr_m, curr_y))
+        
+    thang_str = f"T{thang:02d}"
+    t_minus_1_m, t_minus_1_y = lookback[0]
+    t_minus_1_str = f"T{t_minus_1_m:02d}"
+    
+    # 2. Xây dựng điều kiện lọc địa lý cho bưu cục
+    geo_where = []
+    geo_params = []
+    if cum and cum != "Tất cả":
+        geo_where.append("b.ten_cum = ?")
+        geo_params.append(cum)
+    if bdx and bdx != "Tất cả":
+        geo_where.append("b.ten_bdx = ?")
+        geo_params.append(bdx)
+    geo_where_str = " AND " + " AND ".join(geo_where) if geo_where else ""
+    
+    # 3. Lấy tất cả CMS có doanh thu trong tháng target (T) và bưu cục của họ
+    # Vì 1 CMS có thể giao dịch nhiều bưu cục, ta lấy bưu cục lớn nhất làm đại diện
+    q_curr = f"""
+        WITH cms_bc AS (
+            SELECT t.cms, t.buu_cuc, SUM(t.cuoc_tt_tong) as dt,
+                   ROW_NUMBER() OVER (PARTITION BY t.cms ORDER BY SUM(t.cuoc_tt_tong) DESC) as rn
+            FROM transactions t
+            LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+            WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ? AND t.cuoc_tt_tong > 0 {geo_where_str}
+            GROUP BY t.cms, t.buu_cuc
+        )
+        SELECT cms, buu_cuc, dt FROM cms_bc WHERE rn = 1
+    """
+    df_curr = pd.read_sql_query(q_curr, conn, params=[nam, thang_str] + geo_params)
+    cms_curr_rev = dict(zip(df_curr['cms'], df_curr['dt']))
+    
+    # 4. Lấy tất cả CMS có doanh thu trong tháng T-1 và bưu cục
+    q_prev = f"""
+        WITH cms_bc AS (
+            SELECT t.cms, t.buu_cuc, SUM(t.cuoc_tt_tong) as dt,
+                   ROW_NUMBER() OVER (PARTITION BY t.cms ORDER BY SUM(t.cuoc_tt_tong) DESC) as rn
+            FROM transactions t
+            LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+            WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ? AND t.cuoc_tt_tong > 0 {geo_where_str}
+            GROUP BY t.cms, t.buu_cuc
+        )
+        SELECT cms, buu_cuc, dt FROM cms_bc WHERE rn = 1
+    """
+    df_prev = pd.read_sql_query(q_prev, conn, params=[t_minus_1_y, t_minus_1_str] + geo_params)
+    cms_prev_rev = dict(zip(df_prev['cms'], df_prev['dt']))
+    
+    # 5. Phân tích Tăng, Giảm, Duy trì
+    # Lấy tập hợp CMS chung có doanh thu dương ở cả 2 tháng T và T-1
+    common_cms = set(cms_curr_rev.keys()) & set(cms_prev_rev.keys())
+    
+    # Cần join thêm địa lý dim_buucuc
+    df_buucuc = pd.read_sql_query("SELECT ma_bc as buu_cuc, ten_bdx, ten_cum FROM dim_buucuc", conn)
+    
+    list_tang = []
+    list_giam = []
+    duy_tri_count = 0
+    
+    # Map nhanh thông tin địa lý từ df_curr và df_prev
+    df_geo_map = pd.concat([df_curr[['cms', 'buu_cuc']], df_prev[['cms', 'buu_cuc']]]).drop_duplicates(subset=['cms'])
+    df_geo_final = pd.merge(df_geo_map, df_buucuc, on='buu_cuc', how='inner')
+    geo_dict = df_geo_final.set_index('cms')[['ten_cum', 'ten_bdx']].to_dict('index')
+    
+    for cms in common_cms:
+        dt_c = cms_curr_rev[cms]
+        dt_p = cms_prev_rev[cms]
+        g = geo_dict.get(cms, {'ten_cum': 'Khác', 'ten_bdx': 'Khác'})
+        
+        row_d = {
+            'cms': cms,
+            'ten_cum': g['ten_cum'],
+            'ten_bdx': g['ten_bdx'],
+            'sl_ky_nay': 1, # Số lượng bưu gửi hoặc đếm giao dịch có thể điền 1
+            'dt_ky_nay': dt_c,
+            'sl_ky_truoc': 1,
+            'dt_ky_truoc': dt_p,
+            'chenh_lech': dt_c - dt_p
+        }
+        
+        if dt_c > dt_p:
+            list_tang.append(row_d)
+        elif dt_c < dt_p:
+            list_giam.append(row_d)
+        else:
+            duy_tri_count += 1
+            
+    # 6. Phân tích Rời bỏ (Churn) 3 tháng
+    # Churn = Có doanh thu dương ở T-1, T-2 hoặc T-3 nhưng tháng T = 0
+    # Lấy danh sách CMS có doanh thu trong 3 tháng lookback
+    lookback_cms_dict = {} # cms -> (thang_gần_nhất, nam_gần_nhất, doanh_thu_tháng_đó, buu_cuc_đó)
+    for idx, (m, y) in enumerate(lookback):
+        m_str = f"T{m:02d}"
+        q_l = f"""
+            WITH cms_bc AS (
+                SELECT t.cms, t.buu_cuc, SUM(t.cuoc_tt_tong) as dt,
+                       ROW_NUMBER() OVER (PARTITION BY t.cms ORDER BY SUM(t.cuoc_tt_tong) DESC) as rn
+                FROM transactions t
+                LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+                WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ? AND t.cuoc_tt_tong > 0 {geo_where_str}
+                GROUP BY t.cms, t.buu_cuc
+            )
+            SELECT cms, buu_cuc, dt FROM cms_bc WHERE rn = 1
+        """
+        df_l = pd.read_sql_query(q_l, conn, params=[y, m_str] + geo_params)
+        
+        for _, row in df_l.iterrows():
+            c = row['cms']
+            if c not in lookback_cms_dict:
+                # Vì lookback sắp xếp giảm dần từ T-1 -> T-3, nên lần đầu bắt gặp chính là tháng gần nhất
+                lookback_cms_dict[c] = {
+                    'thang_gan_nhat': m,
+                    'nam_gan_nhat': y,
+                    'dt_gan_nhat': row['dt'],
+                    'buu_cuc': row['buu_cuc']
+                }
+                
+    # Lọc ra các CMS thuộc lookback nhưng KHÔNG có trong tháng hiện tại T
+    churn_cms = set(lookback_cms_dict.keys()) - set(cms_curr_rev.keys())
+    
+    list_roi_bo = []
+    for cms in churn_cms:
+        info = lookback_cms_dict[cms]
+        bc = info['buu_cuc']
+        
+        # Lấy địa lý bưu cục
+        cursor.execute("SELECT ten_bdx, ten_cum FROM dim_buucuc WHERE ma_bc = ? LIMIT 1", (bc,))
+        bc_row = cursor.fetchone()
+        ten_cum = bc_row[1] if bc_row else "Khác"
+        ten_bdx = bc_row[0] if bc_row else "Khác"
+        
+        list_roi_bo.append({
+            'cms': cms,
+            'ten_cum': ten_cum,
+            'ten_bdx': ten_bdx,
+            'sl_gan_nhat': 1,
+            'dt_gan_nhat': info['dt_gan_nhat'],
+            'thang_gan_nhat': f"T{info['thang_gan_nhat']:02d}/{info['nam_gan_nhat']}"
+        })
+        
+    conn.close()
+    
+    return {
+        'tang': list_tang,
+        'giam': list_giam,
+        'roi_bo': list_roi_bo,
+        'duy_tri_count': duy_tri_count
+    }
+
+
+def get_weekly_changes(db_path: str, year: int, week: int, cum: str = None, bdx: str = None) -> dict:
+    """
+    Phân tích biến động tuần theo định nghĩa tuần-tuần.
+    - Tăng: DT tuần hiện tại > DT tuần trước > 0
+    - Giảm: 0 < DT tuần hiện tại < DT tuần trước
+    - Rời bỏ: Tuần trước có DT > 0, tuần hiện tại không có (DT=0)
+    - Duy trì: DT tuần hiện tại == DT tuần trước và > 0
+    """
+    import config.week_calendar as calendar_helper
+    conn = sqlite3.connect(db_path)
+    
+    # 1. Xác định tuần trước
+    prev_w, prev_yr = get_prev_period_info('Tuần', week, year)
+    
+    # Lấy ngày của tuần hiện tại và tuần trước để query transactions
+    weeks_list = calendar_helper.get_week_list(year)
+    c_start, c_end = None, None
+    for w_num, s_d, e_d in weeks_list:
+        if w_num == week:
+            c_start, c_end = s_d.isoformat(), e_d.isoformat()
+            break
+            
+    prev_weeks_list = calendar_helper.get_week_list(prev_yr)
+    p_start, p_end = None, None
+    for w_num, s_d, e_d in prev_weeks_list:
+        if w_num == prev_w:
+            p_start, p_end = s_d.isoformat(), e_d.isoformat()
+            break
+            
+    if not c_start or not p_start:
+        conn.close()
+        return {'tang': [], 'giam': [], 'roi_bo': [], 'duy_tri_count': 0}
+        
+    geo_where = []
+    geo_params = []
+    if cum and cum != "Tất cả":
+        geo_where.append("b.ten_cum = ?")
+        geo_params.append(cum)
+    if bdx and bdx != "Tất cả":
+        geo_where.append("b.ten_bdx = ?")
+        geo_params.append(bdx)
+    geo_where_str = " AND " + " AND ".join(geo_where) if geo_where else ""
+    
+    # Query doanh thu tuần hiện tại
+    q_curr = f"""
+        WITH cms_bc AS (
+            SELECT t.cms, t.buu_cuc, SUM(t.cuoc_tt_tong) as dt,
+                   ROW_NUMBER() OVER (PARTITION BY t.cms ORDER BY SUM(t.cuoc_tt_tong) DESC) as rn
+            FROM transactions t
+            LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+            WHERE t.ngay_chap_nhan BETWEEN ? AND ? AND t.cuoc_tt_tong > 0 {geo_where_str}
+            GROUP BY t.cms, t.buu_cuc
+        )
+        SELECT cms, buu_cuc, dt FROM cms_bc WHERE rn = 1
+    """
+    df_curr = pd.read_sql_query(q_curr, conn, params=[c_start, c_end] + geo_params)
+    cms_curr_rev = dict(zip(df_curr['cms'], df_curr['dt']))
+    
+    # Query doanh thu tuần trước
+    q_prev = f"""
+        WITH cms_bc AS (
+            SELECT t.cms, t.buu_cuc, SUM(t.cuoc_tt_tong) as dt,
+                   ROW_NUMBER() OVER (PARTITION BY t.cms ORDER BY SUM(t.cuoc_tt_tong) DESC) as rn
+            FROM transactions t
+            LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+            WHERE t.ngay_chap_nhan BETWEEN ? AND ? AND t.cuoc_tt_tong > 0 {geo_where_str}
+            GROUP BY t.cms, t.buu_cuc
+        )
+        SELECT cms, buu_cuc, dt FROM cms_bc WHERE rn = 1
+    """
+    df_prev = pd.read_sql_query(q_prev, conn, params=[p_start, p_end] + geo_params)
+    cms_prev_rev = dict(zip(df_prev['cms'], df_prev['dt']))
+    
+    # Phân rã
+    common_cms = set(cms_curr_rev.keys()) & set(cms_prev_rev.keys())
+    df_buucuc = pd.read_sql_query("SELECT ma_bc as buu_cuc, ten_bdx, ten_cum FROM dim_buucuc", conn)
+    
+    list_tang = []
+    list_giam = []
+    duy_tri_count = 0
+    
+    df_geo_map = pd.concat([df_curr[['cms', 'buu_cuc']], df_prev[['cms', 'buu_cuc']]]).drop_duplicates(subset=['cms'])
+    df_geo_final = pd.merge(df_geo_map, df_buucuc, on='buu_cuc', how='inner')
+    geo_dict = df_geo_final.set_index('cms')[['ten_cum', 'ten_bdx']].to_dict('index')
+    
+    for cms in common_cms:
+        dt_c = cms_curr_rev[cms]
+        dt_p = cms_prev_rev[cms]
+        g = geo_dict.get(cms, {'ten_cum': 'Khác', 'ten_bdx': 'Khác'})
+        
+        row_d = {
+            'cms': cms,
+            'ten_cum': g['ten_cum'],
+            'ten_bdx': g['ten_bdx'],
+            'sl_ky_nay': 1,
+            'dt_ky_nay': dt_c,
+            'sl_ky_truoc': 1,
+            'dt_ky_truoc': dt_p,
+            'chenh_lech': dt_c - dt_p
+        }
+        
+        if dt_c > dt_p:
+            list_tang.append(row_d)
+        elif dt_c < dt_p:
+            list_giam.append(row_d)
+        else:
+            duy_tri_count += 1
+            
+    # Churn tuần: Tuần trước có DT, tuần này không có
+    churn_cms = set(cms_prev_rev.keys()) - set(cms_curr_rev.keys())
+    list_roi_bo = []
+    
+    df_prev_indexed = df_prev.set_index('cms')
+    for cms in churn_cms:
+        g = geo_dict.get(cms, {'ten_cum': 'Khác', 'ten_bdx': 'Khác'})
+        list_roi_bo.append({
+            'cms': cms,
+            'ten_cum': g['ten_cum'],
+            'ten_bdx': g['ten_bdx'],
+            'sl_gan_nhat': 1,
+            'dt_gan_nhat': cms_prev_rev[cms],
+            'thang_gan_nhat': f"Tuần {prev_w}/{prev_yr}"
+        })
+        
+    conn.close()
+    
+    return {
+        'tang': list_tang,
+        'giam': list_giam,
+        'roi_bo': list_roi_bo,
+        'duy_tri_count': duy_tri_count
+    }
 

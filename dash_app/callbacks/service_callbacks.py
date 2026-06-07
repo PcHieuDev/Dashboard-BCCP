@@ -1,426 +1,715 @@
 # -*- coding: utf-8 -*-
 """
-Callbacks quản lý giao diện, tính toán số liệu và xuất Excel cho các trang HCC, TCBC, PPBL.
+Callbacks quản lý giao diện, tính toán số liệu và xuất Excel cho các trang Tổng quan dịch vụ v2.0.
+Sử dụng chung cấu trúc với Tổng quan chung nhưng lọc theo từng dịch vụ (BCCP, HCC, TCBC, PPBL).
 """
 
 import sys
-import io
 import sqlite3
 import pandas as pd
 from pathlib import Path
-from dash import Output, Input, State, html, dash_table, dcc
-import dash_bootstrap_components as dbc
-import plotly.express as px
+from dash import Output, Input, State, html, dash_table
 import plotly.graph_objects as go
-from flask_login import current_user
+import dash_bootstrap_components as dbc
 
 # Setup sys.path
 project_root = Path(__file__).resolve().parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from config.settings import DB_PATH
+from config.settings import DB_PATH, SERVICE_COLORS
 from callbacks.utils import format_revenue
+from analytics.global_metrics import get_top10_by_comparison
 
-def get_prev_month_year(year, month):
-    """Helper tìm tháng trước và năm tương ứng"""
-    if month == 1:
-        return year - 1, 12
-    return year, month - 1
+def get_prev_period_info(period_type, period_value, year):
+    """Tìm kỳ trước và năm tương ứng"""
+    import config.week_calendar as calendar_helper
+    if period_type == 'Tháng':
+        if period_value == 1:
+            return 12, year - 1
+        return period_value - 1, year
+    else: # Tuần
+        if period_value == 1:
+            prev_yr = year - 1
+            weeks = calendar_helper.get_week_list(prev_yr)
+            prev_val = weeks[-1][0] if weeks else 52
+            return prev_val, prev_yr
+        return period_value - 1, year
+
+def get_plans_current_period_sub(db_path, service_key, period_type, period_value, year):
+    """Lấy kế hoạch doanh thu của các dịch vụ con thuộc service_key trong kỳ hiện tại"""
+    res = {}
+    conn = sqlite3.connect(str(db_path))
+    try:
+        cursor = conn.cursor()
+        if period_type == 'Tháng':
+            sql = """
+                SELECT nhom_dich_vu, SUM(ke_hoach_doanh_thu) 
+                FROM plans 
+                WHERE nam = ? AND thang = ? AND nhom_dich_vu IN (
+                    SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
+                )
+                GROUP BY nhom_dich_vu
+            """
+            cursor.execute(sql, (year, period_value, service_key))
+        else:
+            sql = """
+                SELECT nhom_dich_vu, SUM(ke_hoach_doanh_thu) 
+                FROM plans_weekly 
+                WHERE nam = ? AND tuan_so = ? AND nhom_dich_vu IN (
+                    SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
+                )
+                GROUP BY nhom_dich_vu
+            """
+            cursor.execute(sql, (year, period_value, service_key))
+        for r in cursor.fetchall():
+            res[r[0]] = r[1] or 0.0
+    except Exception as e:
+        print(f"Lỗi lấy kế hoạch con cho {service_key}: {e}")
+    finally:
+        conn.close()
+    return res
+
+def create_top10_table_sub(df):
+    """Tạo bảng Top 10 đơn giản cho dịch vụ con"""
+    if df.empty:
+        return html.Div("Không có dữ liệu phù hợp", style={"color": "#64748B", "fontSize": "12px", "textAlign": "center", "padding": "10px"})
+        
+    rows = []
+    for idx, row in df.iterrows():
+        ratio_val = row['ratio']
+        color = "#10B981" if ratio_val >= 0 else "#EF4444"
+        icon = "▲" if ratio_val >= 0 else "▼"
+        rows.append(html.Tr([
+            html.Td(f"{idx+1}", style={"width": "30px", "fontWeight": "bold", "color": "#64748B"}),
+            html.Td(row['ten_cum'], style={"color": "#475569"}),
+            html.Td(row['ten_bdx'], style={"fontWeight": "medium", "color": "#0F172A"}),
+            html.Td(f"{icon} {abs(ratio_val):.1f}%", style={"color": color, "fontWeight": "bold", "textAlign": "right"})
+        ]))
+        
+    return html.Table([
+        html.Tbody(rows)
+    ], className="table table-sm table-borderless", style={"fontSize": "12px", "marginBottom": 0})
+
+def create_detail_table_sub(df, sub_services, compare_type):
+    """Tạo bảng DataTable hiển thị chi tiết xã theo các nhóm dịch vụ con"""
+    if df.empty:
+        return html.Div("Không có dữ liệu", style={"textAlign": "center", "padding": "20px"})
+        
+    # Thêm cột % So sánh
+    if compare_type == 'prev':
+        df['ratio'] = ((df['tong_dt'] - df['dt_prev']) / df['dt_prev']) * 100.0
+        df['ratio_display'] = df['ratio'].map(lambda x: f"{x:+.1f}%" if pd.notna(x) and x != float('inf') and x != float('-inf') else "—")
+        ratio_col_name = "Tăng trưởng vs Kỳ trước"
+    elif compare_type == 'yoy':
+        df['ratio'] = ((df['tong_dt'] - df['dt_yoy']) / df['dt_yoy']) * 100.0
+        df['ratio_display'] = df['ratio'].map(lambda x: f"{x:+.1f}%" if pd.notna(x) and x != float('inf') and x != float('-inf') else "—")
+        ratio_col_name = "Tăng trưởng vs Cùng kỳ"
+    else: # plan
+        df['ratio'] = (df['tong_dt'] / df['plan_dt']) * 100.0
+        df['ratio_display'] = df['ratio'].map(lambda x: f"{x:.1f}%" if pd.notna(x) and x != float('inf') and x != float('-inf') else "—")
+        ratio_col_name = "Hoàn thành Kế hoạch"
+        
+    # Tính dòng TOÀN TỈNH
+    prov_dict = {
+        "ten_cum": "⭐️ TOÀN TỈNH",
+        "ten_bdx": "",
+        "tong_dt": df["tong_dt"].sum(),
+        "dt_prev": df["dt_prev"].sum(),
+        "dt_yoy": df["dt_yoy"].sum(),
+        "plan_dt": df["plan_dt"].sum(),
+    }
+    for sub in sub_services:
+        prov_dict[sub] = df[sub].sum() if sub in df.columns else 0.0
+        
+    prov_row = pd.DataFrame([prov_dict])
+    
+    if compare_type == 'prev':
+        p_prev = prov_row.iloc[0]['dt_prev']
+        prov_row['ratio'] = ((prov_row['tong_dt'] - p_prev) / p_prev * 100.0) if p_prev > 0 else None
+        prov_row['ratio_display'] = prov_row['ratio'].map(lambda x: f"{x:+.1f}%" if pd.notna(x) else "—")
+    elif compare_type == 'yoy':
+        p_yoy = prov_row.iloc[0]['dt_yoy']
+        prov_row['ratio'] = ((prov_row['tong_dt'] - p_yoy) / p_yoy * 100.0) if p_yoy > 0 else None
+        prov_row['ratio_display'] = prov_row['ratio'].map(lambda x: f"{x:+.1f}%" if pd.notna(x) else "—")
+    else: # plan
+        p_plan = prov_row.iloc[0]['plan_dt']
+        prov_row['ratio'] = (prov_row['tong_dt'] / p_plan * 100.0) if p_plan > 0 else None
+        prov_row['ratio_display'] = prov_row['ratio'].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
+        
+    df_sorted = df.sort_values(by=['ten_cum', 'ten_bdx'], ascending=True)
+    df_final = pd.concat([prov_row, df_sorted], ignore_index=True)
+    
+    # Định dạng tiền
+    df_display = df_final.copy()
+    for col in sub_services + ["tong_dt"]:
+        if col in df_display.columns:
+            df_display[col] = df_display[col].map(lambda x: f"{x:,.0f} đ" if x > 0 else "0 đ")
+        
+    columns = [
+        {"name": "Cụm", "id": "ten_cum"},
+        {"name": "Xã / Bưu cục", "id": "ten_bdx"}
+    ]
+    for sub in sub_services:
+        columns.append({"name": sub, "id": sub})
+        
+    columns.extend([
+        {"name": "Tổng Doanh Thu", "id": "tong_dt"},
+        {"name": ratio_col_name, "id": "ratio_display"}
+    ])
+    
+    return dash_table.DataTable(
+        data=df_display.to_dict("records"),
+        columns=columns,
+        sort_action="native",
+        page_size=15,
+        style_table={"overflowX": "auto", "borderRadius": "8px", "border": "1px solid #E2E8F0"},
+        style_header={
+            "backgroundColor": "#F8FAFC",
+            "fontWeight": "bold",
+            "color": "#1E293B",
+            "border": "1px solid #CBD5E1"
+        },
+        style_cell={
+            "padding": "8px 10px",
+            "textAlign": "left",
+            "fontSize": "13px",
+            "fontFamily": "Inter, sans-serif"
+        },
+        style_data_conditional=[
+            {
+                "if": {"row_index": 0},
+                "backgroundColor": "#EFF6FF",
+                "fontWeight": "bold",
+                "color": "#1E3A8A"
+            },
+            {
+                "if": {"column_id": "tong_dt"},
+                "fontWeight": "bold"
+            }
+        ]
+    )
+
+def query_sub_service_data(conn, service_key, period_type, period_val, year, sub_services):
+    """Query chi tiết doanh thu theo bưu cục xã, phân rã theo nhóm dịch vụ con"""
+    # 1. Tìm kỳ trước và cùng kỳ
+    prev_val, prev_yr = get_prev_period_info(period_type, period_val, year)
+    
+    # 2. Query doanh thu kỳ hiện tại
+    if period_type == 'Tháng':
+        sql = """
+            SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
+            FROM agg_monthly
+            WHERE nam = ? AND thang = ? AND nhom_dich_vu IN (
+                SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
+            )
+            GROUP BY buu_cuc, nhom_dich_vu
+        """
+        params = (year, period_val, service_key)
+    else:
+        sql = """
+            SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
+            FROM agg_weekly
+            WHERE nam = ? AND tuan_so = ? AND nhom_dich_vu IN (
+                SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
+            )
+            GROUP BY buu_cuc, nhom_dich_vu
+        """
+        params = (year, period_val, service_key)
+        
+    df_raw = pd.read_sql_query(sql, conn, params=params)
+    
+    if not df_raw.empty:
+        df_pivot = df_raw.pivot(index='buu_cuc', columns='nhom_dich_vu', values='dt').fillna(0.0).reset_index()
+    else:
+        df_pivot = pd.DataFrame(columns=['buu_cuc'] + sub_services)
+        
+    for sub in sub_services:
+        if sub not in df_pivot.columns:
+            df_pivot[sub] = 0.0
+            
+    df_pivot['tong_dt'] = df_pivot[sub_services].sum(axis=1)
+    
+    # 3. Query tổng doanh thu kỳ trước
+    if period_type == 'Tháng':
+        prev_sql = """
+            SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev 
+            FROM agg_monthly 
+            WHERE nam = ? AND thang = ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
+            GROUP BY buu_cuc
+        """
+        prev_params = (prev_yr, prev_val, service_key)
+    else:
+        prev_sql = """
+            SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev 
+            FROM agg_weekly 
+            WHERE nam = ? AND tuan_so = ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
+            GROUP BY buu_cuc
+        """
+        prev_params = (prev_yr, prev_val, service_key)
+        
+    df_prev = pd.read_sql_query(prev_sql, conn, params=prev_params)
+    
+    # 4. Query tổng doanh thu cùng kỳ năm trước
+    if period_type == 'Tháng':
+        yoy_sql = """
+            SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy 
+            FROM agg_monthly 
+            WHERE nam = ? AND thang = ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
+            GROUP BY buu_cuc
+        """
+    else:
+        yoy_sql = """
+            SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy 
+            FROM agg_weekly 
+            WHERE nam = ? AND tuan_so = ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
+            GROUP BY buu_cuc
+        """
+    yoy_params = (year - 1, period_val, service_key)
+    df_yoy = pd.read_sql_query(yoy_sql, conn, params=yoy_params)
+    
+    # 5. Query kế hoạch
+    if period_type == 'Tháng':
+        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans WHERE nam = ? AND thang = ? AND nhom_dich_vu = ? GROUP BY ma_buu_cuc"
+    else:
+        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans_weekly WHERE nam = ? AND tuan_so = ? AND nhom_dich_vu = ? GROUP BY ma_buu_cuc"
+    plan_params = (year, period_val, service_key)
+    df_plan = pd.read_sql_query(plan_sql, conn, params=plan_params)
+    
+    # Merge all
+    df_merge = df_pivot
+    for df_c, col_name in [(df_prev, 'dt_prev'), (df_yoy, 'dt_yoy'), (df_plan, 'plan_dt')]:
+        if not df_c.empty:
+            df_merge = pd.merge(df_merge, df_c, on='buu_cuc', how='left')
+        else:
+            df_merge[col_name] = 0.0
+            
+    df_merge = df_merge.fillna(0.0)
+    
+    df_buucuc = pd.read_sql_query("SELECT ma_bc as buu_cuc, ten_bdx, ten_cum FROM dim_buucuc", conn)
+    df_final = pd.merge(df_merge, df_buucuc, on='buu_cuc', how='inner')
+    
+    return df_final
+
+def query_sub_service_data_ytd(conn, service_key, period_type, period_val, year, sub_services):
+    """Query chi tiết doanh thu lũy kế YTD theo bưu cục xã, phân rã theo nhóm dịch vụ con"""
+    # 1. Query doanh thu YTD hiện tại
+    if period_type == 'Tháng':
+        sql = """
+            SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
+            FROM agg_monthly
+            WHERE nam = ? AND thang BETWEEN 1 AND ? AND nhom_dich_vu IN (
+                SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
+            )
+            GROUP BY buu_cuc, nhom_dich_vu
+        """
+        params = (year, period_val, service_key)
+    else:
+        sql = """
+            SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
+            FROM agg_weekly
+            WHERE nam = ? AND tuan_so BETWEEN 1 AND ? AND nhom_dich_vu IN (
+                SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
+            )
+            GROUP BY buu_cuc, nhom_dich_vu
+        """
+        params = (year, period_val, service_key)
+        
+    df_raw = pd.read_sql_query(sql, conn, params=params)
+    
+    if not df_raw.empty:
+        df_pivot = df_raw.pivot(index='buu_cuc', columns='nhom_dich_vu', values='dt').fillna(0.0).reset_index()
+    else:
+        df_pivot = pd.DataFrame(columns=['buu_cuc'] + sub_services)
+        
+    for sub in sub_services:
+        if sub not in df_pivot.columns:
+            df_pivot[sub] = 0.0
+            
+    df_pivot['tong_dt'] = df_pivot[sub_services].sum(axis=1)
+    
+    # 2. Query tổng doanh thu kỳ trước lũy kế
+    prev_val, prev_yr = get_prev_period_info(period_type, period_val, year)
+    if period_type == 'Tháng':
+        prev_sql = """
+            SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev 
+            FROM agg_monthly 
+            WHERE nam = ? AND thang BETWEEN 1 AND ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
+            GROUP BY buu_cuc
+        """
+        prev_params = (prev_yr, prev_val, service_key)
+    else:
+        prev_sql = """
+            SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev 
+            FROM agg_weekly 
+            WHERE nam = ? AND tuan_so BETWEEN 1 AND ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
+            GROUP BY buu_cuc
+        """
+        prev_params = (prev_yr, prev_val, service_key)
+        
+    df_prev = pd.read_sql_query(prev_sql, conn, params=prev_params)
+    
+    # 3. Query tổng doanh thu cùng kỳ YTD
+    if period_type == 'Tháng':
+        yoy_sql = """
+            SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy 
+            FROM agg_monthly 
+            WHERE nam = ? AND thang BETWEEN 1 AND ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
+            GROUP BY buu_cuc
+        """
+    else:
+        yoy_sql = """
+            SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy 
+            FROM agg_weekly 
+            WHERE nam = ? AND tuan_so BETWEEN 1 AND ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
+            GROUP BY buu_cuc
+        """
+    yoy_params = (year - 1, period_val, service_key)
+    df_yoy = pd.read_sql_query(yoy_sql, conn, params=yoy_params)
+    
+    # 4. Query kế hoạch lũy kế YTD
+    if period_type == 'Tháng':
+        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans WHERE nam = ? AND thang BETWEEN 1 AND ? AND nhom_dich_vu = ? GROUP BY ma_buu_cuc"
+    else:
+        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans_weekly WHERE nam = ? AND tuan_so BETWEEN 1 AND ? AND nhom_dich_vu = ? GROUP BY ma_buu_cuc"
+    plan_params = (year, period_val, service_key)
+    df_plan = pd.read_sql_query(plan_sql, conn, params=plan_params)
+    
+    df_merge = df_pivot
+    for df_c, col_name in [(df_prev, 'dt_prev'), (df_yoy, 'dt_yoy'), (df_plan, 'plan_dt')]:
+        if not df_c.empty:
+            df_merge = pd.merge(df_merge, df_c, on='buu_cuc', how='left')
+        else:
+            df_merge[col_name] = 0.0
+            
+    df_merge = df_merge.fillna(0.0)
+    
+    df_buucuc = pd.read_sql_query("SELECT ma_bc as buu_cuc, ten_bdx, ten_cum FROM dim_buucuc", conn)
+    df_final = pd.merge(df_merge, df_buucuc, on='buu_cuc', how='inner')
+    
+    return df_final
 
 def register_service_callbacks(app):
-    """Đăng ký các callback cho trang dịch vụ dùng chung"""
+    """Đăng ký các callback động cho các trang dịch vụ (BCCP, HCC, TCBC, PPBL) sử dụng mô hình Pattern Matching Callbacks hoặc tương tự"""
     
-    # 1. Khởi tạo bộ lọc (Cụm, Năm) dựa theo dịch vụ và phân quyền người dùng
-    @app.callback(
-        [Output("service-filter-year", "options"),
-         Output("service-filter-cum", "options"),
-         Output("service-filter-cum", "value"),
-         Output("service-filter-cum", "disabled")],
-        [Input("service-type-store", "data")]
-    )
-    def init_service_filters(service_type):
-        if not service_type or not DB_PATH.exists():
-            return [{"label": "2026", "value": 2026}], [{"label": "Tất cả Cụm", "value": "Tất cả"}], "Tất cả", False
-            
-        conn = sqlite3.connect(str(DB_PATH))
-        try:
-            # Lấy danh sách năm
-            # Do transactions có thể chứa dữ liệu cũ, ta query cột nam_du_lieu
-            df_years = pd.read_sql_query("SELECT DISTINCT nam_du_lieu FROM transactions WHERE nam_du_lieu IS NOT NULL ORDER BY nam_du_lieu DESC", conn)
-            years_opts = [{"label": str(y), "value": y} for y in df_years["nam_du_lieu"].tolist()] if not df_years.empty else [{"label": "2026", "value": 2026}]
-            
-            # Lấy danh sách cụm
-            df_cums = pd.read_sql_query("SELECT DISTINCT ten_cum FROM dim_buucuc WHERE ten_cum IS NOT NULL ORDER BY ten_cum", conn)
-            cums = df_cums["ten_cum"].tolist()
-        except Exception as e:
-            print(f"Lỗi load filter trong service_callbacks: {e}")
-            years_opts = [{"label": "2026", "value": 2026}]
-            cums = []
-        finally:
-            conn.close()
-            
-        # Áp dụng phân quyền
-        cum_value = "Tất cả"
-        cum_options = [{"label": "Tất cả Cụm", "value": "Tất cả"}] + [{"label": c, "value": c} for c in cums]
-        cum_disabled = False
+    # Để tránh việc trùng lặp code và hỗ trợ prefix linh động, ta đăng ký callbacks cho 4 dịch vụ thông qua 4 bộ prefix khác nhau.
+    # Các prefix: bccp-overview, hcc-overview, tcbc-overview, ppbl-overview
+    for prefix in ["bccp-overview", "hcc-overview", "tcbc-overview", "ppbl-overview"]:
         
-        if current_user and current_user.is_authenticated and current_user.role == 'user' and current_user.assigned_cum:
-            cum_value = current_user.assigned_cum
-            cum_options = [{"label": current_user.assigned_cum, "value": current_user.assigned_cum}]
-            cum_disabled = True
-            
-        return years_opts, cum_options, cum_value, cum_disabled
-
-    # Hàm truy vấn dữ liệu chi tiết của 1 dịch vụ
-    def query_service_data(service_type, year, month):
-        """
-        Truy vấn dữ liệu doanh thu chi tiết từ DB SQLite.
-        Đặc biệt xử lý riêng trường hợp HCC: gộp 'Chuyển phát HCC' trong BCCP và data transactions_hcc.
-        """
-        thang_str = f"T{month:02d}"
-        results = [] # list of dicts: {"ma_bc": ..., "ten_dich_vu": ..., "doanh_thu": ...}
-        
-        if not DB_PATH.exists():
-            return pd.DataFrame()
-            
-        conn = sqlite3.connect(str(DB_PATH))
-        try:
-            if service_type == "HCC":
-                # A. Lấy 'Chuyển phát HCC' từ bảng transactions chính
-                sql_cp = """
-                    SELECT t.buu_cuc as ma_bc, 'Chuyển phát HCC' as ten_dich_vu, SUM(t.cuoc_tt_tong) as dt
-                    FROM transactions t
-                    INNER JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
-                    WHERE d.nhom_chinh = 'HCC' AND t.nam_du_lieu = :nam AND t.thang_du_lieu = :thang
-                    GROUP BY t.buu_cuc
-                """
-                df_cp = pd.read_sql_query(sql_cp, conn, params={"nam": year, "thang": thang_str})
-                for _, r in df_cp.iterrows():
-                    results.append({
-                        "ma_bc": r["ma_bc"],
-                        "ten_dich_vu": r["ten_dich_vu"],
-                        "doanh_thu": r["dt"] or 0.0
-                    })
-                    
-                # B. Lấy 5 dịch vụ khác từ transactions_hcc
-                sql_hcc = """
-                    SELECT ma_buu_cuc as ma_bc, ten_dich_vu, SUM(doanh_thu) as dt
-                    FROM transactions_hcc
-                    WHERE nam_du_lieu = :nam AND thang_du_lieu = :thang
-                    GROUP BY ma_buu_cuc, ten_dich_vu
-                """
-                df_hcc = pd.read_sql_query(sql_hcc, conn, params={"nam": year, "thang": thang_str})
-                for _, r in df_hcc.iterrows():
-                    results.append({
-                        "ma_bc": r["ma_bc"],
-                        "ten_dich_vu": r["ten_dich_vu"],
-                        "doanh_thu": r["dt"] or 0.0
-                    })
-                    
-            elif service_type == "TCBC":
-                sql_tc = """
-                    SELECT ma_buu_cuc as ma_bc, ten_dich_vu, SUM(doanh_thu) as dt
-                    FROM transactions_tcbc
-                    WHERE nam_du_lieu = :nam AND thang_du_lieu = :thang
-                    GROUP BY ma_buu_cuc, ten_dich_vu
-                """
-                df_tc = pd.read_sql_query(sql_tc, conn, params={"nam": year, "thang": thang_str})
-                for _, r in df_tc.iterrows():
-                    results.append({
-                        "ma_bc": r["ma_bc"],
-                        "ten_dich_vu": r["ten_dich_vu"],
-                        "doanh_thu": r["dt"] or 0.0
-                    })
-                    
-            elif service_type == "PPBL":
-                sql_pp = """
-                    SELECT ma_buu_cuc as ma_bc, ten_dich_vu, SUM(doanh_thu) as dt
-                    FROM transactions_ppbl
-                    WHERE nam_du_lieu = :nam AND thang_du_lieu = :thang
-                    GROUP BY ma_buu_cuc, ten_dich_vu
-                """
-                df_pp = pd.read_sql_query(sql_pp, conn, params={"nam": year, "thang": thang_str})
-                for _, r in df_pp.iterrows():
-                    results.append({
-                        "ma_bc": r["ma_bc"],
-                        "ten_dich_vu": r["ten_dich_vu"],
-                        "doanh_thu": r["dt"] or 0.0
-                    })
-        except Exception as e:
-            print(f"Lỗi query service data: {e}")
-        finally:
-            conn.close()
-            
-        return pd.DataFrame(results)
-
-    def process_and_pivot_data(df, service_type, cum):
-        """
-        Xử lý, JOIN danh mục địa lý, Pivot và thêm dòng tổng hợp.
-        Nếu cum == 'Tất cả' -> Group by Cụm
-        Nếu cum == cụm cụ thể -> Group by Bưu cục thuộc Cụm đó
-        """
-        if df.empty or not DB_PATH.exists():
-            return pd.DataFrame(), []
-            
-        # 1. Đọc danh sách bưu cục từ dim_buucuc
-        conn = sqlite3.connect(str(DB_PATH))
-        try:
-            df_buucuc = pd.read_sql_query("SELECT ma_bc, ten_buu_cuc, ten_cum FROM dim_buucuc", conn)
-            # Load danh mục sản phẩm của dịch vụ này từ dim_dichvu để pivot đủ cột
-            df_sub_services = pd.read_sql_query("SELECT DISTINCT ten_dich_vu FROM dim_dichvu WHERE nhom_chinh = :st", conn, params={"st": service_type})
-            sub_services = df_sub_services["ten_dich_vu"].tolist()
-        except Exception as e:
-            print(f"Lỗi đọc danh mục buucuc: {e}")
-            df_buucuc = pd.DataFrame(columns=["ma_bc", "ten_buu_cuc", "ten_cum"])
-            sub_services = []
-        finally:
-            conn.close()
-            
-        # Join data thực tế với danh mục bưu cục
-        df_merged = pd.merge(df, df_buucuc, left_on="ma_bc", right_on="ma_bc", how="inner")
-        if df_merged.empty:
-            return pd.DataFrame(), sub_services
-            
-        # 2. Xử lý theo bộ lọc cụm
-        if cum == "Tất cả":
-            # Group by Cụm & Dịch vụ con
-            df_grouped = df_merged.groupby(["ten_cum", "ten_dich_vu"])["doanh_thu"].sum().reset_index()
-            # Pivot table
-            df_pivot = df_grouped.pivot(index="ten_cum", columns="ten_dich_vu", values="doanh_thu").fillna(0.0)
-            df_pivot = df_pivot.reset_index().rename(columns={"ten_cum": "Địa bàn"})
-            title_col = "Địa bàn"
-        else:
-            # Lọc riêng cụm đó
-            df_cum_filtered = df_merged[df_merged["ten_cum"] == cum]
-            if df_cum_filtered.empty:
-                return pd.DataFrame(), sub_services
-            # Group by Bưu cục (Mã BC + Tên BC) & Dịch vụ con
-            df_grouped = df_cum_filtered.groupby(["ma_bc", "ten_buu_cuc", "ten_dich_vu"])["doanh_thu"].sum().reset_index()
-            df_grouped["BuuCuc"] = df_grouped["ma_bc"] + " - " + df_grouped["ten_buu_cuc"]
-            # Pivot table
-            df_pivot = df_grouped.pivot(index="BuuCuc", columns="ten_dich_vu", values="doanh_thu").fillna(0.0)
-            df_pivot = df_pivot.reset_index().rename(columns={"BuuCuc": "Bưu cục"})
-            title_col = "Bưu cục"
-            
-        # Đảm bảo tất cả dịch vụ con trong dim_dichvu đều có cột (kể cả khi doanh thu = 0)
-        for s in sub_services:
-            if s not in df_pivot.columns:
-                df_pivot[s] = 0.0
+        # Hàm closure tạo callback riêng biệt cho mỗi prefix
+        def make_callbacks(pfx):
+            @app.callback(
+                [
+                    Output(f"{pfx}-top10-prev-container", "children"),
+                    Output(f"{pfx}-top10-yoy-container", "children"),
+                    Output(f"{pfx}-top10-plan-container", "children"),
+                    Output(f"{pfx}-stacked-bar-12p", "figure")
+                ] + [
+                    # Output cho tối đa 10 KPI cards con
+                    Output(f"{pfx}-sub-{i}-value", "children") for i in range(10)
+                ] + [
+                    Output(f"{pfx}-sub-{i}-compare-prev", "children") for i in range(10)
+                ] + [
+                    Output(f"{pfx}-sub-{i}-compare-prev", "style") for i in range(10)
+                ] + [
+                    Output(f"{pfx}-sub-{i}-compare-yoy", "children") for i in range(10)
+                ] + [
+                    Output(f"{pfx}-sub-{i}-compare-yoy", "style") for i in range(10)
+                ] + [
+                    Output(f"{pfx}-sub-{i}-compare-plan", "children") for i in range(10)
+                ] + [
+                    Output(f"{pfx}-sub-{i}-compare-plan", "style") for i in range(10)
+                ],
+                [Input("btn-apply-filter", "n_clicks")],
+                [
+                    State("sidebar-year", "value"),
+                    State("sidebar-month-select", "value"),
+                    State("sidebar-week-select", "value"),
+                    State("sidebar-period", "value"),
+                    State(f"{pfx}-service-key-store", "data")
+                ]
+            )
+            def update_service_dashboard(n_clicks, year, month, week, cycle, store_data):
+                # Khởi tạo toàn bộ outputs rỗng (74 outputs = 4 + 7 * 10)
+                empty_kpis = []
+                for _ in range(10):
+                    empty_kpis.extend(["—", "—", {"color": "#64748B"}, "—", {"color": "#64748B"}, "—", {"color": "#64748B"}])
+                default_returns = ["Không có dữ liệu", "Không có dữ liệu", "Không có dữ liệu", go.Figure()] + empty_kpis
                 
-        # Sắp xếp các cột dịch vụ con
-        service_cols = [c for c in sub_services if c in df_pivot.columns]
-        
-        # Thêm cột Tổng cộng
-        df_pivot["Tổng cộng"] = df_pivot[service_cols].sum(axis=1)
-        
-        # Tạo dòng Tổng (Toàn tỉnh hoặc Tổng cụm)
-        sum_row = {title_col: "⭐️ TOÀN TỈNH" if cum == "Tất cả" else f"⭐️ TỔNG {cum.upper()}"}
-        for s in service_cols:
-            sum_row[s] = df_pivot[s].sum()
-        sum_row["Tổng cộng"] = df_pivot["Tổng cộng"].sum()
-        
-        df_sum = pd.DataFrame([sum_row])
-        df_final = pd.concat([df_sum, df_pivot], ignore_index=True)
-        
-        # Trả về df_final và các cột dịch vụ con
-        return df_final, service_cols
+                if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week) or not store_data:
+                    return default_returns
+                    
+                service_key = store_data["service_key"]
+                sub_services = store_data["sub_services"]
+                period_val = month if cycle == 'Tháng' else week
+                
+                conn = sqlite3.connect(str(DB_PATH))
+                
+                try:
+                    # 1. Query Top 10 của dịch vụ chính
+                    df_top_prev = get_top10_by_comparison(conn, cycle, period_val, year, 'prev')
+                    df_top_yoy = get_top10_by_comparison(conn, cycle, period_val, year, 'yoy')
+                    df_top_plan = get_top10_by_comparison(conn, cycle, period_val, year, 'plan')
+                    
+                    top10_prev = create_top10_table_sub(df_top_prev)
+                    top10_yoy = create_top10_table_sub(df_top_yoy)
+                    top10_plan = create_top10_table_sub(df_top_plan)
+                    
+                    # 2. Query doanh thu 12 kỳ của các dịch vụ con
+                    df_12p = get_12_periods_revenue_sub(conn, service_key, cycle, period_val, year, sub_services)
+                    
+                    fig = go.Figure()
+                    sub_colors = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#6366F1", "#14B8A6"]
+                    if not df_12p.empty:
+                        for idx, sub in enumerate(sub_services):
+                            if sub in df_12p.columns:
+                                fig.add_trace(go.Bar(
+                                    name=sub,
+                                    x=df_12p["label"],
+                                    y=df_12p[sub],
+                                    marker_color=sub_colors[idx % len(sub_colors)],
+                                    hovertemplate=f"{sub}: %{{y:,.0f}} đ<extra></extra>"
+                                ))
+                                
+                    fig.update_layout(
+                        barmode="stack",
+                        margin=dict(t=20, b=20, l=60, r=10),
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5),
+                        height=320,
+                        xaxis=dict(showgrid=False),
+                        yaxis=dict(showgrid=True, gridcolor="#F1F5F9")
+                    )
+                    
+                    # 3. Tính toán các KPI Cards con
+                    # Doanh thu kỳ này
+                    rev_cur = query_sub_revenue_total(conn, service_key, cycle, period_val, year)
+                    
+                    # Doanh thu kỳ trước
+                    prev_val, prev_yr = get_prev_period_info(cycle, period_val, year)
+                    rev_prev = query_sub_revenue_total(conn, service_key, cycle, prev_val, prev_yr)
+                    
+                    # Doanh thu cùng kỳ năm trước
+                    rev_yoy = query_sub_revenue_total(conn, service_key, cycle, period_val, year - 1)
+                    
+                    # Kế hoạch
+                    rev_plan = get_plans_current_period_sub(DB_PATH, service_key, cycle, period_val, year)
+                    
+                    kpi_outputs = []
+                    # Lặp qua tất cả 10 slot KPI cards
+                    for i in range(10):
+                        if i < len(sub_services):
+                            sub = sub_services[i]
+                            cur_val = rev_cur.get(sub, 0.0)
+                            p_val = rev_prev.get(sub, 0.0)
+                            y_val = rev_yoy.get(sub, 0.0)
+                            pl_val = rev_plan.get(sub, 0.0)
+                            
+                            # Kỳ trước
+                            if p_val > 0:
+                                pct_p = (cur_val - p_val) * 100.0 / p_val
+                                p_str = f"{pct_p:+.1f}%"
+                                p_style = {"color": "#10B981" if pct_p >= 0 else "#EF4444", "fontWeight": "bold"}
+                            else:
+                                p_str = "—"
+                                p_style = {"color": "#64748B"}
+                                
+                            # Cùng kỳ
+                            if y_val > 0:
+                                pct_y = (cur_val - y_val) * 100.0 / y_val
+                                y_str = f"{pct_y:+.1f}%"
+                                y_style = {"color": "#10B981" if pct_y >= 0 else "#EF4444", "fontWeight": "bold"}
+                            else:
+                                y_str = "—"
+                                y_style = {"color": "#64748B"}
+                                
+                            # Kế hoạch
+                            if pl_val > 0:
+                                pct_pl = (cur_val / pl_val) * 100.0
+                                pl_str = f"{pct_pl:.1f}%"
+                                pl_style = {"color": "#10B981" if pct_pl >= 100 else "#F59E0B", "fontWeight": "bold"}
+                            else:
+                                pl_str = "—"
+                                pl_style = {"color": "#64748B"}
+                                
+                            kpi_outputs.append(format_revenue(cur_val))
+                            kpi_outputs.append(p_str)
+                            kpi_outputs.append(p_style)
+                            kpi_outputs.append(y_str)
+                            kpi_outputs.append(y_style)
+                            kpi_outputs.append(pl_str)
+                            kpi_outputs.append(pl_style)
+                        else:
+                            # Slot không dùng thì trả về mặc định ẩn/trống
+                            kpi_outputs.extend(["", "", {"display": "none"}, "", {"display": "none"}, "", {"display": "none"}])
+                            
+                    # Sắp xếp đúng thứ tự output: 4 containers + 70 kpi outputs
+                    # Dashboard return 4 containers + 70 kpis
+                    
+                    # Tách kpi_outputs thành các mảng song song tương ứng với list Outputs
+                    val_outputs = kpi_outputs[0::7]      # 10 values
+                    p_str_outputs = kpi_outputs[1::7]    # 10 prev strings
+                    p_style_outputs = kpi_outputs[2::7]  # 10 prev styles
+                    y_str_outputs = kpi_outputs[3::7]    # 10 yoy strings
+                    y_style_outputs = kpi_outputs[4::7]  # 10 yoy styles
+                    pl_str_outputs = kpi_outputs[5::7]   # 10 plan strings
+                    pl_style_outputs = kpi_outputs[6::7] # 10 plan styles
+                    
+                    all_final_returns = [top10_prev, top10_yoy, top10_plan, fig] + val_outputs + p_str_outputs + p_style_outputs + y_str_outputs + y_style_outputs + pl_str_outputs + pl_style_outputs
+                    return all_final_returns
+                    
+                except Exception as e:
+                    print(f"Lỗi update service dashboard cho {service_key}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return default_returns
+                finally:
+                    conn.close()
 
-    # 2. Callback chính cập nhật giao diện
-    @app.callback(
-        [Output("service-kpi-container", "children"),
-         Output("service-bar-chart", "figure"),
-         Output("service-table-title", "children"),
-         Output("service-table-container", "children")],
-        [Input("service-type-store", "data"),
-         Input("service-filter-year", "value"),
-         Input("service-filter-month", "value"),
-         Input("service-filter-cum", "value")]
-    )
-    def update_service_page(service_type, year, month, cum):
-        if not service_type:
-            return html.Div(), go.Figure(), "", html.Div()
-            
-        # A. Query và xử lý dữ liệu
-        df_raw = query_service_data(service_type, year, month)
-        df_pivot, service_cols = process_and_pivot_data(df_raw, service_type, cum)
+            @app.callback(
+                Output(f"{pfx}-table-a-container", "children"),
+                [
+                    Input("btn-apply-filter", "n_clicks"),
+                    Input(f"{pfx}-table-a-compare-selector", "value")
+                ],
+                [
+                    State("sidebar-year", "value"),
+                    State("sidebar-month-select", "value"),
+                    State("sidebar-week-select", "value"),
+                    State("sidebar-period", "value"),
+                    State(f"{pfx}-service-key-store", "data")
+                ]
+            )
+            def update_service_table_a(n_clicks, compare_type, year, month, week, cycle, store_data):
+                if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week) or not store_data:
+                    return html.Div("Vui lòng chọn bộ lọc thời gian để xem chi tiết.")
+                    
+                service_key = store_data["service_key"]
+                sub_services = store_data["sub_services"]
+                period_val = month if cycle == 'Tháng' else week
+                
+                conn = sqlite3.connect(str(DB_PATH))
+                try:
+                    df = query_sub_service_data(conn, service_key, cycle, period_val, year, sub_services)
+                    return create_detail_table_sub(df, sub_services, compare_type)
+                except Exception as e:
+                    return html.Div(f"Lỗi load bảng chi tiết xã: {e}")
+                finally:
+                    conn.close()
+
+            @app.callback(
+                Output(f"{pfx}-table-b-container", "children"),
+                [
+                    Input("btn-apply-filter", "n_clicks"),
+                    Input(f"{pfx}-table-b-compare-selector", "value")
+                ],
+                [
+                    State("sidebar-year", "value"),
+                    State("sidebar-month-select", "value"),
+                    State("sidebar-week-select", "value"),
+                    State("sidebar-period", "value"),
+                    State(f"{pfx}-service-key-store", "data")
+                ]
+            )
+            def update_service_table_b(n_clicks, compare_type, year, month, week, cycle, store_data):
+                if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week) or not store_data:
+                    return html.Div("Vui lòng chọn bộ lọc thời gian để xem chi tiết.")
+                    
+                service_key = store_data["service_key"]
+                sub_services = store_data["sub_services"]
+                period_val = month if cycle == 'Tháng' else week
+                
+                conn = sqlite3.connect(str(DB_PATH))
+                try:
+                    df = query_sub_service_data_ytd(conn, service_key, cycle, period_val, year, sub_services)
+                    return create_detail_table_sub(df, sub_services, compare_type)
+                except Exception as e:
+                    return html.Div(f"Lỗi load bảng lũy kế YTD: {e}")
+                finally:
+                    conn.close()
+                    
+        # Chạy hàm khởi tạo callbacks
+        make_callbacks(prefix)
+
+def query_sub_revenue_total(conn, service_key, period_type, period_val, year):
+    """Tính tổng doanh thu hiện tại theo từng nhóm dịch vụ con"""
+    res = {}
+    cursor = conn.cursor()
+    if period_type == 'Tháng':
+        sql = """
+            SELECT nhom_dich_vu, SUM(tong_doanh_thu) 
+            FROM agg_monthly 
+            WHERE nam = ? AND thang = ? AND nhom_dich_vu IN (
+                SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
+            )
+            GROUP BY nhom_dich_vu
+        """
+    else:
+        sql = """
+            SELECT nhom_dich_vu, SUM(tong_doanh_thu) 
+            FROM agg_weekly 
+            WHERE nam = ? AND tuan_so = ? AND nhom_dich_vu IN (
+                SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
+            )
+            GROUP BY nhom_dich_vu
+        """
+    cursor.execute(sql, (year, period_val, service_key))
+    for nhom, dt in cursor.fetchall():
+        res[nhom] = dt or 0.0
+    return res
+
+def get_12_periods_revenue_sub(conn, service_key, period_type, current_period, current_year, sub_services):
+    """Lấy dữ liệu doanh thu của 12 kỳ của các dịch vụ con thuộc service_key"""
+    import config.week_calendar as calendar_helper
+    periods = []
+    
+    if period_type == 'Tháng':
+        curr_m, curr_y = current_period, current_year
+        for _ in range(12):
+            periods.append((curr_m, curr_y, f"T{curr_m:02d}/{curr_y}"))
+            curr_m -= 1
+            if curr_m == 0:
+                curr_m = 12
+                curr_y -= 1
+        periods.reverse()
+    else: # Tuần
+        curr_w, curr_y = current_period, current_year
+        for _ in range(12):
+            periods.append((curr_w, curr_y, f"Tuần {curr_w}"))
+            curr_w -= 1
+            if curr_w == 0:
+                curr_y -= 1
+                weeks = calendar_helper.get_week_list(curr_y)
+                curr_w = weeks[-1][0] if weeks else 52
+        periods.reverse()
         
-        # B. Check empty state
-        if df_pivot.empty or len(df_pivot) <= 1 or df_pivot["Tổng cộng"].iloc[0] == 0:
-            empty_state = html.Div([
-                html.Div("📥", className="empty-state-icon"),
-                html.Div("Chưa có dữ liệu", className="empty-state-title"),
-                html.Div(f"Hệ thống chưa ghi nhận dữ liệu {service_type} cho thời kỳ Tháng {month:02d}/{year}.", className="empty-state-desc"),
-                dcc.Link(dbc.Button("Đi đến trang Nhập dữ liệu", color="primary"), href="/import")
-            ], className="empty-state-container")
+    result_data = []
+    for val, yr, label in periods:
+        row_dict = {'label': label}
+        for sub in sub_services:
+            row_dict[sub] = 0.0
             
-            return empty_state, go.Figure(), "📋 Bảng doanh thu chi tiết", empty_state
-            
-        # C. Render KPI tổng hợp
-        tot_rev = df_pivot["Tổng cộng"].iloc[0] # Dòng đầu tiên là dòng tổng
-        
-        # Tính kỳ trước để so sánh (không lũy kế, so sánh tháng liền kề)
-        pyear, pmonth = get_prev_month_year(year, month)
-        df_raw_prev = query_service_data(service_type, pyear, pmonth)
-        df_pivot_prev, _ = process_and_pivot_data(df_raw_prev, service_type, cum)
-        prev_rev = df_pivot_prev["Tổng cộng"].iloc[0] if not df_pivot_prev.empty else 0.0
-        
-        # Tính hoàn thành kế hoạch tháng (nếu có)
-        sql_plan = "SELECT SUM(ke_hoach_doanh_thu) FROM plans WHERE nam = :nam AND thang = :thang AND nhom_dich_vu = :nt"
-        params_plan = {"nam": year, "thang": month, "nt": service_type}
-        if cum and cum != "Tất cả":
-            sql_plan = """
-                SELECT SUM(p.ke_hoach_doanh_thu) 
-                FROM plans p
-                INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_bc
-                WHERE p.nam = :nam AND p.thang = :thang AND p.nhom_dich_vu = :nt AND b.ten_cum = :cum
+        if period_type == 'Tháng':
+            query = """
+                SELECT nhom_dich_vu, SUM(tong_doanh_thu) as dt
+                FROM agg_monthly
+                WHERE nam = ? AND thang = ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
+                GROUP BY nhom_dich_vu
             """
-            params_plan["cum"] = cum
-            
-        plan_val = 0.0
-        if DB_PATH.exists():
-            conn = sqlite3.connect(str(DB_PATH))
-            try:
-                cursor = conn.cursor()
-                cursor.execute(sql_plan, params_plan)
-                row = cursor.fetchone()
-                plan_val = row[0] if row and row[0] is not None else 0.0
-            except Exception as e:
-                print(f"Lỗi lấy plan tháng: {e}")
-            finally:
-                conn.close()
+        else: # Tuần
+            query = """
+                SELECT nhom_dich_vu, SUM(tong_doanh_thu) as dt
+                FROM agg_weekly
+                WHERE nam = ? AND tuan_so = ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
+                GROUP BY nhom_dich_vu
+            """
+        cursor = conn.cursor()
+        cursor.execute(query, (yr, val, service_key))
+        for nhom, dt in cursor.fetchall():
+            if nhom in row_dict:
+                row_dict[nhom] = dt or 0.0
                 
-        # Xây dựng so sánh
-        compare_elements = []
-        if prev_rev > 0:
-            pct_prev = (tot_rev - prev_rev) * 100.0 / prev_rev
-            color = "#10B981" if pct_prev >= 0 else "#EF4444"
-            icon = "▲" if pct_prev >= 0 else "▼"
-            compare_elements.append(html.Span([
-                html.Span(f"{icon} {abs(pct_prev):.1f}%", style={"color": color, "fontWeight": "bold", "marginRight": "5px"}),
-                html.Span(f"so với kỳ trước ({format_revenue(prev_rev)})  |  ", style={"color": "#64748B"})
-            ]))
-            
-        if plan_val > 0:
-            pct_plan = tot_rev * 100.0 / plan_val
-            color = "#10B981" if pct_plan >= 100 else "#FF9800"
-            compare_elements.append(html.Span([
-                html.Span(f"🎯 Hoàn thành KH: {pct_plan:.1f}%", style={"color": color, "fontWeight": "bold", "marginRight": "5px"}),
-                html.Span(f"(Chỉ tiêu: {format_revenue(plan_val)})", style={"color": "#64748B"})
-            ]))
-        else:
-            compare_elements.append(html.Span("🎯 Chỉ tiêu KH: Chưa được giao chỉ tiêu", style={"color": "#94A3B8"}))
-            
-        # Thẻ KPI tổng
-        kpi_card = html.Div([
-            html.Div([
-                html.Div("💰 Tổng doanh thu thực tế trong tháng", className="kpi-title"),
-                html.Span("💵", style={"fontSize": "22px", "float": "right", "marginTop": "-24px"})
-            ]),
-            html.Div(format_revenue(tot_rev), className="kpi-value", style={"marginTop": "8px", "fontSize": "30px"}),
-            html.Div(compare_elements, style={"marginTop": "8px"})
-        ], className="kpi-card mb-4", style={"borderLeft": "5px solid #10B981"})
+        result_data.append(row_dict)
         
-        # D. Vẽ biểu đồ cột doanh thu các dịch vụ con
-        # Lấy dòng tổng hợp ở dòng index 0 ra vẽ chart
-        chart_data = []
-        for s in service_cols:
-            val = df_pivot[s].iloc[0]
-            chart_data.append({"Dịch vụ con": s, "Doanh thu": val})
-        df_chart = pd.DataFrame(chart_data)
-        
-        # Sắp xếp giảm dần
-        df_chart = df_chart.sort_values(by="Doanh thu", ascending=True)
-        
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            y=df_chart["Dịch vụ con"],
-            x=df_chart["Doanh thu"],
-            orientation="h",
-            marker_color="#10B981",
-            hovertemplate="<b>%{y}</b><br>Doanh thu: %{x:,.0f} đ<extra></extra>"
-        ))
-        fig.update_layout(
-            margin=dict(t=20, b=10, l=150, r=20),
-            height=320,
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(title="Doanh thu (VNĐ)", gridcolor="#E2E8F0"),
-            yaxis=dict(gridcolor="rgba(0,0,0,0)")
-        )
-        
-        # E. Cấu hình bảng hiển thị DataTable
-        # Tạo bảng sao lưu để định dạng chuỗi VNĐ khi render
-        df_table = df_pivot.copy()
-        first_col = df_table.columns[0] # "Địa bàn" hoặc "Bưu cục"
-        
-        for col in service_cols + ["Tổng cộng"]:
-            df_table[col] = df_table[col].map(lambda x: f"{x:,.0f} đ" if x > 0 else "—")
-            
-        table_title = f"📋 Chi tiết doanh thu theo {'Cụm' if cum == 'Tất cả' else f'Bưu cục thuộc Cụm {cum}'}"
-        
-        table_component = dash_table.DataTable(
-            data=df_table.to_dict("records"),
-            columns=[{"name": col, "id": col} for col in df_table.columns],
-            style_table={"overflowX": "auto", "borderRadius": "8px", "border": "1px solid #E2E8F0"},
-            style_header={
-                "backgroundColor": "#F1F5F9",
-                "fontWeight": "bold",
-                "color": "#1E293B",
-                "border": "1px solid #CBD5E1"
-            },
-            style_cell={
-                "padding": "8px 10px",
-                "textAlign": "left",
-                "fontSize": "13px",
-                "fontFamily": "Inter, sans-serif"
-            },
-            style_data_conditional=[
-                {
-                    # Dòng tổng nổi bật
-                    "if": {"row_index": 0},
-                    "backgroundColor": "#EFF6FF",
-                    "fontWeight": "bold",
-                    "color": "#1E3A8A"
-                },
-                {
-                    "if": {"column_id": "Tổng cộng"},
-                    "fontWeight": "bold"
-                }
-            ]
-        )
-        
-        return kpi_card, fig, table_title, table_component
-
-    # 3. Callback xuất file Excel
-    @app.callback(
-        Output("service-download-excel", "data"),
-        [Input("service-export-excel-btn", "n_clicks")],
-        [State("service-type-store", "data"),
-         State("service-filter-year", "value"),
-         State("service-filter-month", "value"),
-         State("service-filter-cum", "value")],
-        prevent_initial_call=True
-    )
-    def export_service_excel(n_clicks, service_type, year, month, cum):
-        if not n_clicks or not service_type:
-            return None
-            
-        df_raw = query_service_data(service_type, year, month)
-        df_pivot, _ = process_and_pivot_data(df_raw, service_type, cum)
-        
-        if df_pivot.empty:
-            return None
-            
-        # Tạo file Excel trong memory
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_pivot.to_excel(writer, index=False, sheet_name="Doanh thu")
-            
-        output.seek(0)
-        
-        filename = f"Doanh_thu_{service_type}_{month:02d}_{year}.xlsx"
-        if cum and cum != "Tất cả":
-            filename = f"Doanh_thu_{service_type}_Cum_{cum}_{month:02d}_{year}.xlsx"
-            
-        return dcc.send_bytes(output.getvalue(), filename)
+    return pd.DataFrame(result_data)

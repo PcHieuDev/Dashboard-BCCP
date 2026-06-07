@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Callbacks quản lý các biểu đồ, KPI cards và bảng dữ liệu trang Tổng quan chung.
+Callbacks quản lý biểu đồ, KPI cards, top 10 xã và các bảng chi tiết trang Tổng quan chung v2.0.
 """
 
 import sys
@@ -9,496 +9,428 @@ import pandas as pd
 from pathlib import Path
 from dash import Output, Input, State, html, dash_table
 import plotly.graph_objects as go
+import dash_bootstrap_components as dbc
 
-# Setup sys.path
+# Setup sys.path để import cấu hình
 project_root = Path(__file__).resolve().parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.append(str(project_root))
 
-from config.settings import DB_PATH
+from config.settings import DB_PATH, SERVICE_COLORS
 from callbacks.utils import format_revenue
 from analytics.global_metrics import (
     get_total_revenue_by_service,
-    get_revenue_structure,
-    get_ytd_revenue,
-    get_ytd_plan,
-    get_revenue_by_cum,
-    get_growth_heatmap_data
+    get_top10_by_comparison,
+    get_12_periods_revenue,
+    get_period_detail_by_xa,
+    get_ytd_detail_by_xa
 )
 
-def get_prev_month_year(year, month):
-    """Helper tìm tháng trước và năm tương ứng"""
-    if month == 1:
-        return year - 1, 12
-    return year, month - 1
+def get_prev_period_info(period_type, period_value, year):
+    """Tìm kỳ trước và năm tương ứng"""
+    import config.week_calendar as calendar_helper
+    if period_type == 'Tháng':
+        if period_value == 1:
+            return 12, year - 1
+        return period_value - 1, year
+    else: # Tuần
+        if period_value == 1:
+            prev_yr = year - 1
+            weeks = calendar_helper.get_week_list(prev_yr)
+            prev_val = weeks[-1][0] if weeks else 52
+            return prev_val, prev_yr
+        return period_value - 1, year
 
-def get_plans_current_month(db_path, year, month, cum):
-    """Helper lấy kế hoạch doanh thu của 4 dịch vụ trong tháng hiện tại"""
-    sql = "SELECT nhom_dich_vu, SUM(ke_hoach_doanh_thu) FROM plans WHERE nam = :nam AND thang = :thang"
-    params = {"nam": year, "thang": month}
-    if cum and cum != "Tất cả":
-        sql = """
-            SELECT p.nhom_dich_vu, SUM(p.ke_hoach_doanh_thu) 
-            FROM plans p
-            INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_bc
-            WHERE p.nam = :nam AND p.thang = :thang AND b.ten_cum = :cum
-        """
-        params["cum"] = cum
-    sql += " GROUP BY nhom_dich_vu"
-    
+def get_plans_current_period(db_path, period_type, period_value, year):
+    """Lấy kế hoạch doanh thu của 4 dịch vụ trong kỳ hiện tại"""
     res = {"BCCP": 0.0, "HCC": 0.0, "TCBC": 0.0, "PPBL": 0.0}
-    if not db_path.exists():
-        return res
-        
     conn = sqlite3.connect(str(db_path))
     try:
         cursor = conn.cursor()
-        cursor.execute(sql, params)
+        if period_type == 'Tháng':
+            sql = "SELECT nhom_dich_vu, SUM(ke_hoach_doanh_thu) FROM plans WHERE nam = ? AND thang = ? GROUP BY nhom_dich_vu"
+        else:
+            sql = "SELECT nhom_dich_vu, SUM(ke_hoach_doanh_thu) FROM plans_weekly WHERE nam = ? AND tuan_so = ? GROUP BY nhom_dich_vu"
+        cursor.execute(sql, (year, period_value))
         for r in cursor.fetchall():
             if r[0] in res:
                 res[r[0]] = r[1] or 0.0
     except Exception as e:
-        print(f"Lỗi lấy kế hoạch tháng: {e}")
+        print(f"Lỗi lấy kế hoạch kỳ: {e}")
     finally:
         conn.close()
     return res
 
-def get_ytd_data_by_cum(db_path, year, month_den):
-    """Helper lấy doanh thu & kế hoạch lũy kế YTD theo Cụm để vẽ biểu đồ thanh ngang"""
-    thang_list = [f"T{i:02d}" for i in range(1, month_den + 1)]
-    
-    # 1. Load danh sách Cụm để đảm bảo đủ cụm
-    conn = sqlite3.connect(str(db_path))
-    try:
-        df_cums = pd.read_sql_query("SELECT DISTINCT ten_cum FROM dim_buucuc WHERE ten_cum IS NOT NULL ORDER BY ten_cum", conn)
-        cums = df_cums["ten_cum"].tolist()
-    except Exception as e:
-        print(f"Lỗi load cụm: {e}")
-        cums = []
-    finally:
-        conn.close()
+def create_top10_table(df):
+    """Render bảng top 10 đơn giản đẹp mắt"""
+    if df.empty:
+        return html.Div("Không có dữ liệu phù hợp", style={"color": "#64748B", "fontSize": "12px", "textAlign": "center", "padding": "10px"})
         
-    res = {c: {"actual": 0.0, "plan": 0.0} for c in cums}
-    
-    # 2. Query doanh thu thực tế lũy kế từ transactions (BCCP & HCC cp)
-    sql_trans = """
-        SELECT b.ten_cum, SUM(t.cuoc_tt_tong) as dt
-        FROM transactions t
-        INNER JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
-        WHERE t.nam_du_lieu = :nam AND t.thang_du_lieu IN ({})
-        GROUP BY b.ten_cum
-    """.format(','.join(f"'{m}'" for m in thang_list))
-    
-    # 3. Query doanh thu thực tế lũy kế từ 3 bảng mới
-    sql_other = """
-        SELECT b.ten_cum, SUM(t.doanh_thu) as dt
-        FROM (
-            SELECT ma_buu_cuc, doanh_thu, nam_du_lieu, thang_du_lieu FROM transactions_hcc
-            UNION ALL
-            SELECT ma_buu_cuc, doanh_thu, nam_du_lieu, thang_du_lieu FROM transactions_tcbc
-            UNION ALL
-            SELECT ma_buu_cuc, doanh_thu, nam_du_lieu, thang_du_lieu FROM transactions_ppbl
-        ) t
-        INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_bc
-        WHERE t.nam_du_lieu = :nam AND t.thang_du_lieu IN ({})
-        GROUP BY b.ten_cum
-    """.format(','.join(f"'{m}'" for m in thang_list))
-    
-    # 4. Query kế hoạch lũy kế từ plans
-    sql_plan = """
-        SELECT b.ten_cum, SUM(p.ke_hoach_doanh_thu) as dt
-        FROM plans p
-        INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_bc
-        WHERE p.nam = :nam AND p.thang >= 1 AND p.thang <= :thang_den
-        GROUP BY b.ten_cum
-    """
-    
-    conn = sqlite3.connect(str(db_path))
-    try:
-        # Thực tế transactions
-        df_t = pd.read_sql_query(sql_trans, conn, params={"nam": year})
-        for _, r in df_t.iterrows():
-            c = r["ten_cum"]
-            if c in res:
-                res[c]["actual"] += r["dt"] or 0.0
-                
-        # Thực tế khác
-        df_o = pd.read_sql_query(sql_other, conn, params={"nam": year})
-        for _, r in df_o.iterrows():
-            c = r["ten_cum"]
-            if c in res:
-                res[c]["actual"] += r["dt"] or 0.0
-                
-        # Kế hoạch plans
-        df_p = pd.read_sql_query(sql_plan, conn, params={"nam": year, "thang_den": month_den})
-        for _, r in df_p.iterrows():
-            c = r["ten_cum"]
-            if c in res:
-                res[c]["plan"] += r["dt"] or 0.0
-                
-    except Exception as e:
-        print(f"Lỗi truy vấn YTD theo cụm: {e}")
-    finally:
-        conn.close()
+    rows = []
+    for idx, row in df.iterrows():
+        ratio_val = row['ratio']
+        color = "#10B981" if ratio_val >= 0 else "#EF4444"
+        icon = "▲" if ratio_val >= 0 else "▼"
+        rows.append(html.Tr([
+            html.Td(f"{idx+1}", style={"width": "30px", "fontWeight": "bold", "color": "#64748B"}),
+            html.Td(row['ten_cum'], style={"color": "#475569"}),
+            html.Td(row['ten_bdx'], style={"fontWeight": "medium", "color": "#0F172A"}),
+            html.Td(f"{icon} {abs(ratio_val):.1f}%", style={"color": color, "fontWeight": "bold", "textAlign": "right"})
+        ]))
         
-    return res
+    return html.Table([
+        html.Tbody(rows)
+    ], className="table table-sm table-borderless", style={"fontSize": "12px", "marginBottom": 0})
+
+def create_detail_table(df, compare_type):
+    """Tạo DataTable hiển thị danh sách chi tiết xã"""
+    if df.empty:
+        return html.Div("Không có dữ liệu", style={"textAlign": "center", "padding": "20px"})
+        
+    # Thêm cột % So sánh tùy thuộc compare_type
+    if compare_type == 'prev':
+        df['ratio'] = ((df['tong_dt'] - df['dt_prev']) / df['dt_prev']) * 100.0
+        df['ratio_display'] = df['ratio'].map(lambda x: f"{x:+.1f}%" if pd.notna(x) and x != float('inf') and x != float('-inf') else "—")
+        ratio_col_name = "Tăng trưởng vs Kỳ trước"
+    elif compare_type == 'yoy':
+        df['ratio'] = ((df['tong_dt'] - df['dt_yoy']) / df['dt_yoy']) * 100.0
+        df['ratio_display'] = df['ratio'].map(lambda x: f"{x:+.1f}%" if pd.notna(x) and x != float('inf') and x != float('-inf') else "—")
+        ratio_col_name = "Tăng trưởng vs Cùng kỳ"
+    else: # plan
+        df['ratio'] = (df['tong_dt'] / df['plan_dt']) * 100.0
+        df['ratio_display'] = df['ratio'].map(lambda x: f"{x:.1f}%" if pd.notna(x) and x != float('inf') and x != float('-inf') else "—")
+        ratio_col_name = "Hoàn thành Kế hoạch"
+        
+    # Tính dòng TOÀN TỈNH
+    prov_row = pd.DataFrame([{
+        "ten_cum": "⭐️ TOÀN TỈNH",
+        "ten_bdx": "",
+        "BCCP": df["BCCP"].sum(),
+        "HCC": df["HCC"].sum(),
+        "TCBC": df["TCBC"].sum(),
+        "PPBL": df["PPBL"].sum(),
+        "tong_dt": df["tong_dt"].sum(),
+        "dt_prev": df["dt_prev"].sum(),
+        "dt_yoy": df["dt_yoy"].sum(),
+        "plan_dt": df["plan_dt"].sum(),
+    }])
+    
+    # Tính lại % so sánh cho dòng Toàn tỉnh
+    if compare_type == 'prev':
+        p_prev = prov_row.iloc[0]['dt_prev']
+        prov_row['ratio'] = ((prov_row['tong_dt'] - p_prev) / p_prev * 100.0) if p_prev > 0 else None
+        prov_row['ratio_display'] = prov_row['ratio'].map(lambda x: f"{x:+.1f}%" if pd.notna(x) else "—")
+    elif compare_type == 'yoy':
+        p_yoy = prov_row.iloc[0]['dt_yoy']
+        prov_row['ratio'] = ((prov_row['tong_dt'] - p_yoy) / p_yoy * 100.0) if p_yoy > 0 else None
+        prov_row['ratio_display'] = prov_row['ratio'].map(lambda x: f"{x:+.1f}%" if pd.notna(x) else "—")
+    else: # plan
+        p_plan = prov_row.iloc[0]['plan_dt']
+        prov_row['ratio'] = (prov_row['tong_dt'] / p_plan * 100.0) if p_plan > 0 else None
+        prov_row['ratio_display'] = prov_row['ratio'].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
+        
+    df_sorted = df.sort_values(by=['ten_cum', 'ten_bdx'], ascending=True)
+    df_final = pd.concat([prov_row, df_sorted], ignore_index=True)
+    
+    # Định dạng các cột hiển thị số tiền
+    df_display = df_final.copy()
+    for col in ["BCCP", "HCC", "TCBC", "PPBL", "tong_dt"]:
+        df_display[col] = df_display[col].map(lambda x: f"{x:,.0f} đ" if x > 0 else "0 đ")
+        
+    columns = [
+        {"name": "Cụm", "id": "ten_cum"},
+        {"name": "Xã / Bưu cục", "id": "ten_bdx"},
+        {"name": "BCCP", "id": "BCCP"},
+        {"name": "HCC", "id": "HCC"},
+        {"name": "TCBC", "id": "TCBC"},
+        {"name": "PPBL", "id": "PPBL"},
+        {"name": "Tổng Doanh Thu", "id": "tong_dt"},
+        {"name": ratio_col_name, "id": "ratio_display"}
+    ]
+    
+    return dash_table.DataTable(
+        data=df_display.to_dict("records"),
+        columns=columns,
+        sort_action="native",
+        page_size=15,
+        style_table={"overflowX": "auto", "borderRadius": "8px", "border": "1px solid #E2E8F0"},
+        style_header={
+            "backgroundColor": "#F8FAFC",
+            "fontWeight": "bold",
+            "color": "#1E293B",
+            "border": "1px solid #CBD5E1"
+        },
+        style_cell={
+            "padding": "8px 10px",
+            "textAlign": "left",
+            "fontSize": "13px",
+            "fontFamily": "Inter, sans-serif"
+        },
+        style_data_conditional=[
+            {
+                # Dòng Toàn tỉnh nổi bật
+                "if": {"row_index": 0},
+                "backgroundColor": "#EFF6FF",
+                "fontWeight": "bold",
+                "color": "#1E3A8A"
+            },
+            {
+                "if": {"column_id": "tong_dt"},
+                "fontWeight": "bold"
+            }
+        ]
+    )
 
 def register_global_callbacks(app):
-    """Đăng ký các callback cho trang Tổng quan chung"""
+    """Đăng ký các callback mới cho trang Tổng quan chung v2.0"""
     
     @app.callback(
-        [Output("global-kpi-bccp-value", "children"),
-         Output("global-kpi-bccp-compare-info", "children"),
-         Output("global-kpi-hcc-value", "children"),
-         Output("global-kpi-hcc-compare-info", "children"),
-         Output("global-kpi-tcbc-value", "children"),
-         Output("global-kpi-tcbc-compare-info", "children"),
-         Output("global-kpi-ppbl-value", "children"),
-         Output("global-kpi-ppbl-compare-info", "children"),
-         Output("global-stacked-bar", "figure"),
-         Output("global-heatmap", "figure"),
-         Output("ytd-table-container", "children"),
-         Output("global-cum-table-container", "children")],
+        [
+            # KPI Cards (BCCP)
+            Output("global-kpi-bccp-value", "children"),
+            Output("global-kpi-bccp-compare-prev", "children"),
+            Output("global-kpi-bccp-compare-prev", "style"),
+            Output("global-kpi-bccp-compare-yoy", "children"),
+            Output("global-kpi-bccp-compare-yoy", "style"),
+            Output("global-kpi-bccp-compare-plan", "children"),
+            Output("global-kpi-bccp-compare-plan", "style"),
+            
+            # KPI Cards (HCC)
+            Output("global-kpi-hcc-value", "children"),
+            Output("global-kpi-hcc-compare-prev", "children"),
+            Output("global-kpi-hcc-compare-prev", "style"),
+            Output("global-kpi-hcc-compare-yoy", "children"),
+            Output("global-kpi-hcc-compare-yoy", "style"),
+            Output("global-kpi-hcc-compare-plan", "children"),
+            Output("global-kpi-hcc-compare-plan", "style"),
+            
+            # KPI Cards (TCBC)
+            Output("global-kpi-tcbc-value", "children"),
+            Output("global-kpi-tcbc-compare-prev", "children"),
+            Output("global-kpi-tcbc-compare-prev", "style"),
+            Output("global-kpi-tcbc-compare-yoy", "children"),
+            Output("global-kpi-tcbc-compare-yoy", "style"),
+            Output("global-kpi-tcbc-compare-plan", "children"),
+            Output("global-kpi-tcbc-compare-plan", "style"),
+            
+            # KPI Cards (PPBL)
+            Output("global-kpi-ppbl-value", "children"),
+            Output("global-kpi-ppbl-compare-prev", "children"),
+            Output("global-kpi-ppbl-compare-prev", "style"),
+            Output("global-kpi-ppbl-compare-yoy", "children"),
+            Output("global-kpi-ppbl-compare-yoy", "style"),
+            Output("global-kpi-ppbl-compare-plan", "children"),
+            Output("global-kpi-ppbl-compare-plan", "style"),
+            
+            # Top 10 Containers
+            Output("global-top10-prev-container", "children"),
+            Output("global-top10-yoy-container", "children"),
+            Output("global-top10-plan-container", "children"),
+            
+            # 12 periods Graph
+            Output("global-stacked-bar-12p", "figure")
+        ],
         [Input("btn-apply-filter", "n_clicks")],
-        [State("sidebar-year", "value"),
-         State("sidebar-month-select", "value"),
-         State("sidebar-compare-mode", "value"),
-         State("sidebar-cum", "value")]
-    )
-    def update_global_overview(n_clicks, year, month, compare_mode, cum):
-        if not year or not month:
-            return ["—"] * 8 + [go.Figure(), go.Figure(), html.Div(), html.Div("Vui lòng chọn bộ lọc thời gian.")]
-            
-        # 1. Lấy doanh thu thực tế kỳ hiện tại
-        rev_cur = get_total_revenue_by_service(DB_PATH, year, month, cum)
-        
-        # 2. Lấy doanh thu thực tế kỳ trước
-        pyear, pmonth = get_prev_month_year(year, month)
-        rev_prev = get_total_revenue_by_service(DB_PATH, pyear, pmonth, cum)
-        
-        # 3. Lấy doanh thu thực tế cùng kỳ năm trước (YoY)
-        rev_yoy = get_total_revenue_by_service(DB_PATH, year - 1, month, cum)
-        
-        # 4. Lấy kế hoạch doanh thu tháng hiện tại
-        rev_plan = get_plans_current_month(DB_PATH, year, month, cum)
-        
-        # 5. Xây dựng nội dung so sánh cho mỗi thẻ KPI
-        def build_compare_info(service_key):
-            now_val = rev_cur.get(service_key, 0.0)
-            elements = []
-            
-            # So sánh Kỳ trước
-            if "prev_period" in compare_mode:
-                prev_val = rev_prev.get(service_key, 0.0)
-                if prev_val > 0:
-                    pct = (now_val - prev_val) * 100.0 / prev_val
-                    color = "#10B981" if pct >= 0 else "#EF4444"
-                    icon = "▲" if pct >= 0 else "▼"
-                    elements.append(html.Div([
-                        html.Span(f"{icon} {abs(pct):.1f}%", style={"color": color, "fontWeight": "bold", "marginRight": "5px"}),
-                        html.Span(f"so với kỳ trước ({format_revenue(prev_val)})", style={"color": "#64748B"})
-                    ], style={"marginBottom": "2px"}))
-                else:
-                    elements.append(html.Div("— so với kỳ trước", style={"color": "#94A3B8", "marginBottom": "2px"}))
-                    
-            # So sánh Cùng kỳ (YoY)
-            if "yoy" in compare_mode:
-                yoy_val = rev_yoy.get(service_key, 0.0)
-                if yoy_val > 0:
-                    pct = (now_val - yoy_val) * 100.0 / yoy_val
-                    color = "#10B981" if pct >= 0 else "#EF4444"
-                    icon = "▲" if pct >= 0 else "▼"
-                    elements.append(html.Div([
-                        html.Span(f"{icon} {abs(pct):.1f}%", style={"color": color, "fontWeight": "bold", "marginRight": "5px"}),
-                        html.Span(f"so với cùng kỳ ({format_revenue(yoy_val)})", style={"color": "#64748B"})
-                    ], style={"marginBottom": "2px"}))
-                else:
-                    elements.append(html.Div("— so với cùng kỳ", style={"color": "#94A3B8", "marginBottom": "2px"}))
-                    
-            # So sánh Kế hoạch
-            if "plan" in compare_mode:
-                plan_val = rev_plan.get(service_key, 0.0)
-                if plan_val > 0:
-                    pct = now_val * 100.0 / plan_val
-                    color = "#10B981" if pct >= 100 else "#FF9800"
-                    elements.append(html.Div([
-                        html.Span(f"🎯 {pct:.1f}%", style={"color": color, "fontWeight": "bold", "marginRight": "5px"}),
-                        html.Span(f"KH: {format_revenue(plan_val)}", style={"color": "#64748B"})
-                    ]))
-                else:
-                    elements.append(html.Div("🎯 — (Chưa giao KH)", style={"color": "#94A3B8"}))
-                    
-            return html.Div(elements)
-            
-        bccp_val_str = format_revenue(rev_cur["BCCP"])
-        bccp_info = build_compare_info("BCCP")
-        
-        hcc_val_str = format_revenue(rev_cur["HCC"])
-        hcc_info = build_compare_info("HCC")
-        
-        tcbc_val_str = format_revenue(rev_cur["TCBC"])
-        tcbc_info = build_compare_info("TCBC")
-        
-        ppbl_val_str = format_revenue(rev_cur["PPBL"])
-        ppbl_info = build_compare_info("PPBL")
-        
-        # 6. Biểu đồ Stacked Bar Chart doanh thu theo tháng
-        months_data = []
-        for m in range(1, month + 1):
-            rev = get_total_revenue_by_service(DB_PATH, year, m, cum)
-            months_data.append({"Tháng": f"T{m:02d}", **rev})
-        df_bar = pd.DataFrame(months_data)
-        
-        stacked_bar_fig = go.Figure()
-        colors = {"BCCP": "#2196F3", "HCC": "#4CAF50", "TCBC": "#FF9800", "PPBL": "#9C27B0"}
-        for service in ["BCCP", "HCC", "TCBC", "PPBL"]:
-            stacked_bar_fig.add_trace(go.Bar(
-                name=service,
-                x=df_bar["Tháng"],
-                y=df_bar[service],
-                marker_color=colors[service],
-                hovertemplate=f"{service}: %{{y:,.0f}} đ<extra></extra>"
-            ))
-            
-        stacked_bar_fig.update_layout(
-            barmode="stack",
-            margin=dict(t=30, b=30, l=50, r=10),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
-            height=300
-        )
-        
-        # 6b. Bản đồ nhiệt (Heatmap) tăng trưởng Cụm x DV
-        import plotly.figure_factory as ff
-        h_mode = "yoy" if (compare_mode and "yoy" in compare_mode) else "prev"
-        df_growth = get_growth_heatmap_data(DB_PATH, year, month, compare_mode=h_mode, cum=cum)
-        
-        z = df_growth[["BCCP", "HCC", "TCBC", "PPBL"]].values.tolist()
-        x_labels = ["BCCP", "HCC", "TCBC", "PPBL"]
-        y_labels = df_growth.index.tolist()
-        
-        annotation_text = [[f"{val:+.1f}%" if val is not None else "N/A" for val in row] for row in z]
-        z_colors = [[val if val is not None else 0.0 for val in row] for row in z]
-        
-        all_vals = [val for row in z for val in row if val is not None]
-        if all_vals:
-            max_abs = max(abs(min(all_vals)), abs(max(all_vals)))
-            zmax = max(max_abs, 10.0)
-            zmin = -zmax
-        else:
-            zmax = 100.0
-            zmin = -100.0
-
-        heatmap_height = 150 if len(y_labels) == 1 else 500
-        
-        heatmap_fig = ff.create_annotated_heatmap(
-            z=z_colors,
-            x=x_labels,
-            y=y_labels,
-            colorscale='RdYlGn',
-            annotation_text=annotation_text,
-            font_colors=['black', 'black'],
-            zmid=0,
-            zmin=zmin,
-            zmax=zmax
-        )
-        
-        heatmap_fig.update_layout(
-            height=heatmap_height,
-            margin=dict(l=150, r=30, t=30, b=30),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)"
-        )
-
-        
-        # 7. Bảng doanh thu YTD (lũy kế từ đầu năm đến tháng hiện tại)
-        ytd_cum_data = get_ytd_data_by_cum(DB_PATH, year, month)
-        df_cum = get_revenue_by_cum(DB_PATH, year, month)
-        
-        # Tạo bảng YTD DataTable
-        ytd_rows = []
-        for c in sorted(ytd_cum_data.keys()):
-            # Lấy doanh thu tháng từ df_cum (nếu tồn tại)
-            month_val = 0.0
-            if not df_cum.empty:
-                match = df_cum[df_cum["Cụm"] == c]
-                if not match.empty:
-                    month_val = match.iloc[0]["Tổng cộng"]
-            
-            actual_ytd = ytd_cum_data[c]["actual"]
-            plan_ytd = ytd_cum_data[c]["plan"]
-            
-            # Tính % hoàn thành
-            if plan_ytd is not None and plan_ytd > 0:
-                pct = (actual_ytd * 100.0 / plan_ytd)
-            else:
-                pct = None
-                
-            ytd_rows.append({
-                "Cụm": c,
-                "month_val": month_val,
-                "actual_ytd": actual_ytd,
-                "pct": pct,
-                "pct_display": f"{pct:.1f}%" if pct is not None else "-"
-            })
-            
-        df_ytd = pd.DataFrame(ytd_rows)
-        
-        # Thêm dòng Toàn tỉnh
-        ytd_provincial_actual = sum(item["actual"] for item in ytd_cum_data.values())
-        ytd_provincial_plan = sum(item["plan"] for item in ytd_cum_data.values())
-        prov_month_val = df_cum["Tổng cộng"].sum() if not df_cum.empty else 0.0
-        
-        if ytd_provincial_plan > 0:
-            prov_pct = (ytd_provincial_actual * 100.0 / ytd_provincial_plan)
-        else:
-            prov_pct = None
-            
-        prov_row = pd.DataFrame([{
-            "Cụm": "⭐️ TOÀN TỈNH",
-            "month_val": prov_month_val,
-            "actual_ytd": ytd_provincial_actual,
-            "pct": prov_pct,
-            "pct_display": f"{prov_pct:.1f}%" if prov_pct is not None else "-"
-        }])
-        
-        df_ytd = pd.concat([prov_row, df_ytd], ignore_index=True)
-        
-        # Định dạng hiển thị các cột
-        df_ytd_display = df_ytd.copy()
-        df_ytd_display["Doanh thu tháng"] = df_ytd_display["month_val"].apply(lambda x: f"{x:,.0f} đ" if x > 0 else "0 đ")
-        df_ytd_display["Doanh thu lũy kế (YTD)"] = df_ytd_display["actual_ytd"].apply(lambda x: f"{x:,.0f} đ" if x > 0 else "0 đ")
-        df_ytd_display["Tỷ lệ hoàn thành (%)"] = df_ytd_display["pct_display"]
-        df_ytd_display["Đơn vị"] = df_ytd_display["Cụm"]
-        
-        ytd_columns = [
-            {"name": "Đơn vị", "id": "Đơn vị"},
-            {"name": "Doanh thu tháng", "id": "Doanh thu tháng"},
-            {"name": "Doanh thu lũy kế (YTD)", "id": "Doanh thu lũy kế (YTD)"},
-            {"name": "Tỷ lệ hoàn thành (%)", "id": "Tỷ lệ hoàn thành (%)"}
+        [
+            State("sidebar-year", "value"),
+            State("sidebar-month-select", "value"),
+            State("sidebar-week-select", "value"),
+            State("sidebar-period", "value"), # 'Tháng' hoặc 'Tuần'
+            State("sidebar-cum", "value")
         ]
-        
-        ytd_table = dash_table.DataTable(
-            id="ytd-revenue-datatable",
-            data=df_ytd_display.to_dict("records"),
-            columns=ytd_columns,
-            sort_action="native",
-            style_table={"overflowX": "auto", "borderRadius": "8px", "border": "1px solid #E2E8F0"},
-            style_header={
-                "backgroundColor": "#F1F5F9",
-                "fontWeight": "bold",
-                "color": "#1E293B",
-                "border": "1px solid #CBD5E1"
-            },
-            style_cell={
-                "padding": "10px 12px",
-                "textAlign": "left",
-                "fontSize": "13px",
-                "fontFamily": "Inter, sans-serif"
-            },
-            style_data_conditional=[
-                {
-                    # Dòng Toàn tỉnh nổi bật
-                    "if": {"row_index": 0},
-                    "backgroundColor": "#EFF6FF",
-                    "fontWeight": "bold",
-                    "color": "#1E3A8A"
-                },
-                {
-                    "if": {
-                        "column_id": "Tỷ lệ hoàn thành (%)",
-                        "filter_query": "{pct} < 60"
-                    },
-                    "backgroundColor": "#FEE2E2",
-                    "color": "#DC2626",
-                    "fontWeight": "bold"
-                },
-                {
-                    "if": {
-                        "column_id": "Tỷ lệ hoàn thành (%)",
-                        "filter_query": "{pct} >= 60 && {pct} < 80"
-                    },
-                    "backgroundColor": "#FFEDD5",
-                    "color": "#EA580C",
-                    "fontWeight": "bold"
-                },
-                {
-                    "if": {
-                        "column_id": "Tỷ lệ hoàn thành (%)",
-                        "filter_query": "{pct} >= 80 && {pct} < 100"
-                    },
-                    "backgroundColor": "#FEF9C3",
-                    "color": "#CA8A04",
-                    "fontWeight": "bold"
-                },
-                {
-                    "if": {
-                        "column_id": "Tỷ lệ hoàn thành (%)",
-                        "filter_query": "{pct} >= 100"
-                    },
-                    "backgroundColor": "#DCFCE7",
-                    "color": "#16A34A",
-                    "fontWeight": "bold"
-                }
-            ]
-        )
-        
-        # 8. Bảng phân rã Cụm doanh thu chi tiết (đã có df_cum ở trên)
-        # Thêm dòng Toàn tỉnh
-        if not df_cum.empty:
-            prov_cum_row = pd.DataFrame([{
-                "Cụm": "⭐️ TOÀN TỈNH",
-                "BCCP": df_cum["BCCP"].sum(),
-                "HCC": df_cum["HCC"].sum(),
-                "TCBC": df_cum["TCBC"].sum(),
-                "PPBL": df_cum["PPBL"].sum(),
-                "Tổng cộng": df_cum["Tổng cộng"].sum()
-            }])
-            df_cum = pd.concat([prov_cum_row, df_cum], ignore_index=True)
+    )
+    def update_global_dashboard(n_clicks, year, month, week, cycle, cum):
+        if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week):
+            # Return empty/fallback values if filter is incomplete
+            empty_kpi = ["—", "—", {"color": "#94A3B8"}, "—", {"color": "#94A3B8"}, "—", {"color": "#94A3B8"}]
+            return empty_kpi * 4 + ["Không có dữ liệu", "Không có dữ liệu", "Không có dữ liệu", go.Figure()]
             
-            # Định dạng các cột số
-            for col in ["BCCP", "HCC", "TCBC", "PPBL", "Tổng cộng"]:
-                df_cum[col] = df_cum[col].map(lambda x: f"{x:,.0f} đ" if x > 0 else "—")
-                
-        table = dash_table.DataTable(
-            data=df_cum.to_dict("records"),
-            columns=[{"name": col, "id": col} for col in df_cum.columns],
-            style_table={"overflowX": "auto", "borderRadius": "8px", "border": "1px solid #E2E8F0"},
-            style_header={
-                "backgroundColor": "#F1F5F9",
-                "fontWeight": "bold",
-                "color": "#1E293B",
-                "border": "1px solid #CBD5E1"
-            },
-            style_cell={
-                "padding": "10px 12px",
-                "textAlign": "left",
-                "fontSize": "13px",
-                "fontFamily": "Inter, sans-serif"
-            },
-            style_data_conditional=[
-                {
-                    # Dòng Toàn tỉnh nổi bật
-                    "if": {"row_index": 0},
-                    "backgroundColor": "#EFF6FF",
-                    "fontWeight": "bold",
-                    "color": "#1E3A8A"
-                },
-                {
-                    "if": {"column_id": "Tổng cộng"},
-                    "fontWeight": "bold"
-                }
-            ]
-        )
+        period_val = month if cycle == 'Tháng' else week
         
-        return (
-            bccp_val_str, bccp_info,
-            hcc_val_str, hcc_info,
-            tcbc_val_str, tcbc_info,
-            ppbl_val_str, ppbl_info,
-            stacked_bar_fig,
-            heatmap_fig,
-            ytd_table,
-            table
-        )
+        conn = sqlite3.connect(str(DB_PATH))
+        
+        try:
+            # 1. KPI Calculation
+            # Doanh thu hiện tại
+            rev_cur = get_total_revenue_by_service(DB_PATH, year, period_val if cycle == 'Tháng' else None)
+            
+            # Với tuần, ta phải query tổng doanh thu tuần từ agg_weekly
+            if cycle == 'Tuần':
+                rev_cur = {"BCCP": 0.0, "HCC": 0.0, "TCBC": 0.0, "PPBL": 0.0}
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT nhom_dich_vu, SUM(tong_doanh_thu) 
+                    FROM agg_weekly 
+                    WHERE nam = ? AND tuan_so = ?
+                    GROUP BY nhom_dich_vu
+                """, (year, period_val))
+                for nhom, dt in cursor.fetchall():
+                    if nhom in rev_cur:
+                        rev_cur[nhom] = dt or 0.0
+                        
+            # Doanh thu kỳ trước
+            prev_val, prev_yr = get_prev_period_info(cycle, period_val, year)
+            rev_prev = {"BCCP": 0.0, "HCC": 0.0, "TCBC": 0.0, "PPBL": 0.0}
+            cursor = conn.cursor()
+            if cycle == 'Tháng':
+                cursor.execute("SELECT nhom_dich_vu, SUM(tong_doanh_thu) FROM agg_monthly WHERE nam = ? AND thang = ? GROUP BY nhom_dich_vu", (prev_yr, prev_val))
+            else:
+                cursor.execute("SELECT nhom_dich_vu, SUM(tong_doanh_thu) FROM agg_weekly WHERE nam = ? AND tuan_so = ? GROUP BY nhom_dich_vu", (prev_yr, prev_val))
+            for nhom, dt in cursor.fetchall():
+                if nhom in rev_prev:
+                    rev_prev[nhom] = dt or 0.0
+                    
+            # Doanh thu cùng kỳ năm trước
+            rev_yoy = {"BCCP": 0.0, "HCC": 0.0, "TCBC": 0.0, "PPBL": 0.0}
+            if cycle == 'Tháng':
+                cursor.execute("SELECT nhom_dich_vu, SUM(tong_doanh_thu) FROM agg_monthly WHERE nam = ? AND thang = ? GROUP BY nhom_dich_vu", (year - 1, period_val))
+            else:
+                cursor.execute("SELECT nhom_dich_vu, SUM(tong_doanh_thu) FROM agg_weekly WHERE nam = ? AND tuan_so = ? GROUP BY nhom_dich_vu", (year - 1, period_val))
+            for nhom, dt in cursor.fetchall():
+                if nhom in rev_yoy:
+                    rev_yoy[nhom] = dt or 0.0
+                    
+            # Kế hoạch kỳ hiện tại
+            rev_plan = get_plans_current_period(DB_PATH, cycle, period_val, year)
+            
+            kpi_outputs = []
+            for service in ["BCCP", "HCC", "TCBC", "PPBL"]:
+                cur_dt = rev_cur.get(service, 0.0)
+                prev_dt = rev_prev.get(service, 0.0)
+                yoy_dt = rev_yoy.get(service, 0.0)
+                plan_dt = rev_plan.get(service, 0.0)
+                
+                # So sánh kỳ trước
+                if prev_dt > 0:
+                    pct_prev = (cur_dt - prev_dt) * 100.0 / prev_dt
+                    pct_prev_str = f"{pct_prev:+.1f}%"
+                    pct_prev_style = {"color": "#10B981" if pct_prev >= 0 else "#EF4444", "fontWeight": "bold"}
+                else:
+                    pct_prev_str = "—"
+                    pct_prev_style = {"color": "#64748B"}
+                    
+                # So cùng kỳ YoY
+                if yoy_dt > 0:
+                    pct_yoy = (cur_dt - yoy_dt) * 100.0 / yoy_dt
+                    pct_yoy_str = f"{pct_yoy:+.1f}%"
+                    pct_yoy_style = {"color": "#10B981" if pct_yoy >= 0 else "#EF4444", "fontWeight": "bold"}
+                else:
+                    pct_yoy_str = "—"
+                    pct_yoy_style = {"color": "#64748B"}
+                    
+                # So kế hoạch
+                if plan_dt > 0:
+                    pct_plan = (cur_dt / plan_dt) * 100.0
+                    pct_plan_str = f"{pct_plan:.1f}%"
+                    pct_plan_style = {"color": "#10B981" if pct_plan >= 100.0 else "#F59E0B", "fontWeight": "bold"}
+                else:
+                    pct_plan_str = "—"
+                    pct_plan_style = {"color": "#64748B"}
+                    
+                kpi_outputs.extend([
+                    format_revenue(cur_dt),
+                    pct_prev_str, pct_prev_style,
+                    pct_yoy_str, pct_yoy_style,
+                    pct_plan_str, pct_plan_style
+                ])
+                
+            # 2. Top 10 Tables
+            df_top_prev = get_top10_by_comparison(conn, cycle, period_val, year, 'prev')
+            df_top_yoy = get_top10_by_comparison(conn, cycle, period_val, year, 'yoy')
+            df_top_plan = get_top10_by_comparison(conn, cycle, period_val, year, 'plan')
+            
+            top10_prev_layout = create_top10_table(df_top_prev)
+            top10_yoy_layout = create_top10_table(df_top_yoy)
+            top10_plan_layout = create_top10_table(df_top_plan)
+            
+            # 3. 12 Periods Graph
+            df_12p = get_12_periods_revenue(conn, cycle, period_val, year)
+            
+            fig = go.Figure()
+            if not df_12p.empty:
+                for service in ["BCCP", "HCC", "TCBC", "PPBL"]:
+                    fig.add_trace(go.Bar(
+                        name=service,
+                        x=df_12p["label"],
+                        y=df_12p[service],
+                        marker_color=SERVICE_COLORS.get(service, "#64748B"),
+                        hovertemplate=f"{service}: %{{y:,.0f}} đ<extra></extra>"
+                    ))
+                    
+            fig.update_layout(
+                barmode="stack",
+                margin=dict(t=20, b=20, l=60, r=10),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5),
+                height=320,
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=True, gridcolor="#F1F5F9")
+            )
+            
+            return kpi_outputs + [top10_prev_layout, top10_yoy_layout, top10_plan_layout, fig]
+            
+        except Exception as e:
+            print(f"Lỗi update global dashboard: {e}")
+            import traceback
+            traceback.print_exc()
+            empty_kpi = ["—", "—", {"color": "#94A3B8"}, "—", {"color": "#94A3B8"}, "—", {"color": "#94A3B8"}]
+            return empty_kpi * 4 + [f"Lỗi: {e}", f"Lỗi: {e}", f"Lỗi: {e}", go.Figure()]
+        finally:
+            conn.close()
+
+    # Callback riêng cho Bảng A (Kỳ hiện tại)
+    @app.callback(
+        Output("global-table-a-container", "children"),
+        [
+            Input("btn-apply-filter", "n_clicks"),
+            Input("global-table-a-compare-selector", "value")
+        ],
+        [
+            State("sidebar-year", "value"),
+            State("sidebar-month-select", "value"),
+            State("sidebar-week-select", "value"),
+            State("sidebar-period", "value")
+        ]
+    )
+    def update_table_a(n_clicks, compare_type, year, month, week, cycle):
+        if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week):
+            return html.Div("Vui lòng chọn bộ lọc thời gian để xem chi tiết.")
+            
+        period_val = month if cycle == 'Tháng' else week
+        conn = sqlite3.connect(str(DB_PATH))
+        try:
+            df = get_period_detail_by_xa(conn, cycle, period_val, year)
+            return create_detail_table(df, compare_type)
+        except Exception as e:
+            return html.Div(f"Lỗi load bảng kỳ hiện tại: {e}")
+        finally:
+            conn.close()
+
+    # Callback riêng cho Bảng B (Lũy kế YTD)
+    @app.callback(
+        Output("global-table-b-container", "children"),
+        [
+            Input("btn-apply-filter", "n_clicks"),
+            Input("global-table-b-compare-selector", "value")
+        ],
+        [
+            State("sidebar-year", "value"),
+            State("sidebar-month-select", "value"),
+            State("sidebar-week-select", "value"),
+            State("sidebar-period", "value")
+        ]
+    )
+    def update_table_b(n_clicks, compare_type, year, month, week, cycle):
+        if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week):
+            return html.Div("Vui lòng chọn bộ lọc thời gian để xem chi tiết.")
+            
+        period_val = month if cycle == 'Tháng' else week
+        conn = sqlite3.connect(str(DB_PATH))
+        try:
+            df = get_ytd_detail_by_xa(conn, cycle, period_val, year)
+            return create_detail_table(df, compare_type)
+        except Exception as e:
+            return html.Div(f"Lỗi load bảng lũy kế YTD: {e}")
+        finally:
+            conn.close()
