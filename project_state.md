@@ -82,9 +82,9 @@ E:\Projects\Dashboard-BCCP\
 - **Hiện hữu**: Có phát sinh giao dịch có doanh thu dương trong 3 tháng liền trước.
 
 ## Pending Tasks
-1. **[PENDING] Cập nhật Main Branch**: Merge nhánh `fix-top10-plan-xa` vào `main` sau khi Sếp nghiệm thu thành công.
+1. **[COMPLETED] Cập nhật Main Branch**: Đã merge nhánh `fix-top10-plan-xa` vào `main`.
 2. **[PENDING] Bổ sung dữ liệu**: Chờ Sếp nạp thêm dữ liệu 2 ngày cuối tháng 5 (30.05 - 31.05) và dữ liệu tháng 6 còn thiếu (từ 03/06 trở đi).
-3. **[PENDING] Mẫu File Import**: Thiết kế lại các file mẫu import (Doanh thu, Kế hoạch 3 cấp) theo chuẩn mới, xóa các cột thừa và thêm sheet hướng dẫn metadata.
+3. **[COMPLETED] Mẫu File Import**: Thiết kế lại toàn bộ 3 file mẫu import (Doanh thu, Kế hoạch 3 cấp, Dịch vụ khác) theo chuẩn mới 11/12 cột cốt lõi, xóa cột thừa, thêm sheet hướng dẫn chi tiết và thêm vào Git tracking.
 4. **[PENDING] Dọn dẹp Dữ liệu**: Xóa hoặc lưu trữ các file backup `.csv` cũ trong thư mục `data`.
 5. **[PENDING] Phase 5C**: Thiết lập deploy server nội bộ và chuyển sang PostgreSQL.
 
