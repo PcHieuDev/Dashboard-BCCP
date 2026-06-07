@@ -358,15 +358,20 @@ div[style*="background: rgb(255, 255, 255)"] {
     transition: all 0.2s;
 }
 
+.sidebar-accordion .accordion-button.collapsed {
+    background-color: transparent !important;
+    color: #475569 !important;
+}
+
+.sidebar-accordion .accordion-button.collapsed:focus,
+.sidebar-accordion .accordion-button.collapsed:hover {
+    background-color: transparent !important;
+    color: #0F172A !important;
+}
+
 .sidebar-accordion .accordion-button:not(.collapsed) {
     color: #0F172A !important;
     background-color: #E2E8F0 !important;
-}
-
-.sidebar-accordion .accordion-button::after {
-    background-size: 12px !important;
-    width: 12px !important;
-    height: 12px !important;
 }
 
 .sidebar-accordion .accordion-body {

@@ -75,25 +75,16 @@ def register_sidebar_callbacks(app):
             "ppbl-over": "sidebar-menu-item"
         }
         
-        # Ẩn hiện bộ lọc: Chỉ hiện cho Tổng quan chung và các trang BCCP
-        show_filters = (pathname == "/" or pathname == "" or (pathname and pathname.startswith("/bccp")))
-        topbar_style = {"display": "block"} if show_filters else {"display": "none"}
+        # Ẩn hiện bộ lọc: Luôn hiển thị Topbar cho tất cả các trang
+        topbar_style = {"display": "block"}
         
         bccp_filter_style = {"display": "block"} if (pathname and pathname.startswith("/bccp")) else {"display": "none"}
         
-        # Xác định active accordion item
-        active_accordion = "menu-bccp" # Default open BCCP
-        if pathname:
-            if pathname.startswith("/bccp"):
-                active_accordion = "menu-bccp"
-            elif pathname.startswith("/hcc"):
-                active_accordion = "menu-hcc"
-            elif pathname.startswith("/tcbc"):
-                active_accordion = "menu-tcbc"
-            elif pathname.startswith("/ppbl"):
-                active_accordion = "menu-ppbl"
-            elif pathname == "/" or pathname == "":
-                active_accordion = None
+        # Xác định active accordion item: Chỉ mở khi ở trang BCCP, các trang khác thì đóng
+        if pathname and pathname.startswith("/bccp"):
+            active_accordion = "menu-bccp"
+        else:
+            active_accordion = None
                 
         # Highlight active menu link
         if not pathname or pathname == "/":
