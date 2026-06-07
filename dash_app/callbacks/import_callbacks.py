@@ -266,15 +266,13 @@ def register_import_callbacks(app):
         content_type, content_string = contents.split(',')
         decoded = base64.b64decode(content_string)
         
-        # Lấy phần mở rộng của file gốc (.xls, .xlsx hoặc .csv)
-        suffix = Path(filename).suffix
-        if suffix.lower() not in ['.xlsx', '.xls', '.csv']:
-            suffix = '.xlsx' # fallback
-            
-        # Ghi file tạm ra đĩa
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            tmp.write(decoded)
-            tmp_path = tmp.name
+        # Ghi file tạm ra đĩa giữ nguyên tên gốc của người dùng
+        # để khi import ghi nhận vào import_log hiển thị đúng tên file gốc.
+        temp_dir = Path(tempfile.gettempdir()) / "dashboard_uploads"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        tmp_path = str(temp_dir / filename)
+        with open(tmp_path, "wb") as f:
+            f.write(decoded)
             
         try:
             # Điều phối nạp dữ liệu theo loại dịch vụ được chọn
