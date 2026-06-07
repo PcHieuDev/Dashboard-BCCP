@@ -39,6 +39,15 @@ def init_db(conn: sqlite3.Connection):
             UNIQUE(cms, thang, nam)
         );
     """)
+    # Thêm cột ngay_phat_sinh nếu chưa tồn tại
+    try:
+        cursor.execute("PRAGMA table_info(new_customers)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if 'ngay_phat_sinh' not in columns:
+            cursor.execute("ALTER TABLE new_customers ADD COLUMN ngay_phat_sinh DATE;")
+            print("[NewCustomer] Đã ALTER TABLE new_customers thêm cột ngay_phat_sinh.")
+    except Exception as e:
+        print(f"[NewCustomer] Lỗi kiểm tra/ALTER ngay_phat_sinh: {e}")
     conn.commit()
 
 def calculate_new_customers(db_path: str, nam: int, thang: int) -> int:
@@ -69,13 +78,14 @@ def calculate_new_customers(db_path: str, nam: int, thang: int) -> int:
             curr_y -= 1
         lookback_months.append((curr_y, f"T{curr_m:02d}"))
         
-    # 2. Lấy tất cả CMS target (loại trừ vãng lai)
+    # 2. Lấy tất cả CMS target (loại trừ vãng lai) có doanh thu dương (ĐK MỚI)
     cursor.execute("""
         SELECT DISTINCT cms 
         FROM transactions 
         WHERE nam_du_lieu = ? AND thang_du_lieu = ?
           AND cms IS NOT NULL AND cms != '' 
           AND cms NOT LIKE 'VANGLAI_%' AND LOWER(cms) != 'none'
+          AND cuoc_tt_tong > 0
     """, (nam, thang_str))
     target_cms = {row[0].strip() for row in cursor.fetchall() if row[0]}
     
@@ -87,7 +97,7 @@ def calculate_new_customers(db_path: str, nam: int, thang: int) -> int:
         print(f"[{thang_str}/{nam}] Không có giao dịch phát sinh.")
         return 0
         
-    # 3. Lấy CMS trong 3 tháng lookback
+    # 3. Lấy CMS trong 3 tháng lookback có doanh thu dương (ĐK MỚI)
     lookback_cms = set()
     for y, m_str in lookback_months:
         cursor.execute("""
@@ -96,6 +106,7 @@ def calculate_new_customers(db_path: str, nam: int, thang: int) -> int:
             WHERE nam_du_lieu = ? AND thang_du_lieu = ?
               AND cms IS NOT NULL AND cms != '' 
               AND cms NOT LIKE 'VANGLAI_%' AND LOWER(cms) != 'none'
+              AND cuoc_tt_tong > 0
         """, (y, m_str))
         for row in cursor.fetchall():
             if row[0]:
@@ -161,11 +172,25 @@ def calculate_new_customers(db_path: str, nam: int, thang: int) -> int:
             SELECT cms, SUM(cuoc_tt_tong)
             FROM transactions
             WHERE nam_du_lieu = ? AND thang_du_lieu = ? AND cms IN ({placeholders})
+              AND cuoc_tt_tong > 0
             GROUP BY cms
         """
         cursor.execute(query_rev, [nam, thang_str] + chunk)
         for row in cursor.fetchall():
             cms_to_revenue[row[0].strip()] = row[1]
+            
+        # D. Lấy ngày phát sinh (MIN(ngay_chap_nhan)) của từng CMS có doanh thu dương (Yêu cầu mới)
+        query_np_sinh = f"""
+            SELECT cms, MIN(ngay_chap_nhan)
+            FROM transactions
+            WHERE nam_du_lieu = ? AND thang_du_lieu = ? AND cms IN ({placeholders})
+              AND cuoc_tt_tong > 0
+            GROUP BY cms
+        """
+        cursor.execute(query_np_sinh, [nam, thang_str] + chunk)
+        cms_to_ngay_phat_sinh = {}
+        for row in cursor.fetchall():
+            cms_to_ngay_phat_sinh[row[0].strip()] = row[1]
             
     # 6. Chuẩn bị dữ liệu và Insert vào DB
     # Trước tiên, DELETE dữ liệu cũ để tránh lỗi UNIQUE (cms, thang, nam)
@@ -195,11 +220,11 @@ def calculate_new_customers(db_path: str, nam: int, thang: int) -> int:
             if not ten_cum:
                 ten_cum = "Khác"
                 
-        insert_data.append((cms, thang, nam, buu_cuc, ma_bdx, ten_cum, nhom_dv, tong_doanh_thu))
+        insert_data.append((cms, thang, nam, buu_cuc, ma_bdx, ten_cum, nhom_dv, tong_doanh_thu, cms_to_ngay_phat_sinh.get(cms)))
         
     cursor.executemany("""
-        INSERT INTO new_customers (cms, thang, nam, buu_cuc, ma_bdx, ten_cum, nhom_dv, tong_doanh_thu)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO new_customers (cms, thang, nam, buu_cuc, ma_bdx, ten_cum, nhom_dv, tong_doanh_thu, ngay_phat_sinh)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, insert_data)
     
     conn.commit()
