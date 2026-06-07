@@ -1,0 +1,170 @@
+# -*- coding: utf-8 -*-
+"""
+Các callbacks quản lý hành vi và tương tác của bộ lọc trên Topbar.
+Xử lý chuyển đổi chu kỳ, cascade địa lý và phân quyền tài khoản cụm.
+"""
+
+import sqlite3
+import pandas as pd
+from datetime import date
+from dash import Output, Input, State
+import dash
+from flask_login import current_user
+from flask import has_request_context
+import sys
+from pathlib import Path
+
+# Thêm thư mục gốc vào sys.path để import
+project_root = Path(__file__).resolve().parent.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.append(str(project_root))
+
+from config.settings import DB_PATH
+from config.week_calendar import get_week_list
+
+def get_user_cum():
+    """Lấy tên cụm được gán của user hiện tại nếu có phân quyền."""
+    if has_request_context() and current_user.is_authenticated:
+        cum = getattr(current_user, 'assigned_cum', None)
+        if cum and cum.strip():
+            return cum.strip()
+    return None
+
+def register_topbar_callbacks(app):
+    """
+    Đăng ký các callback của Topbar với ứng dụng Dash.
+    """
+
+    # 1. Callback ẩn/hiện container Tuần/Tháng theo chu kỳ chọn
+    @app.callback(
+        [Output("week-container", "style"),
+         Output("month-container", "style")],
+        [Input("sidebar-period", "value")]
+    )
+    def toggle_period_filters(period):
+        if period == "Tuần":
+            return {"display": "block"}, {"display": "none"}
+        else:  # Mặc định là Tháng
+            return {"display": "none"}, {"display": "block"}
+
+    # 2. Callback cập nhật options Tuần khi đổi Năm
+    @app.callback(
+        [Output("sidebar-week-select", "options"),
+         Output("sidebar-week-select", "value")],
+        [Input("sidebar-year", "value")]
+    )
+    def update_week_dropdown(year):
+        if not year:
+            return [], None
+        weeks = get_week_list(int(year))
+        options = []
+        for w_num, w_from, w_to in weeks:
+            options.append({
+                "label": f"Tuần {w_num:02d} ({w_from.strftime('%d/%m')} - {w_to.strftime('%d/%m')})",
+                "value": w_num  # Đổi thành w_num (1-indexed) để đồng bộ với query DB tuần của các trang
+            })
+        return options, 1 if options else None
+
+    # 3 & 4. Callback cascade địa lý: Cụm -> BĐX -> Bưu cục
+    # Gộp chung để tránh lỗi trùng lặp output trong Dash
+    @app.callback(
+        [Output("sidebar-bdx", "options"),
+         Output("sidebar-bdx", "value"),
+         Output("sidebar-buu-cuc", "options"),
+         Output("sidebar-buu-cuc", "value")],
+        [Input("sidebar-cum", "value"),
+         Input("sidebar-bdx", "value")]
+    )
+    def update_geographic_filters(cum_val, bdx_val):
+        ctx = dash.callback_context
+        triggered_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else ""
+        
+        # Giá trị trả về mặc định
+        bdx_opts = dash.no_update
+        bdx_value = dash.no_update
+        bc_opts = dash.no_update
+        bc_value = dash.no_update
+        
+        if not DB_PATH.exists():
+            return (
+                [{"label": "Tất cả BĐX", "value": "Tất cả"}], "Tất cả",
+                [{"label": "Tất cả Bưu cục", "value": "Tất cả"}], "Tất cả"
+            )
+            
+        conn = sqlite3.connect(str(DB_PATH))
+        try:
+            # TH1: Callback kích hoạt lần đầu hoặc do đổi Cụm
+            if not triggered_id or triggered_id == "sidebar-cum":
+                # Lấy tất cả Xã/Phường thuộc Cụm
+                query_bdx = "SELECT DISTINCT ten_bdx FROM dim_buucuc WHERE ten_bdx IS NOT NULL"
+                params_bdx = []
+                if cum_val and cum_val != "Tất cả":
+                    query_bdx += " AND ten_cum = ?"
+                    params_bdx.append(cum_val)
+                query_bdx += " ORDER BY ten_bdx"
+                df_bdx = pd.read_sql_query(query_bdx, conn, params=params_bdx)
+                bdx_opts = [{"label": "Tất cả BĐX", "value": "Tất cả"}] + [{"label": b, "value": b} for b in df_bdx["ten_bdx"].tolist()]
+                bdx_value = "Tất cả"
+                
+                # Lấy tất cả Bưu cục thuộc Cụm
+                query_bc = "SELECT ma_bc, ten_buu_cuc FROM dim_buucuc WHERE ma_bc IS NOT NULL"
+                params_bc = []
+                if cum_val and cum_val != "Tất cả":
+                    query_bc += " AND ten_cum = ?"
+                    params_bc.append(cum_val)
+                query_bc += " ORDER BY ma_bc"
+                df_bc = pd.read_sql_query(query_bc, conn, params=params_bc)
+                bc_opts = [{"label": "Tất cả Bưu cục", "value": "Tất cả"}] + [{"label": f"{r['ma_bc']} - {r['ten_buu_cuc']}", "value": r['ma_bc']} for _, r in df_bc.iterrows()]
+                bc_value = "Tất cả"
+                
+            # TH2: Đổi Xã/Phường -> chỉ cascade xuống Bưu cục
+            elif triggered_id == "sidebar-bdx":
+                query_bc = "SELECT ma_bc, ten_buu_cuc FROM dim_buucuc WHERE ma_bc IS NOT NULL"
+                params_bc = []
+                if cum_val and cum_val != "Tất cả":
+                    query_bc += " AND ten_cum = ?"
+                    params_bc.append(cum_val)
+                if bdx_val and bdx_val != "Tất cả":
+                    query_bc += " AND ten_bdx = ?"
+                    params_bc.append(bdx_val)
+                query_bc += " ORDER BY ma_bc"
+                df_bc = pd.read_sql_query(query_bc, conn, params=params_bc)
+                bc_opts = [{"label": "Tất cả Bưu cục", "value": "Tất cả"}] + [{"label": f"{r['ma_bc']} - {r['ten_buu_cuc']}", "value": r['ma_bc']} for _, r in df_bc.iterrows()]
+                bc_value = "Tất cả"
+                
+        except Exception as e:
+            print(f"Error in topbar geographic cascade: {e}")
+        finally:
+            conn.close()
+            
+        return bdx_opts, bdx_value, bc_opts, bc_value
+
+    # 5. Callback phân quyền tài khoản khi load trang
+    @app.callback(
+        [Output("sidebar-cum", "options"),
+         Output("sidebar-cum", "value"),
+         Output("sidebar-cum", "disabled")],
+        [Input("url", "pathname")]
+    )
+    def apply_user_permissions(pathname):
+        assigned_cum = get_user_cum()
+        if assigned_cum:
+            # Khóa cụm được phân quyền
+            options = [{"label": assigned_cum, "value": assigned_cum}]
+            return options, assigned_cum, True
+        else:
+            # Admin: hiển thị đầy đủ cụm
+            if not DB_PATH.exists():
+                return [{"label": "Tất cả Cụm", "value": "Tất cả"}], "Tất cả", False
+                
+            conn = sqlite3.connect(str(DB_PATH))
+            try:
+                query = "SELECT DISTINCT ten_cum FROM dim_buucuc WHERE ten_cum IS NOT NULL ORDER BY ten_cum"
+                df = pd.read_sql_query(query, conn)
+                options = [{"label": "Tất cả Cụm", "value": "Tất cả"}] + [{"label": c, "value": c} for c in df["ten_cum"].tolist()]
+            except Exception as e:
+                print(f"Error loading cum options: {e}")
+                options = [{"label": "Tất cả Cụm", "value": "Tất cả"}]
+            finally:
+                conn.close()
+            return options, "Tất cả", False
