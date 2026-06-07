@@ -143,7 +143,7 @@ def import_excel_file(db_path, excel_path, thang=None):
     batch_buffer = []
     
     for row_idx, row in enumerate(ws.iter_rows(min_row=EXCEL_DATA_START_ROW, 
-                                                 max_col=EXCEL_NUM_COLS,
+                                                 max_col=ws.max_column,
                                                  values_only=True), 
                                     start=EXCEL_DATA_START_ROW):
         # Bỏ qua dòng trống
@@ -159,21 +159,32 @@ def import_excel_file(db_path, excel_path, thang=None):
         san_pham_dv = str(row[4]).strip() if row[4] is not None else None
         ngay_chap_nhan = _parse_date(row[5])
         san_luong = _safe_int(row[6])
-        khoi_luong_thuc = _safe_float(row[7])
-        khoi_luong_tinh_cuoc = _safe_float(row[8])
-        cuoc_cb_cp = _safe_float(row[9])
-        cuoc_cb_gtgt = _safe_float(row[10])
-        cuoc_cb_cod = _safe_float(row[11])
-        cuoc_cb_tong = _safe_float(row[12])
-        cuoc_tt_cp = _safe_float(row[13])
-        cuoc_tt_gtgt = _safe_float(row[14])
-        cuoc_tt_cod = _safe_float(row[15])
-        cuoc_tt_tong = _safe_float(row[16])
-        thue_vat = _safe_float(row[17])
-        cuoc_tt_gom_vat = _safe_float(row[18])
-        cuoc_chenh_lech = _safe_float(row[19])
-        tien_cod = _safe_float(row[20])
-        nho_thu_khac = _safe_float(row[21])
+        khoi_luong_thuc = _safe_float(row[7]) if len(row) > 7 else 0.0
+        khoi_luong_tinh_cuoc = _safe_float(row[8]) if len(row) > 8 else 0.0
+        
+        # Hỗ trợ cả 2 chuẩn template: Mới (12 cột) và Cũ (22 cột)
+        if ws.max_column <= 12:
+            cuoc_tt_tong = _safe_float(row[9]) if len(row) > 9 else 0.0
+            thue_vat = _safe_float(row[10]) if len(row) > 10 else 0.0
+            cuoc_tt_gom_vat = _safe_float(row[11]) if len(row) > 11 else 0.0
+            
+            cuoc_cb_cp = cuoc_cb_gtgt = cuoc_cb_cod = cuoc_cb_tong = 0.0
+            cuoc_tt_cp = cuoc_tt_gtgt = cuoc_tt_cod = 0.0
+            cuoc_chenh_lech = tien_cod = nho_thu_khac = 0.0
+        else:
+            cuoc_cb_cp = _safe_float(row[9]) if len(row) > 9 else 0.0
+            cuoc_cb_gtgt = _safe_float(row[10]) if len(row) > 10 else 0.0
+            cuoc_cb_cod = _safe_float(row[11]) if len(row) > 11 else 0.0
+            cuoc_cb_tong = _safe_float(row[12]) if len(row) > 12 else 0.0
+            cuoc_tt_cp = _safe_float(row[13]) if len(row) > 13 else 0.0
+            cuoc_tt_gtgt = _safe_float(row[14]) if len(row) > 14 else 0.0
+            cuoc_tt_cod = _safe_float(row[15]) if len(row) > 15 else 0.0
+            cuoc_tt_tong = _safe_float(row[16]) if len(row) > 16 else 0.0
+            thue_vat = _safe_float(row[17]) if len(row) > 17 else 0.0
+            cuoc_tt_gom_vat = _safe_float(row[18]) if len(row) > 18 else 0.0
+            cuoc_chenh_lech = _safe_float(row[19]) if len(row) > 19 else 0.0
+            tien_cod = _safe_float(row[20]) if len(row) > 20 else 0.0
+            nho_thu_khac = _safe_float(row[21]) if len(row) > 21 else 0.0
         
         # Xử lý CMS vãng lai
         if cms is None:
