@@ -1,49 +1,24 @@
 # BUILD LOG: Dashboard BCCP v2.0
-Branch: feat/topbar-auth
-Builder started: 2026-06-07T13:08:57+07:00
+Branch: feat-db-etl
+Builder started: 2026-06-07T20:11:17+07:00
 
 ---
 
-## TIP-topbar-001: Tạo topbar.py component + CSS
-- Status: DONE
-- Started: 2026-06-07T13:09:00+07:00
-- Completed: 2026-06-07T13:09:30+07:00
-- Files: 1 created, 1 modified
-- Tests: 3/3 passed
-- Commit: `feat(ui): TIP-topbar-001 — Create Topbar filter layout and append styles`
-- Commit hash: beeb2f6
-- Issues: None
-
----
-
-## TIP-topbar-002: Tạo topbar_callbacks.py (cascade, phân quyền)
-- Status: DONE
-- Started: 2026-06-07T13:09:35+07:00
-- Completed: 2026-06-07T13:09:45+07:00
-- Files: 1 created, 0 modified
-- Tests: 3/3 passed
-- Commit: `feat(callbacks): TIP-topbar-002 — Implement Topbar filter callbacks and user permission logic`
-- Commit hash: beeb2f6
-- Issues: Grouped cascade callbacks to prevent Duplicate Callback Outputs.
-
----
-
-## TIP-topbar-003: Tích hợp topbar vào app.py, thu gọn sidebar
-- Status: DONE
-- Started: 2026-06-07T13:12:00+07:00
-- Completed: 2026-06-07T13:13:00+07:00
-- Files: 0 created, 4 modified
-- Tests: 4/4 passed
-- Commit: `feat(integration): TIP-topbar-003 — Integrate Topbar layout/callbacks and redesign Sidebar`
-- Commit hash: c0fe6e8
-- Issues: None
+## TIP-fix-db-etl: Nâng cấp Cơ sở dữ liệu và Logic ETL Phân bổ
+- **Status:** DONE
+- **Started:** 2026-06-07T20:15:00+07:00
+- **Completed:** 2026-06-07T20:22:00+07:00
+- **Files Modified:** `etl/importer.py`, `etl/aggregator.py`
+- **Files Created:** `scripts/migrate_fix_db_etl.py`, `scripts/test_import_hcc.py`, `scripts/verify_sums.py`
+- **Tests:** 100% matched, error-diffusion logic verified against raw tables
+- **Commit:** `feat(db-etl): TIP-fix-db-etl — Upgrade database schema, import dates and weekly cumulative allocation`
+- **Issues:** Resolved integer rounding errors in weekly volume allocation using cumulative error diffusion.
 
 ---
 
 ## SUMMARY
-- Branch: feat/topbar-auth
-- Total TIPs: 3
-- DONE: 3
-- BLOCKED: 0
-- Commits: beeb2f6, c0fe6e8
-- Overall: READY FOR VERIFY
+- **Branch:** feat-db-etl
+- **Total TIPs:** 1
+- **DONE:** 1
+- **BLOCKED:** 0
+- **Overall:** READY FOR VERIFY

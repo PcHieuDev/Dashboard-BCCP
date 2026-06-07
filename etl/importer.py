@@ -618,8 +618,9 @@ def import_service_excel(db_path, excel_path, service_type, thang=None):
         
         insert_sql = f"""
         INSERT OR IGNORE INTO {table_name} 
-        (thang_du_lieu, nam_du_lieu, ma_buu_cuc, ten_dich_vu, san_luong, doanh_thu, import_batch)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        (thang_du_lieu, nam_du_lieu, ma_buu_cuc, ten_dich_vu, san_luong, doanh_thu, import_batch,
+         tu_ngay, tu_thang, tu_nam, den_ngay, den_thang, den_nam)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         
         batch_buffer = []
@@ -632,16 +633,28 @@ def import_service_excel(db_path, excel_path, service_type, thang=None):
             if pd.isna(stt_val) and idx > 0:
                 continue # Skip empty rows
                 
+            if str(stt_val).strip().upper() == 'STT':
+                continue
+                
             total_rows += 1
             ma_bc = clean_str_field(row.iloc[1])
             ten_dv = clean_str_field(row.iloc[2])
             sl = _safe_int(row.iloc[3])
             dt = _safe_float(row.iloc[4])
             
+            # Đọc các cột ngày bắt đầu và kết thúc (Từ cột 6 đến 11)
+            tu_ngay = _safe_int(row.iloc[5]) if len(row) > 5 and pd.notna(row.iloc[5]) else 1
+            tu_thang = _safe_int(row.iloc[6]) if len(row) > 6 and pd.notna(row.iloc[6]) else 1
+            tu_nam = _safe_int(row.iloc[7]) if len(row) > 7 and pd.notna(row.iloc[7]) else nam_du_lieu
+            den_ngay = _safe_int(row.iloc[8]) if len(row) > 8 and pd.notna(row.iloc[8]) else 30
+            den_thang = _safe_int(row.iloc[9]) if len(row) > 9 and pd.notna(row.iloc[9]) else 12
+            den_nam = _safe_int(row.iloc[10]) if len(row) > 10 and pd.notna(row.iloc[10]) else nam_du_lieu
+            
             if not ma_bc:
                 warnings.append(f"Dòng {idx+2}: Thiếu mã bưu cục")
                 
-            batch_buffer.append((thang, nam_du_lieu, ma_bc, ten_dv, sl, dt, batch_id))
+            batch_buffer.append((thang, nam_du_lieu, ma_bc, ten_dv, sl, dt, batch_id,
+                                 tu_ngay, tu_thang, tu_nam, den_ngay, den_thang, den_nam))
             
             if len(batch_buffer) >= BATCH_SIZE:
                 cursor.executemany(insert_sql, batch_buffer)
