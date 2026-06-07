@@ -244,7 +244,7 @@ def register_retention_callbacks(app):
             State("sidebar-year", "value"),
             State("sidebar-month-select", "value"),
             State("sidebar-week-select", "value"),
-            State("sidebar-cycle", "value"),
+            State("sidebar-period", "value"),
             State("sidebar-cum", "value")
         ]
     )
@@ -315,7 +315,7 @@ def register_retention_callbacks(app):
             State("sidebar-year", "value"),
             State("sidebar-month-select", "value"),
             State("sidebar-week-select", "value"),
-            State("sidebar-cycle", "value"),
+            State("sidebar-period", "value"),
             State("sidebar-cum", "value")
         ],
         prevent_initial_call=True
@@ -350,7 +350,7 @@ def register_retention_callbacks(app):
             State("sidebar-year", "value"),
             State("sidebar-month-select", "value"),
             State("sidebar-week-select", "value"),
-            State("sidebar-cycle", "value"),
+            State("sidebar-period", "value"),
             State("sidebar-cum", "value")
         ],
         prevent_initial_call=True
@@ -385,7 +385,7 @@ def register_retention_callbacks(app):
             State("sidebar-year", "value"),
             State("sidebar-month-select", "value"),
             State("sidebar-week-select", "value"),
-            State("sidebar-cycle", "value"),
+            State("sidebar-period", "value"),
             State("sidebar-cum", "value")
         ],
         prevent_initial_call=True

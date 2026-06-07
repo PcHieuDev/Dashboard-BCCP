@@ -425,7 +425,7 @@ def register_service_callbacks(app):
                     State("sidebar-year", "value"),
                     State("sidebar-month-select", "value"),
                     State("sidebar-week-select", "value"),
-                    State("sidebar-cycle", "value"),
+                    State("sidebar-period", "value"),
                     State(f"{pfx}-service-key-store", "data")
                 ]
             )
@@ -577,7 +577,7 @@ def register_service_callbacks(app):
                     State("sidebar-year", "value"),
                     State("sidebar-month-select", "value"),
                     State("sidebar-week-select", "value"),
-                    State("sidebar-cycle", "value"),
+                    State("sidebar-period", "value"),
                     State(f"{pfx}-service-key-store", "data")
                 ]
             )
@@ -608,7 +608,7 @@ def register_service_callbacks(app):
                     State("sidebar-year", "value"),
                     State("sidebar-month-select", "value"),
                     State("sidebar-week-select", "value"),
-                    State("sidebar-cycle", "value"),
+                    State("sidebar-period", "value"),
                     State(f"{pfx}-service-key-store", "data")
                 ]
             )

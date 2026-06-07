@@ -235,7 +235,7 @@ def register_global_callbacks(app):
             State("sidebar-year", "value"),
             State("sidebar-month-select", "value"),
             State("sidebar-week-select", "value"),
-            State("sidebar-cycle", "value"), # 'Tháng' hoặc 'Tuần'
+            State("sidebar-period", "value"), # 'Tháng' hoặc 'Tuần'
             State("sidebar-cum", "value")
         ]
     )
@@ -390,7 +390,7 @@ def register_global_callbacks(app):
             State("sidebar-year", "value"),
             State("sidebar-month-select", "value"),
             State("sidebar-week-select", "value"),
-            State("sidebar-cycle", "value")
+            State("sidebar-period", "value")
         ]
     )
     def update_table_a(n_clicks, compare_type, year, month, week, cycle):
@@ -418,7 +418,7 @@ def register_global_callbacks(app):
             State("sidebar-year", "value"),
             State("sidebar-month-select", "value"),
             State("sidebar-week-select", "value"),
-            State("sidebar-cycle", "value")
+            State("sidebar-period", "value")
         ]
     )
     def update_table_b(n_clicks, compare_type, year, month, week, cycle):
