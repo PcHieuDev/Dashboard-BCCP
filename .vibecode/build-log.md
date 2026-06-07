@@ -35,7 +35,7 @@ Builder started: 2026-06-07T13:08:57+07:00
 - Files: 0 created, 4 modified
 - Tests: 4/4 passed
 - Commit: `feat(integration): TIP-topbar-003 — Integrate Topbar layout/callbacks and redesign Sidebar`
-- Commit hash: [N/A - To be committed]
+- Commit hash: c0fe6e8
 - Issues: None
 
 ---
@@ -45,5 +45,5 @@ Builder started: 2026-06-07T13:08:57+07:00
 - Total TIPs: 3
 - DONE: 3
 - BLOCKED: 0
-- Commits: beeb2f6
+- Commits: beeb2f6, c0fe6e8
 - Overall: READY FOR VERIFY
