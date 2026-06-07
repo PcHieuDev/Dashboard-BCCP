@@ -7,4 +7,5 @@ from dash_app.pages.service_overview import create_service_overview_layout
 
 def create_ppbl_revenue_layout():
     """Tạo layout cho trang PPBL"""
-    return create_service_overview_layout("Phân phối bán lẻ", "🛍️", "#8B5CF6")
+    return create_service_overview_layout("PPBL", "🛍️", "#8B5CF6")
+
