@@ -32,6 +32,9 @@ Dashboard doanh thu bưu chính chuyển phát (BCCP) hỗ trợ bộ lọc đa 
   - Các trang Tổng quan, BCCP, Khách hàng... đã chuyển sang đọc từ các bảng này, cải thiện hiệu suất tải trang gấp nhiều lần. Tự động cập nhật summary khi có thay đổi dữ liệu từ file Excel.
 - **Điều chỉnh Doanh thu tháng 10/2025 (07/06/2026)**:
   - Chuyển giao dịch điều chỉnh âm -7,42 tỷ của khách hàng `C002362753` từ `01/10/2025` về `30/09/2025` để đối trừ với giao dịch dương cùng kỳ, giúp phục hồi doanh thu thực tế chính xác. Rebuild thành công toàn bộ summary tables.
+- **Nạp dữ liệu Tháng 04/2025 (08/06/2026)**:
+  - Đã import thành công **70.543 dòng** dữ liệu thô (RAW từ CAS) của tháng 04/2025 từ 5 tệp Excel nguồn vào cơ sở dữ liệu.
+  - Đã hoàn thành tiến trình cập nhật và làm mới lại toàn bộ các bảng số liệu tổng hợp (rebuild summaries) để đồng bộ Dashboard.
 - **Hoàn thành & Hủy bỏ (Rollback) nhánh `feat-ux-filters` (06/06/2026 - 07/06/2026)**:
   - Nhánh đã được nghiệm thu và gộp thành công vào `main`, nhưng sau đó theo yêu cầu của Sếp, hệ thống đã thực hiện **rollback hoàn toàn** bản cập nhật này. Giao diện và logic code của `main` hiện tại quay về trạng thái ổn định của **Phase 11**.
 - **Sửa lỗi mã hóa tập tin thực thi Batch `.bat` (07/06/2026)**:
@@ -155,3 +158,19 @@ E:\Projects\Dashboard-BCCP\
 - **Database Lock**: Do SQLite sử dụng khóa độc quyền, quá trình chạy script `rebuild_summaries.py` sẽ tạm khóa tất cả các truy cập đọc/ghi khác.
 - **Lỗi không hiển thị Alert khi nạp thành công**: Đã sửa triệt để đổi `dismissible` thành `dismissable` trong DBC Alert.
 - **Lỗi CSV dấu phân tách ';'**: Đã khắc phục triệt để.
+
+### 📚 Kinh Nghiệm Vận Hành & Các Lỗi Thường Gặp:
+1. **Lỗi nạp lại Code (`File is not a zip file` khi nạp `.xls`)**:
+   - **Vấn đề**: Khi sửa đổi mã nguồn hoặc cập nhật thư viện (như hỗ trợ mở rộng định dạng file `.xls`), giao diện có thể vẫn báo lỗi cũ do ứng dụng Dash đang chạy trong bộ nhớ RAM chưa nạp lại code mới.
+   - **Khắc phục**: **Bắt buộc phải khởi động lại Dashboard** (tắt cửa sổ Terminal/Command Prompt chạy app và chạy lại file `run_dashboard.bat`).
+2. **Quy trình lưu và nạp file Danh mục Dịch vụ (CSV Mapping)**:
+   - **Vấn đề**: File mẫu Excel trên OneDrive được chia làm **2 Sheet** (Sheet 1: Hướng dẫn, Sheet 2: Mẫu nạp). Nếu lưu trực tiếp mà không chọn sheet, Pandas sẽ đọc nhầm tiêu đề lớn của Sheet 1 làm tên cột và báo lỗi `Thiếu cột nhom_chinh`.
+   - **Khắc phục**: Sếp cần mở file Excel mẫu, click chọn đúng **Sheet 2** (`Mẫu Danh Mục Dịch Vụ`), sau đó thực hiện File -> Save As -> Định dạng **CSV UTF-8 (Comma delimited) (.csv)** trước khi nạp vào Dashboard.
+3. **Logic gộp mã CMS dòng nhóm (ETL thô)**:
+   - **Vấn đề**: Khi nạp dữ liệu thô, logic import cũ gán nhầm mã CMS của khách hàng dòng trên cho các dòng nhóm phụ không có mã CMS (ví dụ nhóm `1.313`).
+   - **Khắc phục**: Đã bổ sung logic reset cache mã CMS khi đọc qua các dòng nhóm phân cấp của tệp Excel nguồn.
+4. **Lỗi Số thứ tự (STT) hiển thị sai lệch trong bảng xếp hạng**:
+   - **Vấn đề**: Bảng Top 10 hiển thị số thứ tự STT lộn xộn (như 189, 311) do Dash DataTable lấy trực tiếp cột chỉ mục (index) gốc của Pandas DataFrame sau khi lọc.
+   - **Khắc phục**: Sử dụng `df.reset_index(drop=True)` để reset chỉ mục và thiết lập hiển thị STT từ 1-10 tăng dần trên giao diện.
+5. **Thiết kế trang Khách hàng Chi tiết (CMS Detail)**:
+   - Thay đổi từ giao diện xoay chiều (Pivot Table) có hiệu năng kém ở bản cũ sang **bảng phẳng (Flat Table) với các cột dữ liệu cố định** tại Phase 11 để tăng tốc độ phản hồi và xuất dữ liệu.
