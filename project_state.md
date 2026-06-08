@@ -78,6 +78,12 @@ Dashboard doanh thu bưu chính chuyển phát (BCCP) hỗ trợ bộ lọc đa 
 
 - **Logic Chia Đều Số Liệu Ngày (Back-distribution)**:
   Khi import các file dữ liệu có định kỳ lớn (Ví dụ: Doanh thu dịch vụ khác theo tuần hoặc theo tháng từ file `mau_import_dich_vu_khac.xlsx`), hệ thống tự động xác định khoảng thời gian và thực hiện chia đều doanh thu đó ra các ngày trong tuần/tháng để tính toán doanh thu trung bình ngày ổn định.
+- **Phân bổ Dữ liệu Tuần (Đối với HCC/TCBC/PPBL)**:
+  Do các bảng dữ liệu gốc của 3 dịch vụ phụ (Hành chính công, Tài chính bưu chính, Phân phối bán lẻ) chỉ lưu trữ số liệu thực tế theo **Tháng**, nên khi Sếp xem báo cáo theo **Tuần**, hệ thống sẽ tự động phân bổ doanh thu thực tế của Tháng vào các Tuần trong tháng đó theo tỷ lệ số ngày lịch (tương tự như cách phân bổ kế hoạch tuần). Logic này sẽ được điều chỉnh khi có dữ liệu thực tế theo ngày.
+- **Logic Xếp hạng Top 10 Bưu điện Xã/Phường**:
+  Để tránh hiện tượng xếp hạng lặp lại cùng một xã nhiều lần do một bưu điện xã có nhiều mã bưu cục con, hệ thống thực hiện **cộng dồn doanh thu của tất cả các bưu cục trực thuộc cùng một Xã/Phường** trước khi so sánh xếp hạng. Mỗi xã/phường chỉ xuất hiện tối đa một lần trong danh sách xếp hạng.
+- **Đồng bộ trạng thái Bộ lọc Toàn cục**:
+  Bộ lọc trên Topbar (Năm, Tháng, Tuần, Địa lý) được đồng bộ trạng thái khi chuyển đổi giữa tất cả các trang, thay vì reset về mặc định khi đổi trang. Dữ liệu trang mới chỉ thực sự tải lại theo các bộ lọc này khi Sếp nhấn nút **"Áp dụng"** (Manual Load).
 - **Phân tách Tài liệu Bàn giao**: 
   - `GEMINI.md` đóng vai trò là tài liệu tóm tắt ngắn gọn nhất để Agent/Nhân sự mới nắm bắt nhanh.
   - `project_state.md` lưu trữ chi tiết kỹ thuật chuyên sâu và lịch sử phát triển.
