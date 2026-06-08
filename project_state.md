@@ -115,9 +115,16 @@ E:\Projects\Dashboard-BCCP\
 - `import_log` — Lịch sử import.
 
 ### Logic phân loại KH (theo tháng, không cộng dồn):
-- **Vãng lai**: CMS null / bắt đầu bằng `VANGLAI_` / 'none'
-- **KHM/Tái bán**: Không có phát sinh giao dịch nào có doanh thu dương trong 3 tháng liền trước.
-- **Hiện hữu**: Có phát sinh giao dịch có doanh thu dương trong 3 tháng liền trước.
+- **Khách hàng Mới (KHM)** (Bảng `new_customers`):
+  - **Định nghĩa**: Khách hàng phát sinh giao dịch có doanh thu dương (`cuoc_tt_tong > 0`) trong tháng target nhưng **không phát sinh bất kỳ giao dịch doanh thu dương nào trong 3 tháng liền trước đó** (không tính mã vãng lai `VANGLAI_%` hoặc null/none).
+  - **Thông tin lưu trữ**: Bưu cục hoạt động nhiều nhất (nếu bằng thì lấy tổng doanh thu cao nhất), mã xã `ma_bdx`, tên cụm `ten_cum`, nhóm dịch vụ phát sinh đầu tiên (`nhom_dv`), tổng doanh thu trong tháng target (`tong_doanh_thu`), và ngày giao dịch đầu tiên có doanh thu dương (`ngay_phat_sinh`).
+- **Khách hàng Hiện hữu (KHHH)** (Phân hệ Retention):
+  - **Định nghĩa Mới (Đã áp dụng)**: **`Khách hàng hiện hữu = Khách hàng có phát sinh giao dịch trong tháng target - Khách hàng mới của tháng target`**.
+  - **Lưu ý**: Công thức tối ưu mới này thay thế cho logic quét 3 tháng Lookback lịch sử cũ để khắc phục triệt để lỗi sập trang và cải thiện 100% hiệu năng tải trang `/bccp/retention`.
+- **Khách hàng Tái bán (KHM/Tái bán)** (Bảng Doanh thu chi tiết / `customer_classifier.py`):
+  - **Định nghĩa**: Khách hàng phi vãng lai **không hoạt động trong 3 tháng liền trước** (có thể là KHM mới tinh hoặc KH cũ quay lại sau 3 tháng gián đoạn).
+- **Vãng lai**:
+  - **Định nghĩa**: Các giao dịch có mã CMS là null, rỗng, bắt đầu bằng `VANGLAI_` hoặc `none`.
 
 ## Pending Tasks
 1. **[COMPLETED] Cập nhật Main Branch**: Đã merge nhánh `fix-top10-plan-xa` vào `main`.
@@ -128,6 +135,14 @@ E:\Projects\Dashboard-BCCP\
 
 ## Issues & Notes
 - **Lưu ý Mã Đại diện Cụm (PHBC)**: Khi nạp dữ liệu Kế hoạch hoặc Doanh thu đặc thù cấp Cụm, bắt buộc phải dùng danh sách 18 mã đại diện như `CUM_ANHSON`, `CUM_VINH` điền vào cột "Mã bưu cục".
+- **Khóa cứng bộ lọc Ngày (Trang Tái bán & Khách hàng mới)**:
+  - Do logic tính toán KHM và Tái bán bắt buộc phải tính theo đơn vị tháng cố định, hệ thống đã khóa cứng (bằng callback) không cho chọn khoảng ngày tùy ý tại 2 trang `/bccp/new-customer` và `/bccp/retention`. Hệ thống tự động lấy ngày cuối `end_date` mà Sếp chọn và khóa bộ lọc về đúng tháng đó để tránh tính toán sai lệch dữ liệu.
+- **Biểu đồ biến động 12 kỳ (Line Chart 12 kỳ)**:
+  - Chuyển từ dạng biểu đồ Bar chồng (Stack Bar) sang **biểu đồ đường (Line Chart) 5 đường** (đường nét liền Tổng doanh thu + 4 đường nét đứt biểu diễn các phân hệ dịch vụ BCCP, HCC, TCBC, PPBL) tại trang Tổng quan giúp trực quan hóa xu hướng rõ ràng hơn.
+- **Tính năng Native Filter**: Bật native filtering và sorting (`filter_action='native'`, `sort_action='native'`) cho tất cả các bảng dữ liệu (DataTable) giúp Sếp lọc trực tiếp trên giao diện Dashboard.
+- **Regression Bugs đã xử lý (BUG-01..05)**:
+  - **Lọc vãng lai trong Retention**: Sửa lỗi lọc vãng lai trong các hàm `get_khhh_changes_v2` và `get_weekly_changes` ở `retention_metrics.py` (loại bỏ CMS vãng lai, CMS null, CMS rỗng hoặc 'none').
+  - **Lỗi SQL Ambiguous Column**: Sửa lỗi SQL ambiguous column (ví dụ: `buu_cuc` hoặc `nhom_chinh` bị nhập nhằng khi JOIN) bằng cách sử dụng `COALESCE(d.nhom_chinh, 'Khác')` và chỉ định tường minh tên bảng trong câu lệnh SELECT.
 - **RBAC & Authentication**: Phân quyền người dùng theo Cụm địa lý, khóa cứng bộ lọc Cụm đối với tài khoản cấp Cụm (user). Hỗ trợ route test nhanh `/test-login/<username>`. Bypass hiện tại ở `app.py`.
 - **Database Lock**: Do SQLite sử dụng khóa độc quyền, quá trình chạy script `rebuild_summaries.py` sẽ tạm khóa tất cả các truy cập đọc/ghi khác.
 - **Lỗi không hiển thị Alert khi nạp thành công**: Đã sửa triệt để đổi `dismissible` thành `dismissable` trong DBC Alert.
