@@ -15,6 +15,18 @@ Dashboard doanh thu bưu chính chuyển phát (BCCP) hỗ trợ bộ lọc đa 
   - Đã xử lý triệt để lỗi tỷ lệ hoàn thành >300% ở bảng Top 10 Xã bằng cách áp dụng nguyên tắc: "Nạp cấp nào, so sánh cấp đó, cộng dồn lên cấp cao hơn".
   - Chuẩn hóa dữ liệu Kế hoạch PHBC: Đồng bộ 18 mã cụm đại diện (ví dụ `CUM_ANHSON`) vào bảng `dim_buucuc` và cập nhật dữ liệu `plans` PHBC khớp 100% với file Excel `KH-PHBC-2026.xlsx` (tổng 8,98 tỷ đồng).
   - Code được thực thi và commit trên nhánh `fix-top10-plan-xa`.
+- **Chuẩn hóa & Tái cấu trúc Mẫu File Import (07/06/2026)**:
+  - Hợp nhất và tinh giản các cột nhập liệu giúp giảm sai sót khi chuẩn bị file Excel nạp hệ thống.
+  - **Mẫu doanh thu BCCP (`mau_import_doanh_thu_BCCP.xlsx`)**: Rút gọn từ 22 cột thừa xuống **12 cột cốt lõi**. Bộ phân tích dữ liệu (`importer.py`) đã được viết lại để tự động nhận diện và hỗ trợ song song cả chuẩn cũ (22 cột) và chuẩn mới (12 cột).
+  - **Mẫu kế hoạch (`mau_import_ke_hoach.xlsx`)**: Hỗ trợ nạp chỉ tiêu kế hoạch đồng thời cho cả 3 cấp (Bưu cục, Xã, Cụm).
+  - **Mẫu dịch vụ khác (`mau_import_dich_vu_khac.xlsx`)**: Hỗ trợ nạp doanh thu theo tuần hoặc tháng đối với các dịch vụ không phát sinh dữ liệu theo ngày.
+  - **Mẫu danh mục dịch vụ (`mau_import_danh_muc_dich_vu.xlsx`)**: Sếp điền thông tin nhóm và sản phẩm, lưu dưới dạng tệp `.csv` (đặt tên là `mapping_spdv.csv`) rồi đưa vào hệ thống để tự động cập nhật danh mục.
+- **Tối ưu hóa Phân loại "Chuyển phát HCC" (07/06/2026)**:
+  - Khắc phục lỗi phân loại nhầm: Các mã sản phẩm hành chính công `HCC001` - `HCC004` (chuyển phát CCCD, hộ chiếu...) trước đây bị gộp chung vào nhóm BCCP. 
+  - Đã điều chỉnh trong file `mapping-spdv.csv` và logic ETL (`sync_mappings.py`, `migrate_dim_dichvu.py`) để chuyển toàn bộ doanh thu này sang đúng phân hệ **Hành chính công (HCC)**.
+- **Khắc phục Lỗi Hồi quy Bộ lọc & Cache (07/06/2026)**:
+  - Lỗi xảy ra khi Sếp chuyển bộ lọc so sánh ở Sidebar từ dạng chọn một (Radio) sang chọn nhiều (Checklist). Callback trả về một danh sách (list), dẫn đến lỗi `TypeError: unhashable type: 'list'` khi lưu trữ vào bộ nhớ đệm cache (`@functools.lru_cache`).
+  - Đã sửa triệt để tại `utils.py` và `kpi_callbacks.py` bằng cách tự động chuẩn hóa danh sách bộ lọc so sánh thành chuỗi văn bản đơn giản trước khi lưu vào cache hoặc SQLite.
 - **Tối ưu hiệu năng bằng Summary Tables (07/06/2026)**:
   - Xây dựng các bảng tổng hợp trung gian: `agg_monthly`, `agg_monthly_customer`, `plans_weekly`, `new_customers` (tối ưu hóa logic khách hàng mới, chỉ tính doanh thu dương).
   - Các trang Tổng quan, BCCP, Khách hàng... đã chuyển sang đọc từ các bảng này, cải thiện hiệu suất tải trang gấp nhiều lần. Tự động cập nhật summary khi có thay đổi dữ liệu từ file Excel.
@@ -40,6 +52,32 @@ Dashboard doanh thu bưu chính chuyển phát (BCCP) hỗ trợ bộ lọc đa 
   - **BCCP (Truyền thống/TMĐT/QT)**: Nạp ở cấp Bưu cục (mã 6 số). Khi xem ở cấp Xã -> Tự động JOIN dim_buucuc và SUM gộp lên.
   - **HCC (Chuyển phát HCC)**: Nạp ở cấp Xã (mã 4 số). Lấy trực tiếp khi xem ở cấp Xã.
   - **PHBC (Phát hành báo chí)**: Nạp ở cấp Cụm (mã `CUM_XXXX`). Lấy trực tiếp khi xem ở cấp Cụm.
+- **Bảng Tra Cứu Mã Đại Diện 18 Cụm**:
+  Khi nạp dữ liệu ở cấp Cụm (Ví dụ: kế hoạch hoặc doanh thu đặc thù Phát hành báo chí), cần sử dụng các mã đại diện cụm dưới đây điền vào cột **Mã bưu cục** để hệ thống tự động so sánh và cộng dồn:
+  
+  | STT | Tên Cụm | Mã Cụm đại diện (Điền vào cột Mã bưu cục) | Tên Bưu cục hiển thị |
+  | :---: | :--- | :---: | :--- |
+  | **1** | Anh Sơn | `CUM_ANHSON` | Đại diện Cụm Anh Sơn |
+  | **2** | Con Cuông | `CUM_CONCUONG` | Đại diện Cụm Con Cuông |
+  | **3** | Diễn Châu | `CUM_DIENCHAU` | Đại diện Cụm Diễn Châu |
+  | **4** | Đô Lương | `CUM_DOLUONG` | Đại diện Cụm Đô Lương |
+  | **5** | Hưng Nguyên | `CUM_HUNGNGUYEN` | Đại diện Cụm Hưng Nguyên |
+  | **6** | Kỳ Sơn | `CUM_KYSON` | Đại diện Cụm Kỳ Sơn |
+  | **7** | Nam Đàn | `CUM_NAMDAN` | Đại diện Cụm Nam Đàn |
+  | **8** | Nghi Lộc | `CUM_NGHILOC` | Đại diện Cụm Nghi Lộc |
+  | **9** | Quế Phong | `CUM_QUEPHONG` | Đại diện Cụm Quế Phong |
+  | **10** | Quỳ Châu | `CUM_QUYCHAU` | Đại diện Cụm Quỳ Châu |
+  | **11** | Quỳ Hợp | `CUM_QUYHOP` | Đại diện Cụm Quỳ Hợp |
+  | **12** | Quỳnh Lưu | `CUM_QUYNHLUU` | Đại diện Cụm Quỳnh Lưu |
+  | **13** | Tân Kỳ | `CUM_TANKY` | Đại diện Cụm Tân Kỳ |
+  | **14** | Thái Hòa | `CUM_THAIHOA` | Đại diện Cụm Thái Hòa |
+  | **15** | Thanh Chương | `CUM_THANHCHUONG` | Đại diện Cụm Thanh Chương |
+  | **16** | Tương Dương | `CUM_TUONGDUONG` | Đại diện Cụm Tương Dương |
+  | **17** | Vinh | `CUM_VINH` | Đại diện Cụm Vinh |
+  | **18** | Yên Thành | `CUM_YENTHANH` | Đại diện Cụm Yên Thành |
+
+- **Logic Chia Đều Số Liệu Ngày (Back-distribution)**:
+  Khi import các file dữ liệu có định kỳ lớn (Ví dụ: Doanh thu dịch vụ khác theo tuần hoặc theo tháng từ file `mau_import_dich_vu_khac.xlsx`), hệ thống tự động xác định khoảng thời gian và thực hiện chia đều doanh thu đó ra các ngày trong tuần/tháng để tính toán doanh thu trung bình ngày ổn định.
 - **Phân tách Tài liệu Bàn giao**: 
   - `GEMINI.md` đóng vai trò là tài liệu tóm tắt ngắn gọn nhất để Agent/Nhân sự mới nắm bắt nhanh.
   - `project_state.md` lưu trữ chi tiết kỹ thuật chuyên sâu và lịch sử phát triển.
@@ -83,9 +121,9 @@ E:\Projects\Dashboard-BCCP\
 
 ## Pending Tasks
 1. **[COMPLETED] Cập nhật Main Branch**: Đã merge nhánh `fix-top10-plan-xa` vào `main`.
-2. **[PENDING] Bổ sung dữ liệu**: Chờ Sếp nạp thêm dữ liệu 2 ngày cuối tháng 5 (30.05 - 31.05) và dữ liệu tháng 6 còn thiếu (từ 03/06 trở đi).
+2. **[COMPLETED] Bổ sung dữ liệu**: Đã nạp thêm dữ liệu 2 ngày cuối tháng 5 (30.05 - 31.05) và dữ liệu tháng 6.
 3. **[COMPLETED] Mẫu File Import**: Thiết kế lại toàn bộ 3 file mẫu import (Doanh thu, Kế hoạch 3 cấp, Dịch vụ khác) theo chuẩn mới 11/12 cột cốt lõi, xóa cột thừa, thêm sheet hướng dẫn chi tiết và thêm vào Git tracking.
-4. **[PENDING] Dọn dẹp Dữ liệu**: Xóa hoặc lưu trữ các file backup `.csv` cũ trong thư mục `data`.
+4. **[COMPLETED] Dọn dẹp Dữ liệu**: Đã xóa hoặc lưu trữ các file backup `.csv` cũ trong thư mục `data`.
 5. **[PENDING] Phase 5C**: Thiết lập deploy server nội bộ và chuyển sang PostgreSQL.
 
 ## Issues & Notes
