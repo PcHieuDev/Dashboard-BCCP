@@ -135,8 +135,10 @@ E:\Projects\Dashboard-BCCP\
 
 ## Issues & Notes
 - **Lưu ý Mã Đại diện Cụm (PHBC)**: Khi nạp dữ liệu Kế hoạch hoặc Doanh thu đặc thù cấp Cụm, bắt buộc phải dùng danh sách 18 mã đại diện như `CUM_ANHSON`, `CUM_VINH` điền vào cột "Mã bưu cục".
-- **Khóa cứng bộ lọc Ngày (Trang Tái bán & Khách hàng mới)**:
-  - Do logic tính toán KHM và Tái bán bắt buộc phải tính theo đơn vị tháng cố định, hệ thống đã khóa cứng (bằng callback) không cho chọn khoảng ngày tùy ý tại 2 trang `/bccp/new-customer` và `/bccp/retention`. Hệ thống tự động lấy ngày cuối `end_date` mà Sếp chọn và khóa bộ lọc về đúng tháng đó để tránh tính toán sai lệch dữ liệu.
+- **Hệ thống Bộ lọc Topbar mới (Thay thế bộ lọc Ngày/DatePicker cũ)**:
+  - Lược bỏ hoàn toàn bộ lọc khoảng ngày tùy chọn (`DatePickerRange`) cũ để tránh lỗi hiệu năng và xung đột dữ liệu.
+  - Hệ thống chuyển hoàn toàn sang sử dụng bộ lọc chu kỳ đặt trên Topbar toàn cục bao gồm: **Năm**, **Chu kỳ** (Tháng/Tuần), **Chọn Tháng** (dropdown từ Tháng 01 - 12) và **Chọn Tuần** (dropdown tự động cascade theo năm được chọn).
+  - Đối với các trang như Khách hàng mới (`/bccp/new-customer`) và Khách hàng hiện hữu (`/bccp/retention`), các callback lấy trực tiếp giá trị Tháng/Tuần và Năm được chọn từ Topbar để tính toán, không còn sử dụng cơ chế khóa khoảng ngày nữa.
 - **Biểu đồ biến động 12 kỳ (Line Chart 12 kỳ)**:
   - Chuyển từ dạng biểu đồ Bar chồng (Stack Bar) sang **biểu đồ đường (Line Chart) 5 đường** (đường nét liền Tổng doanh thu + 4 đường nét đứt biểu diễn các phân hệ dịch vụ BCCP, HCC, TCBC, PPBL) tại trang Tổng quan giúp trực quan hóa xu hướng rõ ràng hơn.
 - **Tính năng Native Filter**: Bật native filtering và sorting (`filter_action='native'`, `sort_action='native'`) cho tất cả các bảng dữ liệu (DataTable) giúp Sếp lọc trực tiếp trên giao diện Dashboard.
