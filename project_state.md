@@ -11,6 +11,9 @@ Dashboard doanh thu bưu chính chuyển phát (BCCP) hỗ trợ bộ lọc đa 
 - **Encoding**: UTF-8 toàn bộ
 
 ## Current State
+- **Fix "Bug Tàng Hình" Tuần & Hoàn thiện Bộ Lọc Cụm Trang Chủ (08/06/2026)**:
+  - Khắc phục lỗi Off-by-one truy xuất nhầm số liệu tuần (chọn Tuần 22 hiển thị Tuần 23) tại file `utils.py` do sử dụng sai cấu trúc index mảng thay vì đối chiếu ID tuần.
+  - Sửa lỗi Bộ lọc Địa lý (Cụm) không hoạt động ở trang Tổng quan: Bổ sung liên kết `State("sidebar-cum")` vào `global_callbacks.py` và nhúng cơ chế gọt số liệu theo Cụm (`WHERE ten_cum = ?`) vào các hàm truy vấn DB như `get_period_detail_by_xa`, `get_ytd_detail_by_xa`, `get_12_periods_revenue`.
 - **Hoàn thiện nguyên tắc kế hoạch 3 cấp & Sửa logic Top 10 (07/06/2026)**:
   - Đã xử lý triệt để lỗi tỷ lệ hoàn thành >300% ở bảng Top 10 Xã bằng cách áp dụng nguyên tắc: "Nạp cấp nào, so sánh cấp đó, cộng dồn lên cấp cao hơn".
   - Chuẩn hóa dữ liệu Kế hoạch PHBC: Đồng bộ 18 mã cụm đại diện (ví dụ `CUM_ANHSON`) vào bảng `dim_buucuc` và cập nhật dữ liệu `plans` PHBC khớp 100% với file Excel `KH-PHBC-2026.xlsx` (tổng 8,98 tỷ đồng).
@@ -141,6 +144,7 @@ E:\Projects\Dashboard-BCCP\
 3. **[COMPLETED] Mẫu File Import**: Thiết kế lại toàn bộ 3 file mẫu import (Doanh thu, Kế hoạch 3 cấp, Dịch vụ khác) theo chuẩn mới 11/12 cột cốt lõi, xóa cột thừa, thêm sheet hướng dẫn chi tiết và thêm vào Git tracking.
 4. **[COMPLETED] Dọn dẹp Dữ liệu**: Đã xóa hoặc lưu trữ các file backup `.csv` cũ trong thư mục `data`.
 5. **[PENDING] Phase 5C**: Thiết lập deploy server nội bộ và chuyển sang PostgreSQL.
+6. **[PENDING] Option B (Tái cấu trúc Database)**: Chuẩn hóa bảng `dim_dichvu` (thêm `ma_nhom_chinh`, `ma_nhom_dich_vu` thay vì dùng chuỗi tên nhóm). Hạng mục này đã được hoãn lại, chuyển vào danh sách nâng cấp sau (Backlog) khi hệ thống thực sự cần.
 
 ## Issues & Notes
 - **Lưu ý Mã Đại diện Cụm (PHBC)**: Khi nạp dữ liệu Kế hoạch hoặc Doanh thu đặc thù cấp Cụm, bắt buộc phải dùng danh sách 18 mã đại diện như `CUM_ANHSON`, `CUM_VINH` điền vào cột "Mã bưu cục".

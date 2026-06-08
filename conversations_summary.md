@@ -3,6 +3,21 @@
 > Báo cáo này đã được **sắp xếp theo thời gian chỉnh sửa mới nhất (Từ gần đây nhất đến cũ nhất)**.
 > Các cuộc trò chuyện ở phía trên có thời gian cập nhật muộn hơn, do đó chứa các quyết định và chỉnh sửa **có độ ưu tiên cao hơn**, ghi đè lên các thay đổi hoặc logic cũ ở các cuộc trò chuyện phía dưới.
 
+## Cuộc trò chuyện `9daa9c1a-c27d-4cc7-90b8-48b54582ccf2` (Hiện tại)
+- **Thời gian chỉnh sửa cuối:** `08/06/2026 17:25:00`
+
+### 📋 Tóm tắt các lỗi đã fix (Off-by-one & Bộ lọc Cụm Trang Chủ)
+- **Fix "Bug tàng hình" Tuần (Off-by-one Bug)**: Sửa lỗi lấy nhầm số liệu tuần (chọn tuần 22 ra số liệu tuần 23) tại `dash_app/callbacks/utils.py`. Đổi từ logic truy xuất bằng chỉ mục (index) mảng sang đối chiếu chính xác ID của tuần (`w_num == week_idx`), đảm bảo kết quả lọc theo Tuần tuyệt đối chính xác.
+- **Sửa lỗi bộ lọc Địa lý (Cụm) không hoạt động ở Trang Chủ**:
+  - **Nguyên nhân**: Kiến trúc truy vấn chia làm 2 nhánh. Trang `/bccp` dùng `query_revenue` lọc rất chặt chẽ, nhưng Trang Chủ (Overview) lại dùng các hàm tổng hợp rút gọn (`get_period_detail_by_xa`, `get_ytd_detail_by_xa`, `get_top10_by_comparison`, `get_12_periods_revenue`) truy vấn trực tiếp vào DB mà không hề nhận tham số `cum`, nên lúc nào cũng hiển thị "Toàn tỉnh".
+  - **Đã khắc phục**: 
+    1. Sửa file `global_callbacks.py` để bổ sung kết nối giá trị `State("sidebar-cum")` cho các Bảng chi tiết (A/B), Top 10 và biểu đồ 12 kỳ.
+    2. Viết lại các hàm `get_period_detail_by_xa`, `get_ytd_detail_by_xa`, `get_12_periods_revenue` trong `analytics/global_metrics.py` để nhận tham số `cum` và nhúng lệnh `WHERE ten_cum = ?` khi JOIN với `dim_buucuc`, giúp gọt số liệu khớp 100% với Cụm người dùng chọn trên Topbar.
+- **Quyết định hoãn Option B (Tái cấu trúc Database)**: Thống nhất chuyển hạng mục chuẩn hóa bảng `dim_dichvu` (bổ sung `ma_nhom_chinh`, `ma_nhom_dich_vu`) vào danh sách nâng cấp sau (Backlog), tương tự như Phase 5C, do hệ thống hiện tại chưa thực sự cần thiết.
+- **Git Push**: Đã gom lại thành commit và sử dụng `dong_bo_len_github.bat` để push thành công lên GitHub kho lưu trữ chính.
+
+---
+
 ## 1. Cuộc trò chuyện `0e8282d5-2785-4f9f-bef6-05f7358b3c35`
 - **Thời gian chỉnh sửa cuối:** `08/06/2026 15:21:52`
 
