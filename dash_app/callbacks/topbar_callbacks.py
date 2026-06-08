@@ -144,10 +144,13 @@ def register_topbar_callbacks(app):
         [Output("sidebar-cum", "options"),
          Output("sidebar-cum", "value"),
          Output("sidebar-cum", "disabled")],
-        [Input("url", "pathname")]
+        [Input("url", "pathname")],
+        [State("global-filters-store", "data")]
     )
-    def apply_user_permissions(pathname):
+    def apply_user_permissions(pathname, store_data):
         assigned_cum = get_user_cum()
+        stored_cum = store_data.get('cum', "Tất cả") if store_data else "Tất cả"
+        
         if assigned_cum:
             # Khóa cụm được phân quyền
             options = [{"label": assigned_cum, "value": assigned_cum}]
@@ -155,7 +158,7 @@ def register_topbar_callbacks(app):
         else:
             # Admin: hiển thị đầy đủ cụm
             if not DB_PATH.exists():
-                return [{"label": "Tất cả Cụm", "value": "Tất cả"}], "Tất cả", False
+                return [{"label": "Tất cả Cụm", "value": "Tất cả"}], stored_cum, False
                 
             conn = sqlite3.connect(str(DB_PATH))
             try:
@@ -167,4 +170,52 @@ def register_topbar_callbacks(app):
                 options = [{"label": "Tất cả Cụm", "value": "Tất cả"}]
             finally:
                 conn.close()
-            return options, "Tất cả", False
+            return options, stored_cum, False
+
+
+    # 6. Dong bo trang thai vao Store va nguoc lai
+    @app.callback(
+        Output('global-filters-store', 'data'),
+        [Input('sidebar-year', 'value'),
+         Input('sidebar-period', 'value'),
+         Input('sidebar-week-select', 'value'),
+         Input('sidebar-month-select', 'value'),
+         Input('sidebar-cum', 'value'),
+         Input('sidebar-bdx', 'value'),
+         Input('sidebar-buu-cuc', 'value')],
+        State('global-filters-store', 'data'),
+    )
+    def save_to_store(y, p, w, m, c, b, bc, data):
+        new_data = {
+            'year': y, 'period': p, 'week': w, 'month': m,
+            'cum': c, 'bdx': b, 'buucuc': bc
+        }
+        if data == new_data:
+            from dash import no_update
+            return no_update
+        return new_data
+
+    @app.callback(
+        [Output('sidebar-year', 'value', allow_duplicate=True),
+         Output('sidebar-period', 'value', allow_duplicate=True),
+         Output('sidebar-week-select', 'value', allow_duplicate=True),
+         Output('sidebar-month-select', 'value', allow_duplicate=True),
+         Output('sidebar-cum', 'value', allow_duplicate=True),
+         Output('sidebar-bdx', 'value', allow_duplicate=True),
+         Output('sidebar-buu-cuc', 'value', allow_duplicate=True)],
+        [Input('global-filters-store', 'data')],
+        prevent_initial_call=True
+    )
+    def load_from_store(data):
+        from dash import no_update
+        if not data:
+            return no_update
+        return (
+            data.get('year', no_update),
+            data.get('period', no_update),
+            data.get('week', no_update),
+            data.get('month', no_update),
+            data.get('cum', no_update),
+            data.get('bdx', no_update),
+            data.get('buucuc', no_update)
+        )

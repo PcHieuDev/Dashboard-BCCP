@@ -585,7 +585,7 @@ def get_top10_by_comparison(conn, period_type, period_value, year, compare_type,
     return df_final[['ten_cum', 'ten_bdx', 'ratio']]
 
 
-def get_12_periods_revenue(conn, period_type, current_period, current_year):
+def get_12_periods_revenue(conn, period_type, current_period, current_year, cum=None):
     """
     Truy vấn dữ liệu doanh thu của 12 kỳ liên tiếp tính đến kỳ hiện tại.
     Trả về DataFrame có: label (ví dụ: 'T01/2026' hoặc 'Tuần 12'), BCCP, HCC, TCBC, PPBL
@@ -619,7 +619,7 @@ def get_12_periods_revenue(conn, period_type, current_period, current_year):
         
         if period_type == 'Tháng':
             query = """
-                SELECT COALESCE(d.nhom_chinh, 'Khác') as nhom_chinh_group, SUM(a.tong_doanh_thu) as dt
+                SELECT COALESCE(d.nhom_chinh, 'Khác') as nhom_dich_vu, SUM(a.tong_doanh_thu)
                 FROM agg_monthly a
                 LEFT JOIN dim_dichvu d ON a.nhom_dich_vu = d.nhom_dich_vu OR a.nhom_dich_vu = d.ten_dich_vu OR d.ten_dich_vu LIKE a.nhom_dich_vu || '%'
                 WHERE a.nam = ? AND a.thang = ?
@@ -647,7 +647,7 @@ def get_12_periods_revenue(conn, period_type, current_period, current_year):
     return pd.DataFrame(result_data)
 
 
-def get_period_detail_by_xa(conn, period_type, period_value, year):
+def get_period_detail_by_xa(conn, period_type, period_value, year, cum=None):
     """
     Lấy chi tiết doanh thu theo bưu cục/xã bao gồm cả 4 dịch vụ ở kỳ hiện tại, kỳ trước, cùng kỳ và kế hoạch.
     Trả về DataFrame chi tiết cho từng xã để render lên bảng hiển thị.
@@ -665,7 +665,7 @@ def get_period_detail_by_xa(conn, period_type, period_value, year):
             prev_year = year - 1
             weeks = calendar_helper.get_week_list(prev_year)
             prev_value = weeks[-1][0] if weeks else 52
-            return prev_value, prev_yr
+            return prev_value, prev_year
         else:
             prev_year = year
             prev_value = period_value - 1
@@ -745,18 +745,25 @@ def get_period_detail_by_xa(conn, period_type, period_value, year):
     df_merge = df_merge.fillna(0.0)
     
     # 7. Join với danh mục địa lý dim_buucuc
-    df_buucuc = pd.read_sql_query("SELECT ma_bc as buu_cuc, ten_bdx, ten_cum, ma_bdx FROM dim_buucuc", conn)
+    sql_dim = "SELECT ma_bc as buu_cuc, ten_bdx, ten_cum, ma_bdx FROM dim_buucuc"
+    params_dim = []
+    if cum and cum != "Tất cả":
+        sql_dim += " WHERE ten_cum = ?"
+        params_dim.append(cum)
+        
+    df_buucuc = pd.read_sql_query(sql_dim, conn, params=params_dim)
     df_final = pd.merge(df_merge, df_buucuc, on='buu_cuc', how='inner')
     
     # Gộp bưu cục cùng xã lại
-    df_final = df_final.groupby(['ten_cum', 'ten_bdx', 'ma_bdx'], as_index=False)[
-        ['BCCP', 'HCC', 'TCBC', 'PPBL', 'tong_dt', 'dt_prev', 'dt_yoy', 'plan_dt']
-    ].sum()
+    if not df_final.empty:
+        df_final = df_final.groupby(['ten_cum', 'ten_bdx', 'ma_bdx'], as_index=False)[
+            ['BCCP', 'HCC', 'TCBC', 'PPBL', 'tong_dt', 'dt_prev', 'dt_yoy', 'plan_dt']
+        ].sum()
     
     return df_final
 
 
-def get_ytd_detail_by_xa(conn, period_type, period_value, year):
+def get_ytd_detail_by_xa(conn, period_type, period_value, year, cum=None):
     """
     Tương tự như get_period_detail_by_xa nhưng tính lũy kế YTD từ đầu năm (tháng 1 hoặc tuần 1) đến kỳ hiện tại.
     """
@@ -848,13 +855,20 @@ def get_ytd_detail_by_xa(conn, period_type, period_value, year):
     df_merge = df_merge.fillna(0.0)
     
     # 7. Join với danh mục địa lý dim_buucuc
-    df_buucuc = pd.read_sql_query("SELECT ma_bc as buu_cuc, ten_bdx, ten_cum, ma_bdx FROM dim_buucuc", conn)
+    sql_dim = "SELECT ma_bc as buu_cuc, ten_bdx, ten_cum, ma_bdx FROM dim_buucuc"
+    params_dim = []
+    if cum and cum != "Tất cả":
+        sql_dim += " WHERE ten_cum = ?"
+        params_dim.append(cum)
+        
+    df_buucuc = pd.read_sql_query(sql_dim, conn, params=params_dim)
     df_final = pd.merge(df_merge, df_buucuc, on='buu_cuc', how='inner')
     
     # Gộp bưu cục cùng xã lại
-    df_final = df_final.groupby(['ten_cum', 'ten_bdx', 'ma_bdx'], as_index=False)[
-        ['BCCP', 'HCC', 'TCBC', 'PPBL', 'tong_dt', 'dt_prev', 'dt_yoy', 'plan_dt']
-    ].sum()
+    if not df_final.empty:
+        df_final = df_final.groupby(['ten_cum', 'ten_bdx', 'ma_bdx'], as_index=False)[
+            ['BCCP', 'HCC', 'TCBC', 'PPBL', 'tong_dt', 'dt_prev', 'dt_yoy', 'plan_dt']
+        ].sum()
     
     return df_final
 

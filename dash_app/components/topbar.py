@@ -124,7 +124,8 @@ def create_topbar_layout(filter_opts: dict) -> html.Div:
             className="topbar-apply-btn"
         ),
         # Các dcc.Store tương thích ngược phục vụ các trang chưa chuyển đổi inline
-        dcc.Store(id="sidebar-compare-mode", data=["prev_period"]),
+        dcc.Store(id="global-filters-store", storage_type="memory"),
+        dcc.Store(id="sidebar-compare-mode", data=["prev_period", "yoy"]),
         dcc.Store(id="sidebar-nhom-dv", data=None),
         dcc.Store(id="sidebar-loai-kh", data=[]),
         dcc.Store(id="sidebar-hop-dong", data=[])

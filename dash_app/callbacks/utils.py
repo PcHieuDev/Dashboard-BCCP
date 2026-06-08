@@ -201,10 +201,14 @@ def resolve_filters_and_query_customer(year, period, date_range_start, date_rang
         date_to = date.fromisoformat(date_range_end) if date_range_end else date(year, 1, 31)
     elif period == "Tuần":
         weeks = get_week_list(year)
-        if week_idx is not None and 0 <= week_idx < len(weeks):
-            w_num, w_start, w_end = weeks[week_idx]
-            date_from, date_to = w_start, w_end
-        else:
+        found = False
+        if week_idx is not None:
+            for w_num, w_start, w_end in weeks:
+                if w_num == week_idx:
+                    date_from, date_to = w_start, w_end
+                    found = True
+                    break
+        if not found:
             date_from, date_to = date(year, 1, 1), date(year, 1, 7)
     else: # Tháng
         date_column = 'thang_du_lieu'
@@ -276,10 +280,14 @@ def resolve_filters_and_query(year, period, date_range_start, date_range_end, we
         date_to = date.fromisoformat(date_range_end) if date_range_end else date(year, 1, 31)
     elif period == "Tuần":
         weeks = get_week_list(year)
-        if week_idx is not None and 0 <= week_idx < len(weeks):
-            w_num, w_start, w_end = weeks[week_idx]
-            date_from, date_to = w_start, w_end
-        else:
+        found = False
+        if week_idx is not None:
+            for w_num, w_start, w_end in weeks:
+                if w_num == week_idx:
+                    date_from, date_to = w_start, w_end
+                    found = True
+                    break
+        if not found:
             date_from, date_to = date(year, 1, 1), date(year, 1, 7)
     else: # Tháng
         date_column = 'thang_du_lieu'

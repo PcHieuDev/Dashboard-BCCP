@@ -41,22 +41,74 @@ def get_prev_period_info(period_type, period_value, year):
             return prev_val, prev_yr
         return period_value - 1, year
 
-def get_plans_current_period(db_path, period_type, period_value, year):
+def get_plans_current_period(db_path, period_type, period_value, year, cum=None):
     """Lấy kế hoạch doanh thu của 4 dịch vụ trong kỳ hiện tại"""
     res = {"BCCP": 0.0, "HCC": 0.0, "TCBC": 0.0, "PPBL": 0.0}
     conn = sqlite3.connect(str(db_path))
     try:
+        table = 'plans' if period_type == 'Tháng' else 'plans_weekly'
+        time_col = 'thang' if period_type == 'Tháng' else 'tuan_so'
+        
+        sql = f"SELECT nhom_dich_vu, SUM(ke_hoach_doanh_thu) FROM {table}"
+        where = ["nam = ?", f"{time_col} = ?"]
+        params = [year, period_value]
+        
+        if cum and cum != "Tất cả" and cum != "Tất cả Cụm":
+            sql += f" INNER JOIN dim_buucuc b ON {table}.ma_buu_cuc = b.ma_bc"
+            where.append("b.ten_cum = ?")
+            params.append(cum)
+            
+        sql += " WHERE " + " AND ".join(where) + " GROUP BY nhom_dich_vu"
+        
         cursor = conn.cursor()
-        if period_type == 'Tháng':
-            sql = "SELECT nhom_dich_vu, SUM(ke_hoach_doanh_thu) FROM plans WHERE nam = ? AND thang = ? GROUP BY nhom_dich_vu"
-        else:
-            sql = "SELECT nhom_dich_vu, SUM(ke_hoach_doanh_thu) FROM plans_weekly WHERE nam = ? AND tuan_so = ? GROUP BY nhom_dich_vu"
-        cursor.execute(sql, (year, period_value))
+        cursor.execute(sql, params)
         for r in cursor.fetchall():
             if r[0] in res:
-                res[r[0]] = r[1] or 0.0
+                res[r[0]] += r[1] or 0.0
     except Exception as e:
         print(f"Lỗi lấy kế hoạch kỳ: {e}")
+    finally:
+        conn.close()
+    return res
+
+def get_aggregated_revenue(db_path, cycle, year, period_val, cum=None):
+    """Tính tổng doanh thu từ bảng agg_monthly/agg_weekly theo 4 nhóm dịch vụ chính, có bộ lọc Cụm"""
+    res = {"BCCP": 0.0, "HCC": 0.0, "TCBC": 0.0, "PPBL": 0.0}
+    conn = sqlite3.connect(str(db_path))
+    try:
+        table = 'agg_monthly' if cycle == 'Tháng' else 'agg_weekly'
+        time_col = 'thang' if cycle == 'Tháng' else 'tuan_so'
+        
+        sql = f"""
+            SELECT COALESCE(
+                (SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 
+                'Khác'
+            ) as nhom, SUM(a.tong_doanh_thu)
+            FROM {table} a
+        """
+        where = ["a.nam = ?", f"a.{time_col} = ?"]
+        params = [year, period_val]
+        
+        if cum and cum != "Tất cả" and cum != "Tất cả Cụm":
+            sql += " INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc"
+            where.append("b.ten_cum = ?")
+            params.append(cum)
+            
+        sql += " WHERE " + " AND ".join(where)
+        sql += """ GROUP BY COALESCE(
+            (SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 
+            'Khác'
+        )"""
+        
+        cursor = conn.cursor()
+        cursor.execute(sql, params)
+        for row in cursor.fetchall():
+            nhom = row[0]
+            val = row[1] or 0.0
+            if nhom in res:
+                res[nhom] += val
+    except Exception as e:
+        print(f"Lỗi tính doanh thu aggregated: {e}")
     finally:
         conn.close()
     return res
@@ -252,46 +304,17 @@ def register_global_callbacks(app):
         try:
             # 1. KPI Calculation
             # Doanh thu hiện tại
-            rev_cur = get_total_revenue_by_service(DB_PATH, year, period_val if cycle == 'Tháng' else None)
+            rev_cur = get_aggregated_revenue(DB_PATH, cycle, year, period_val, cum)
             
-            # Với tuần, ta phải query tổng doanh thu tuần từ agg_weekly
-            if cycle == 'Tuần':
-                rev_cur = {"BCCP": 0.0, "HCC": 0.0, "TCBC": 0.0, "PPBL": 0.0}
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT nhom_dich_vu, SUM(tong_doanh_thu) 
-                    FROM agg_weekly 
-                    WHERE nam = ? AND tuan_so = ?
-                    GROUP BY nhom_dich_vu
-                """, (year, period_val))
-                for nhom, dt in cursor.fetchall():
-                    if nhom in rev_cur:
-                        rev_cur[nhom] = dt or 0.0
-                        
             # Doanh thu kỳ trước
             prev_val, prev_yr = get_prev_period_info(cycle, period_val, year)
-            rev_prev = {"BCCP": 0.0, "HCC": 0.0, "TCBC": 0.0, "PPBL": 0.0}
-            cursor = conn.cursor()
-            if cycle == 'Tháng':
-                cursor.execute("SELECT nhom_dich_vu, SUM(tong_doanh_thu) FROM agg_monthly WHERE nam = ? AND thang = ? GROUP BY nhom_dich_vu", (prev_yr, prev_val))
-            else:
-                cursor.execute("SELECT nhom_dich_vu, SUM(tong_doanh_thu) FROM agg_weekly WHERE nam = ? AND tuan_so = ? GROUP BY nhom_dich_vu", (prev_yr, prev_val))
-            for nhom, dt in cursor.fetchall():
-                if nhom in rev_prev:
-                    rev_prev[nhom] = dt or 0.0
+            rev_prev = get_aggregated_revenue(DB_PATH, cycle, prev_yr, prev_val, cum)
                     
             # Doanh thu cùng kỳ năm trước
-            rev_yoy = {"BCCP": 0.0, "HCC": 0.0, "TCBC": 0.0, "PPBL": 0.0}
-            if cycle == 'Tháng':
-                cursor.execute("SELECT nhom_dich_vu, SUM(tong_doanh_thu) FROM agg_monthly WHERE nam = ? AND thang = ? GROUP BY nhom_dich_vu", (year - 1, period_val))
-            else:
-                cursor.execute("SELECT nhom_dich_vu, SUM(tong_doanh_thu) FROM agg_weekly WHERE nam = ? AND tuan_so = ? GROUP BY nhom_dich_vu", (year - 1, period_val))
-            for nhom, dt in cursor.fetchall():
-                if nhom in rev_yoy:
-                    rev_yoy[nhom] = dt or 0.0
+            rev_yoy = get_aggregated_revenue(DB_PATH, cycle, year - 1, period_val, cum)
                     
             # Kế hoạch kỳ hiện tại
-            rev_plan = get_plans_current_period(DB_PATH, cycle, period_val, year)
+            rev_plan = get_plans_current_period(DB_PATH, cycle, period_val, year, cum)
             
             kpi_outputs = []
             for service in ["BCCP", "HCC", "TCBC", "PPBL"]:
@@ -335,16 +358,16 @@ def register_global_callbacks(app):
                 ])
                 
             # 2. Top 10 Tables
-            df_top_prev = get_top10_by_comparison(conn, cycle, period_val, year, 'prev')
-            df_top_yoy = get_top10_by_comparison(conn, cycle, period_val, year, 'yoy')
-            df_top_plan = get_top10_by_comparison(conn, cycle, period_val, year, 'plan')
+            df_top_prev = get_top10_by_comparison(conn, cycle, period_val, year, 'prev', cum)
+            df_top_yoy = get_top10_by_comparison(conn, cycle, period_val, year, 'yoy', cum)
+            df_top_plan = get_top10_by_comparison(conn, cycle, period_val, year, 'plan', cum)
             
             top10_prev_layout = create_top10_table(df_top_prev)
             top10_yoy_layout = create_top10_table(df_top_yoy)
             top10_plan_layout = create_top10_table(df_top_plan)
             
             # 3. 12 Periods Graph — Line chart (5 lines: Tổng + 4 nhóm dịch vụ)
-            df_12p = get_12_periods_revenue(conn, cycle, period_val, year)
+            df_12p = get_12_periods_revenue(conn, cycle, period_val, year, cum)
             
             fig = go.Figure()
             if not df_12p.empty:
@@ -403,17 +426,18 @@ def register_global_callbacks(app):
             State("sidebar-year", "value"),
             State("sidebar-month-select", "value"),
             State("sidebar-week-select", "value"),
-            State("sidebar-period", "value")
+            State("sidebar-period", "value"),
+            State("sidebar-cum", "value")
         ]
     )
-    def update_table_a(n_clicks, compare_type, year, month, week, cycle):
+    def update_table_a(n_clicks, compare_type, year, month, week, cycle, cum):
         if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week):
             return html.Div("Vui lòng chọn bộ lọc thời gian để xem chi tiết.")
             
         period_val = month if cycle == 'Tháng' else week
         conn = sqlite3.connect(str(DB_PATH))
         try:
-            df = get_period_detail_by_xa(conn, cycle, period_val, year)
+            df = get_period_detail_by_xa(conn, cycle, period_val, year, cum)
             return create_detail_table(df, compare_type)
         except Exception as e:
             return html.Div(f"Lỗi load bảng kỳ hiện tại: {e}")
@@ -431,17 +455,18 @@ def register_global_callbacks(app):
             State("sidebar-year", "value"),
             State("sidebar-month-select", "value"),
             State("sidebar-week-select", "value"),
-            State("sidebar-period", "value")
+            State("sidebar-period", "value"),
+            State("sidebar-cum", "value")
         ]
     )
-    def update_table_b(n_clicks, compare_type, year, month, week, cycle):
+    def update_table_b(n_clicks, compare_type, year, month, week, cycle, cum):
         if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week):
             return html.Div("Vui lòng chọn bộ lọc thời gian để xem chi tiết.")
             
         period_val = month if cycle == 'Tháng' else week
         conn = sqlite3.connect(str(DB_PATH))
         try:
-            df = get_ytd_detail_by_xa(conn, cycle, period_val, year)
+            df = get_ytd_detail_by_xa(conn, cycle, period_val, year, cum)
             return create_detail_table(df, compare_type)
         except Exception as e:
             return html.Div(f"Lỗi load bảng lũy kế YTD: {e}")

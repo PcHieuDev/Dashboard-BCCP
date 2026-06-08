@@ -80,11 +80,19 @@ def register_sidebar_callbacks(app):
         
         bccp_filter_style = {"display": "block"} if (pathname and pathname.startswith("/bccp")) else {"display": "none"}
         
-        # Xác định active accordion item: Chỉ mở khi ở trang BCCP, các trang khác thì đóng
-        if pathname and pathname.startswith("/bccp"):
+        # Xác định active accordion item: Mở theo từng nhóm trang
+        if not pathname or pathname == "/":
+            active_accordion = ""
+        elif pathname.startswith("/bccp"):
             active_accordion = "menu-bccp"
+        elif pathname.startswith("/hcc"):
+            active_accordion = "menu-hcc"
+        elif pathname.startswith("/tcbc"):
+            active_accordion = "menu-tcbc"
+        elif pathname.startswith("/ppbl"):
+            active_accordion = "menu-ppbl"
         else:
-            active_accordion = None
+            active_accordion = ""
                 
         # Highlight active menu link
         if not pathname or pathname == "/":

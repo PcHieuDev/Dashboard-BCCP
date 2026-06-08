@@ -231,6 +231,7 @@ def register_kpi_callbacks(app):
         df_prev = pd.DataFrame()
         if compare_mode in ('prev_period', 'both'):
             prev_from, prev_to = get_prev_period(period, date_from, date_to)
+            prev_year = prev_from.year if prev_from else None
             
             # Kết nối DB để thực hiện query riêng cho kỳ trước
             conn_tmp = sqlite3.connect(str(DB_PATH))
@@ -242,7 +243,7 @@ def register_kpi_callbacks(app):
                 df_prev = query_revenue(
                     conn=conn_tmp, date_from=prev_from, date_to=prev_to, date_column=date_column,
                     nhom_dv=nhom_dv, dich_vu=spdv, cum=cum_f, bdx=bdx_f, buu_cuc=bc_f, loai_kh=loai_kh, hop_dong=hd_f,
-                    group_by_primary='nhom_dv', compare_prev=False
+                    group_by_primary='nhom_dv', compare_prev=False, nam=prev_year
                 )
             except Exception as e:
                 print(f"Error querying prev period KPI: {e}")
