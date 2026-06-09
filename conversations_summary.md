@@ -3,144 +3,71 @@
 > Báo cáo này đã được **sắp xếp theo thời gian chỉnh sửa mới nhất (Từ gần đây nhất đến cũ nhất)**.
 > Các cuộc trò chuyện ở phía trên có thời gian cập nhật muộn hơn, do đó chứa các quyết định và chỉnh sửa **có độ ưu tiên cao hơn**, ghi đè lên các thay đổi hoặc logic cũ ở các cuộc trò chuyện phía dưới.
 
-## Cuộc trò chuyện `9daa9c1a-c27d-4cc7-90b8-48b54582ccf2` (Hiện tại)
-- **Thời gian chỉnh sửa cuối:** `08/06/2026 17:25:00`
-
-### 📋 Tóm tắt các lỗi đã fix (Off-by-one & Bộ lọc Cụm Trang Chủ)
-- **Fix "Bug tàng hình" Tuần (Off-by-one Bug)**: Sửa lỗi lấy nhầm số liệu tuần (chọn tuần 22 ra số liệu tuần 23) tại `dash_app/callbacks/utils.py`. Đổi từ logic truy xuất bằng chỉ mục (index) mảng sang đối chiếu chính xác ID của tuần (`w_num == week_idx`), đảm bảo kết quả lọc theo Tuần tuyệt đối chính xác.
-- **Sửa lỗi bộ lọc Địa lý (Cụm) không hoạt động ở Trang Chủ**:
-  - **Nguyên nhân**: Kiến trúc truy vấn chia làm 2 nhánh. Trang `/bccp` dùng `query_revenue` lọc rất chặt chẽ, nhưng Trang Chủ (Overview) lại dùng các hàm tổng hợp rút gọn (`get_period_detail_by_xa`, `get_ytd_detail_by_xa`, `get_top10_by_comparison`, `get_12_periods_revenue`) truy vấn trực tiếp vào DB mà không hề nhận tham số `cum`, nên lúc nào cũng hiển thị "Toàn tỉnh".
-  - **Đã khắc phục**: 
-    1. Sửa file `global_callbacks.py` để bổ sung kết nối giá trị `State("sidebar-cum")` cho các Bảng chi tiết (A/B), Top 10 và biểu đồ 12 kỳ.
-    2. Viết lại các hàm `get_period_detail_by_xa`, `get_ytd_detail_by_xa`, `get_12_periods_revenue` trong `analytics/global_metrics.py` để nhận tham số `cum` và nhúng lệnh `WHERE ten_cum = ?` khi JOIN với `dim_buucuc`, giúp gọt số liệu khớp 100% với Cụm người dùng chọn trên Topbar.
-- **Quyết định hoãn Option B (Tái cấu trúc Database)**: Thống nhất chuyển hạng mục chuẩn hóa bảng `dim_dichvu` (bổ sung `ma_nhom_chinh`, `ma_nhom_dich_vu`) vào danh sách nâng cấp sau (Backlog), tương tự như Phase 5C, do hệ thống hiện tại chưa thực sự cần thiết.
-- **Git Push**: Đã gom lại thành commit và sử dụng `dong_bo_len_github.bat` để push thành công lên GitHub kho lưu trữ chính.
-
----
-
-## 1. Cuộc trò chuyện `0e8282d5-2785-4f9f-bef6-05f7358b3c35`
-- **Thời gian chỉnh sửa cuối:** `08/06/2026 15:21:52`
+## 1. Cuộc trò chuyện `4418f2b8-bd26-4dce-93db-1d6d4c635942`
+- **Thời gian chỉnh sửa cuối:** `08/06/2026 15:50:57`
 
 ### 📋 Tóm tắt từ Walkthrough
-> # Báo cáo kết quả lọc dữ liệu sản phẩm CTN031 (T1 - T5)
-> Tôi đã hoàn thành việc lọc toàn bộ các bản ghi của sản phẩm **CTN031** từ 5 file kết quả gộp tháng trong thư mục [ket-qua-gop-tung-thang](file:///e:/OneDrive/TTKD - Công việc hàng ngày/0. KHM, tai ban hang thang/chi-tiet-KH-hopdong-loaidichvu/du-lieu-goc-4.2.4-casreport/ket-qua-gop-tung-thang) và xuất dữ liệu sang thư mục **[output_theo_yeu_cau](file:///e:/OneDrive/TTKD - Công việc hàng ngày/0. KHM, tai ban hang thang/chi-tiet-KH-hopdong-loaidichvu/du-lieu-goc-4.2.4-casreport/output_theo_yeu_cau)**.
+> # Báo cáo Điều chỉnh Giao dịch Doanh thu & Sửa lỗi Dashboard
+> ## Nội dung thực hiện
+> Đã hoàn thành việc tìm kiếm, sao lưu, điều chỉnh ngày của giao dịch điều chỉnh doanh thu, cập nhật lại toàn bộ các bảng tổng hợp báo cáo (summary tables) và sửa lỗi crash khi khởi động ứng dụng.
+> ### 1. Chi tiết Giao dịch được điều chỉnh
+> * **Mã khách hàng (CMS)**: `C002362753`
+> * **Mã hợp đồng**: `306-BCCP/BĐDC`
+> * **Bưu cục**: `464080` (sản phẩm `CTN007`)
+> * **Mã ID dòng dữ liệu trong DB**: `704676`
+> * **Nội dung thay đổi**:
+> * Ngày ghi nhận cũ: `01/10/2025` (Tháng 10 - `T10`)
+> * Ngày ghi nhận mới: `30/09/2025` (Tháng 9 - `T09`)
+> * Giá trị cước (chưa VAT): **-7.421.946.780đ** (gồm VAT: **-8.015.702.522đ**)
+> ### 2. Hiệu quả điều chỉnh số liệu
+> * **Trước khi điều chỉnh**:
+> * Tháng 9/2025 có một giao dịch ghi nhận doanh thu dương cực lớn là **+7.423.645.880đ** (ID: `697065`) làm doanh thu tháng 9 vọt lên bất thường.
+> * Tháng 10/2025 lại gánh giao dịch âm **-7.421.946.780đ** (ID: `704676`) làm doanh thu tháng 10 bị kéo giảm nghiêm trọng (âm nặng).
+> * **Sau khi điều chỉnh**:
+> * Giao dịch âm được chuyển về ngày `30/09/2025` để đối trừ trực tiếp với giao dịch dương cùng kỳ.
+> * Doanh thu thực tế của khách hàng `C002362753` trong tháng 9/2025 sau khi đối trừ là **2.302.800đ**.
+> * Doanh thu tháng 10/2025 được trả lại đúng giá trị thực tế là **657.200đ** (không còn bị âm do giao dịch điều chỉnh).
 > ---
-> ## Kết quả lọc sản phẩm CTN031
-> Hệ thống đã quét qua dữ liệu của cả 5 tháng và tìm thấy tổng cộng **8 dòng** dữ liệu chi tiết có mã sản phẩm `CTN031` ở cột E:
-> * **Tháng 1 (T1):** Tìm thấy **1 dòng**
-> * **Tháng 2 (T2):** Tìm thấy **2 dòng**
-> * **Tháng 3 (T3):** Tìm thấy **1 dòng**
-> * **Tháng 4 (T4):** Tìm thấy **2 dòng**
-> * **Tháng 5 (T5):** Tìm thấy **2 dòng**
-> => **Tổng số dòng đã lọc:** **8 dòng** dữ liệu.
-> Các dòng dữ liệu đã được tự động sắp xếp theo thứ tự **Ngày chấp nhận** (cột F) và **Mã CMS** (cột B) để dễ theo dõi.
-> ---
-> ## Thông tin file kết quả đầu ra
-> * **Tên file kết quả:** **[Loc_CTN031_T1_T5.xlsx](file:///e:/OneDrive/TTKD - Công việc hàng ngày/0. KHM, tai ban hang thang/chi-tiet-KH-hopdong-loaidichvu/du-lieu-goc-4.2.4-casreport/output_theo_yeu_cau/Loc_CTN031_T1_T5.xlsx)**
-
-### 📐 Tóm tắt từ Bản thiết kế (Plan)
-> # Kế hoạch tổng hợp dữ liệu từ mau-test.xls sang mau-tonghop-dulieu.xlsx (Cập nhật logic nhóm CMS)
-> Tài liệu này bổ sung phương án sửa đổi logic nhận diện dòng nhóm để khắc phục lỗi gán nhầm mã CMS của khách hàng trước đó cho các nhóm không có mã CMS (ví dụ nhóm `1.313`).
-> ---
-> ## User Review Required
-> > [!IMPORTANT]
-> > Phương án sửa đổi logic nhận diện dòng nhóm đã được người dùng phê duyệt thông qua hội thoại trực tuyến ngày 28/05/2026.
-> ### Logic sửa đổi nhận diện dòng nhóm
-> * **Lỗi hiện tại:**
-> Chỉ cập nhật mã CMS khi cột B có giá trị (`val_b != ""`) và cột D rỗng. Khi gặp nhóm mới không có mã CMS (cột B và D đều rỗng), kịch bản bỏ qua và giữ nguyên mã CMS cũ của khách hàng liền trước, dẫn đến việc gán nhầm dữ liệu chi tiết vào khách hàng đó.
 
 ### 💬 Nội dung trao đổi chính của Sếp
-- *Yêu cầu:* "bạn có thấy các thư mục con trong project không
+- *Yêu cầu:* "`E:\Projects\Dashboard-BCCP\data\dieu-chinh\dieu-chinh-30-09-va-01-10.xlsx`
+
+kiểm tra trong database tháng 10/2025 có dòng nào có nội dung như thế này thì chuyển thời gian của dòng dữ liệu ấy sang 30/09/2025 nhé, đây là 1 giao dịch điều chỉnh, nhưng ..."
+- *Yêu cầu:* "đã tìm được và điều chỉnh chưa?
 
 
-The current local time is: 2026-05-27T18:46:36+07:00.
+The current local time is: 2026-06-07T19:17:37+07:00...."
+- *Yêu cầu:* "chạy dashboard nào
 
 
-The user changed setting `Model Selection` from None to Gemini 3.5 Flash (High). No need to comment on this change if the user doesn't ask about..."
-- *Yêu cầu:* "tôi muốn tag 1 file cụ thể thì làm như thế nào
+The current local time is: 2026-06-07T19:21:17+07:00...."
+- *Yêu cầu:* "restart dashboard nhé
 
 
-The current local time is: 2026-05-28T11:26:51+07:00...."
-- *Yêu cầu:* "/grill-me tôi muốn tạo 1 file tổng hợp dữ liệu từ data có sẵn, mẫu tôi thiết kế ở file @[mau-tonghop-dulieu.xlsx]
-dữ liệu nguồn: tôi đã tạo 1 bản đơn giản là file @[mau-test.xls] 
-bạn giúp tôi được không
+The current local time is: 2026-06-07T21:43:20+07:00...."
+- *Yêu cầu:* "kéo dữ liệu bảng plan ra 1 file excel giúp tôi, để trong `E:\Projects\Dashboard-BCCP\data\du-lieu-tu-DB` nhé
 
 
-The current local time is: 2026-05-28T11:29:..."
-- *Yêu cầu:* "tuy nhiên tôi còn 1 vấn đề liên quan đến file nguồn:
-- file nguồn trình bày theo định dạng nội dung cột B (mã CMS) chỉ hiển thị ở dòng trên cùng, các dòng chi tiết ở phía dưới sẽ không có nội dung ở cột B, làm cách nào để có thể cộng được cho đúng
-- ..."
-- *Yêu cầu:* "chạy lại quy trình 1 lần nữa giúp tôi, tôi mới điều chỉnh file nguồn 1 chút
+The current local time is: 2026-06-07T22:31:42+07:00...."
+- *Yêu cầu:* "load lại các cuộc trò chuyện, bổ sung các vấn đề mới phát sinh vào file `project_state.md` nhé
 
 
-The current local time is: 2026-05-28T11:51:26+07:00...."
-- *Yêu cầu:* "tôi khá hài lòng với kết quả, giờ hãy tổng hợp lại thành 1 quy trình hoàn chỉnh, tôi muốn chạy trên bộ dữ liệu nguồn lớn hơn
+The current local time is: 2026-06-07T22:33:05+07:00.
 
 
-The current local time is: 2026-05-28T11:55:54+07:00...."
-- *Yêu cầu:* "tôi muốn bạn chạy với toàn bộ dữ liệu trong thư mục @[T04] 
-file kết quả lưu trữ trong thư mục @[ket-qua-gop-tung-thang] ,tên file bắt đầu bằng `T4 - `
-bạn hiểu ý tôi chứ
+The user changed setting `Model Selection` from Gemini 3.5 Flash (High) to Gemini 3.5 Flash (Low)..."
+- *Yêu cầu:* "cập nhật cả những cuộc trò chuyên khác nưa
 
 
-The current local time is: 2026-05-28T11:58:40+07:00.
-
-The user has mentioned..."
-- *Yêu cầu:* "tiếp tục lần lượt với các thư mục @[T01] @[T02] và @[T03] giúp tôi nhé
+The current local time is: 2026-06-07T22:33:35+07:00...."
+- *Yêu cầu:* "khởi động lại dashboard
 
 
-The current local time is: 2026-05-28T12:30:30+07:00.
-
-The user has mentioned some items in the form @[ITEM]. Here is extra information about the items that were mentioned by th..."
+The current local time is: 2026-06-08T06:49:04+07:00...."
 
 ---
 
-## 2. Cuộc trò chuyện `0092a164-d672-4f56-9288-38a7d475a34a`
-- **Thời gian chỉnh sửa cuối:** `08/06/2026 15:21:48`
-
-### 💬 Nội dung trao đổi chính của Sếp
-- *Yêu cầu:* "@[T04] lọc cho tôi 1 file, lấy tất cả các dòng có cột J là `ETN013`
-
-
-The current local time is: 2026-05-29T10:02:11+07:00.
-
-The user has mentioned some items in the form @[ITEM]. Here is extra information about the items that were mentioned by the u..."
-- *Yêu cầu:* "chuyển các file kịch bản, hướng dẫn vào 1 thư mục mới giúp tôi
-
-
-The current local time is: 2026-05-29T10:13:15+07:00...."
-- *Yêu cầu:* "@[T01] tạo cho tôi 1 file, lọc cho tôi tất các các dòng có nội dung cột H là lần lượt là `01.01.09/BDDC`, `101/BĐNĐ`, `4555/2025.8/T-N/BĐTPV`, `588/HĐ2024/BĐĐL`, mỗi mã hợp đồng là 1 sheet giúp tôi nhé
-
-
-The current local time is: 2026-05-29T11:31:27..."
-- *Yêu cầu:* "@[T01] lọc cho tôi 1 file excel, lấy các dòng có nội dung cột H là: `588/HĐ2024/BĐĐL`, `3479/2025.6/T-N/BĐTPV`, `48/ĐS/TT/BĐQP`, `0115/2023.5/TT/BĐTPV`, mỗi nội dung 1 sheet riêng giúp tôi
-
-
-The current local time is: 2026-05-29T11:33:24+07:00.
-
-The ..."
-- *Yêu cầu:* "trong các file nguồn ở @[T01] có dòng nào có thông tin ở cột H  (cột Mã hợp đồng) nhưng lại không có thông tin mã khách hàng ở cột B không?
-
-
-The current local time is: 2026-05-29T11:40:35+07:00.
-
-The user has mentioned some items in the form @[ITEM]..."
-- *Yêu cầu:* "mã khách hàng của các dòng này, là mã cuối cùng ở bên sheet `01_CT_KHL` , vì file dài nên bị cắt sang sheet 2, chúng ta có thể thấy nội dung cột A của những dòng này cùng cấu trúc với cột A của những dòng cuối bên sheet `01_CT_KHL` đều là `1.2126.`
-c..."
-- *Yêu cầu:* "bạn đã chạy lại lệnh tổng hợp các file trong thư mục @[ket-qua-gop-tung-thang] chưa
-
-
-The current local time is: 2026-05-29T15:01:09+07:00.
-
-The user has mentioned some items in the form @[ITEM]. Here is extra information about the items that were me..."
-- *Yêu cầu:* "chúng ta có thể tạo 1 workflow hướng dẫn chi tiết cách làm, lưu lại thành 1 file md để sử dụng lâu dài được k
-
-
-The current local time is: 2026-05-29T15:32:29+07:00...."
-
----
-
-## 3. Cuộc trò chuyện `30e1884d-d661-40ad-85f7-9df970f362a0`
+## 2. Cuộc trò chuyện `30e1884d-d661-40ad-85f7-9df970f362a0`
 - **Thời gian chỉnh sửa cuối:** `08/06/2026 15:21:47`
 
 ### 📋 Tóm tắt từ Walkthrough
@@ -210,7 +137,7 @@ Selection:
 
 ---
 
-## 4. Cuộc trò chuyện `0fd37ae2-045b-4a24-921a-b56058c14ca3`
+## 3. Cuộc trò chuyện `0fd37ae2-045b-4a24-921a-b56058c14ca3`
 - **Thời gian chỉnh sửa cuối:** `08/06/2026 15:20:20`
 
 ### 📋 Tóm tắt từ Walkthrough
@@ -265,7 +192,7 @@ The current local time is: 2026-06-08T15:20:11+07:00...."
 
 ---
 
-## 5. Cuộc trò chuyện `d85cc6c1-5cc6-4d61-aca2-d00c438e87fd`
+## 4. Cuộc trò chuyện `d85cc6c1-5cc6-4d61-aca2-d00c438e87fd`
 - **Thời gian chỉnh sửa cuối:** `08/06/2026 15:20:02`
 
 ### 💬 Nội dung trao đổi chính của Sếp
@@ -297,7 +224,7 @@ The current local time is: 2026-06-08T15:19:51+07:00...."
 
 ---
 
-## 6. Cuộc trò chuyện `c08da161-0278-4a1b-ba5e-abdcf9358f8b`
+## 5. Cuộc trò chuyện `c08da161-0278-4a1b-ba5e-abdcf9358f8b`
 - **Thời gian chỉnh sửa cuối:** `08/06/2026 15:19:55`
 
 ### 📋 Tóm tắt từ Walkthrough
@@ -363,7 +290,7 @@ The current local time is: 2026-06-02T08:14:48+07:00...."
 
 ---
 
-## 7. Cuộc trò chuyện `29dbcc51-0619-439e-b845-d2f51273047d`
+## 6. Cuộc trò chuyện `29dbcc51-0619-439e-b845-d2f51273047d`
 - **Thời gian chỉnh sửa cuối:** `08/06/2026 15:19:54`
 
 ### 💬 Nội dung trao đổi chính của Sếp
@@ -405,7 +332,7 @@ The user has mentioned some items in the form @[ITEM]. Here is extra information
 
 ---
 
-## 8. Cuộc trò chuyện `33d8b669-782e-4c5b-8193-f44c1dc3916a`
+## 7. Cuộc trò chuyện `33d8b669-782e-4c5b-8193-f44c1dc3916a`
 - **Thời gian chỉnh sửa cuối:** `08/06/2026 15:19:50`
 
 ### 💬 Nội dung trao đổi chính của Sếp
@@ -456,7 +383,7 @@ The current local time is: 2026-06-05T05:33:32+07:00...."
 
 ---
 
-## 9. Cuộc trò chuyện `708a0059-e08c-4abc-b327-07d8e0a12f50`
+## 8. Cuộc trò chuyện `708a0059-e08c-4abc-b327-07d8e0a12f50`
 - **Thời gian chỉnh sửa cuối:** `08/06/2026 15:19:50`
 
 ### 📋 Tóm tắt từ Walkthrough
@@ -518,7 +445,7 @@ The current local time is: 2026-06-08T15:19:44+07:00...."
 
 ---
 
-## 10. Cuộc trò chuyện `7b1956f7-e8e2-4ee6-a101-884d3c993ace`
+## 9. Cuộc trò chuyện `7b1956f7-e8e2-4ee6-a101-884d3c993ace`
 - **Thời gian chỉnh sửa cuối:** `08/06/2026 15:19:46`
 
 ### 📐 Tóm tắt từ Bản thiết kế (Plan)
@@ -571,7 +498,7 @@ The current local time is: 2026-06-01T07:54:16+07:00...."
 
 ---
 
-## 11. Cuộc trò chuyện `306349be-1058-44d3-a8a1-0ba4b7711d8c`
+## 10. Cuộc trò chuyện `306349be-1058-44d3-a8a1-0ba4b7711d8c`
 - **Thời gian chỉnh sửa cuối:** `08/06/2026 15:18:50`
 
 ### 📋 Tóm tắt từ Walkthrough
@@ -652,7 +579,7 @@ The current local time is: 2026-06-02T11:12:47+07:00...."
 
 ---
 
-## 12. Cuộc trò chuyện `882cc1cd-e27b-4491-bcd8-ab1912b5cecd`
+## 11. Cuộc trò chuyện `882cc1cd-e27b-4491-bcd8-ab1912b5cecd`
 - **Thời gian chỉnh sửa cuối:** `08/06/2026 15:18:28`
 
 ### 📐 Tóm tắt từ Bản thiết kế (Plan)
@@ -707,7 +634,7 @@ The current local time is: 2026-06-08T15:18:24+07:00...."
 
 ---
 
-## 13. Cuộc trò chuyện `7bd24168-c89e-45cc-b338-a0dc5e9b5d0b`
+## 12. Cuộc trò chuyện `7bd24168-c89e-45cc-b338-a0dc5e9b5d0b`
 - **Thời gian chỉnh sửa cuối:** `08/06/2026 15:18:26`
 
 ### 💬 Nội dung trao đổi chính của Sếp
@@ -755,7 +682,7 @@ The current local time is: 2026-06-06T08:10:40+07:00...."
 
 ---
 
-## 14. Cuộc trò chuyện `824d2c9e-fbfe-4ff6-b1c3-2971e91ce0d0`
+## 13. Cuộc trò chuyện `824d2c9e-fbfe-4ff6-b1c3-2971e91ce0d0`
 - **Thời gian chỉnh sửa cuối:** `08/06/2026 15:17:44`
 
 ### 💬 Nội dung trao đổi chính của Sếp
@@ -789,7 +716,7 @@ The current local time is: 2026-06-08T15:17:41+07:00...."
 
 ---
 
-## 15. Cuộc trò chuyện `b7a68fe4-0a13-43bc-bb10-7508f7836aad`
+## 14. Cuộc trò chuyện `b7a68fe4-0a13-43bc-bb10-7508f7836aad`
 - **Thời gian chỉnh sửa cuối:** `08/06/2026 15:17:39`
 
 ### 📋 Tóm tắt từ Walkthrough
@@ -861,7 +788,7 @@ The current local time is: 2026-06-08T15:17:37+07:00...."
 
 ---
 
-## 16. Cuộc trò chuyện `129da24d-88fd-49a9-b6cb-1befb7827702`
+## 15. Cuộc trò chuyện `129da24d-88fd-49a9-b6cb-1befb7827702`
 - **Thời gian chỉnh sửa cuối:** `08/06/2026 15:17:35`
 
 ### 📋 Tóm tắt từ Walkthrough
@@ -917,7 +844,7 @@ The current local time is: 2026-06-08T15:17:31+07:00...."
 
 ---
 
-## 17. Cuộc trò chuyện `0fa157b6-d9a3-448c-a7f2-aaaaa5760eb1`
+## 16. Cuộc trò chuyện `0fa157b6-d9a3-448c-a7f2-aaaaa5760eb1`
 - **Thời gian chỉnh sửa cuối:** `08/06/2026 15:16:12`
 
 ### 📋 Tóm tắt từ Walkthrough
@@ -1001,7 +928,7 @@ The current local time is: 2026-06-07T12:52:29+07:00...."
 
 ---
 
-## 18. Cuộc trò chuyện `26480a08-e963-4be4-a422-3b201cee1300`
+## 17. Cuộc trò chuyện `26480a08-e963-4be4-a422-3b201cee1300`
 - **Thời gian chỉnh sửa cuối:** `08/06/2026 15:16:00`
 
 ### 📋 Tóm tắt từ Walkthrough
@@ -1071,71 +998,7 @@ The current local time is: 2026-06-05T11:27:41+07:00...."
 
 ---
 
-## 19. Cuộc trò chuyện `4418f2b8-bd26-4dce-93db-1d6d4c635942`
-- **Thời gian chỉnh sửa cuối:** `08/06/2026 15:03:32`
-
-### 📋 Tóm tắt từ Walkthrough
-> # Báo cáo Điều chỉnh Giao dịch Doanh thu & Sửa lỗi Dashboard
-> ## Nội dung thực hiện
-> Đã hoàn thành việc tìm kiếm, sao lưu, điều chỉnh ngày của giao dịch điều chỉnh doanh thu, cập nhật lại toàn bộ các bảng tổng hợp báo cáo (summary tables) và sửa lỗi crash khi khởi động ứng dụng.
-> ### 1. Chi tiết Giao dịch được điều chỉnh
-> * **Mã khách hàng (CMS)**: `C002362753`
-> * **Mã hợp đồng**: `306-BCCP/BĐDC`
-> * **Bưu cục**: `464080` (sản phẩm `CTN007`)
-> * **Mã ID dòng dữ liệu trong DB**: `704676`
-> * **Nội dung thay đổi**:
-> * Ngày ghi nhận cũ: `01/10/2025` (Tháng 10 - `T10`)
-> * Ngày ghi nhận mới: `30/09/2025` (Tháng 9 - `T09`)
-> * Giá trị cước (chưa VAT): **-7.421.946.780đ** (gồm VAT: **-8.015.702.522đ**)
-> ### 2. Hiệu quả điều chỉnh số liệu
-> * **Trước khi điều chỉnh**:
-> * Tháng 9/2025 có một giao dịch ghi nhận doanh thu dương cực lớn là **+7.423.645.880đ** (ID: `697065`) làm doanh thu tháng 9 vọt lên bất thường.
-> * Tháng 10/2025 lại gánh giao dịch âm **-7.421.946.780đ** (ID: `704676`) làm doanh thu tháng 10 bị kéo giảm nghiêm trọng (âm nặng).
-> * **Sau khi điều chỉnh**:
-> * Giao dịch âm được chuyển về ngày `30/09/2025` để đối trừ trực tiếp với giao dịch dương cùng kỳ.
-> * Doanh thu thực tế của khách hàng `C002362753` trong tháng 9/2025 sau khi đối trừ là **2.302.800đ**.
-> * Doanh thu tháng 10/2025 được trả lại đúng giá trị thực tế là **657.200đ** (không còn bị âm do giao dịch điều chỉnh).
-> ---
-
-### 💬 Nội dung trao đổi chính của Sếp
-- *Yêu cầu:* "`E:\Projects\Dashboard-BCCP\data\dieu-chinh\dieu-chinh-30-09-va-01-10.xlsx`
-
-kiểm tra trong database tháng 10/2025 có dòng nào có nội dung như thế này thì chuyển thời gian của dòng dữ liệu ấy sang 30/09/2025 nhé, đây là 1 giao dịch điều chỉnh, nhưng ..."
-- *Yêu cầu:* "đã tìm được và điều chỉnh chưa?
-
-
-The current local time is: 2026-06-07T19:17:37+07:00...."
-- *Yêu cầu:* "chạy dashboard nào
-
-
-The current local time is: 2026-06-07T19:21:17+07:00...."
-- *Yêu cầu:* "restart dashboard nhé
-
-
-The current local time is: 2026-06-07T21:43:20+07:00...."
-- *Yêu cầu:* "kéo dữ liệu bảng plan ra 1 file excel giúp tôi, để trong `E:\Projects\Dashboard-BCCP\data\du-lieu-tu-DB` nhé
-
-
-The current local time is: 2026-06-07T22:31:42+07:00...."
-- *Yêu cầu:* "load lại các cuộc trò chuyện, bổ sung các vấn đề mới phát sinh vào file `project_state.md` nhé
-
-
-The current local time is: 2026-06-07T22:33:05+07:00.
-
-
-The user changed setting `Model Selection` from Gemini 3.5 Flash (High) to Gemini 3.5 Flash (Low)..."
-- *Yêu cầu:* "cập nhật cả những cuộc trò chuyên khác nưa
-
-
-The current local time is: 2026-06-07T22:33:35+07:00...."
-- *Yêu cầu:* "khởi động lại dashboard
-
-
-The current local time is: 2026-06-08T06:49:04+07:00...."
-
----
-
-## 20. Cuộc trò chuyện `563fc31f-a010-4f41-a20f-7580a29cb42a`
+## 18. Cuộc trò chuyện `563fc31f-a010-4f41-a20f-7580a29cb42a`
 - **Thời gian chỉnh sửa cuối:** `08/06/2026 15:02:28`
 
 ### 📋 Tóm tắt từ Walkthrough
@@ -1223,7 +1086,7 @@ The user has mentioned some items in the form @[ITEM]. Here is extra information
 
 ---
 
-## 21. Cuộc trò chuyện `32d40a8c-2796-47bc-93a8-f64553571a6b`
+## 19. Cuộc trò chuyện `32d40a8c-2796-47bc-93a8-f64553571a6b`
 - **Thời gian chỉnh sửa cuối:** `07/06/2026 22:12:45`
 
 ### 📋 Tóm tắt từ Walkthrough
