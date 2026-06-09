@@ -1,7 +1,66 @@
 # Project State - Dashboard Doanh thu BCCP
 
+## 📌 Tóm Tắt Trạng Thái Dự Án (Nhanh)
+
+### 1. Mục tiêu cuối cùng của dự án (Project Goal)
+- Xây dựng hệ thống Dashboard doanh thu bưu chính chuyển phát (BCCP) chuyên nghiệp bằng Dash (Python).
+- Hỗ trợ bộ lọc đa chiều (Thời gian, Địa lý 3 cấp: Cụm/Bưu cục/Xã, Nhóm dịch vụ) ổn định trên cả giao diện web và đồng bộ URL.
+- Tự động phân loại khách hàng (Mới, Hiện hữu, Tái bán, Vãng lai).
+- Import dữ liệu trực tiếp từ các file Excel báo cáo thô vào cơ sở dữ liệu SQLite (sẽ chuyển sang PostgreSQL khi deploy).
+- Phục vụ cho hơn 20 người dùng từ các phòng ban nghiệp vụ và deploy lên server nội bộ để truy cập qua mạng LAN hoặc đường hầm Cloudflare (`dashboard.bdna.io.vn`).
+
+### 2. Các công việc chính đã hoàn thành (Completed Milestones)
+- **Phase 13 (10/06/2026): Đồng bộ lịch tuần & Chuẩn hóa so sánh Doanh thu / Kế hoạch 3 cấp**:
+  - Đồng bộ mốc lịch tuần các năm cũ (2025) theo mốc ngày năm 2026 trong [week_calendar.py](file:///E:/Projects/Dashboard-BCCP/config/week_calendar.py), fix lệch ngày so sánh YoY.
+  - Chuẩn hóa logic gộp Doanh thu & Kế hoạch 3 cấp trong [global_metrics.py](file:///E:/Projects/Dashboard-BCCP/analytics/global_metrics.py): Cấp Cụm dùng `outer join` gom nhóm theo xã thực tế và kế hoạch HCC, loại trừ xã ảo `"Đại diện Cụm"`; Cấp Xã so sánh bưu cục thực tế có phát sinh doanh thu (`tong_dt > 0`), hiển thị `"Không có KH"` nếu kế hoạch bằng 0.
+  - Thay đổi dòng đầu tiên ở 2 bảng Chi tiết doanh thu và Lũy kế YTD thành nhãn động theo bộ lọc địa lý (`"⭐️ CỤM: <tên cụm>"`, `"⭐️ XÃ: <tên xã>"`, hoặc `"⭐️ BC: <tên bưu cục>"`).
+  - Sửa đổi hiển thị `% hoàn thành kế hoạch` ở Top 10 Bưu điện Xã nổi bật chỉ hiện chữ số màu đen, loại bỏ mũi tên lên/xuống và màu xanh/đỏ.
+  - Rebuild thành công toàn bộ summary tables khớp theo lịch tuần đồng bộ mới.
+  - Cập nhật file chạy [run_dashboard.bat](file:///E:/Projects/Dashboard-BCCP/run_dashboard.bat) tự động giải phóng port 8050 bị treo và in thông báo chào Sếp bằng tiếng Việt UTF-8 có dấu.
+- **Framework & Giao diện**: Chuyển đổi hoàn toàn từ Streamlit sang Dash, hoàn thiện giao diện Phase 11 ổn định.
+- **Sửa 4 nhóm bug logic và UI (09/06/2026 sáng)**:
+  - Sửa lỗi bảng Lũy kế YTD không nhận bộ lọc Bưu điện Xã.
+  - Sửa lỗi các bảng Top 10 trong trang con (/bccp, /hcc, /tcbc, /ppbl) lấy sai Kế hoạch toàn cục thay vì kế hoạch riêng của từng dịch vụ.
+  - Fix lỗi bảng chi tiết không phân rã theo bưu cục khi chọn bộ lọc cấp Xã ở các trang con.
+  - Cập nhật các bảng Top 10, biểu đồ 12 kỳ, KPI thẻ màu ở trang chủ để đáp ứng chuẩn xác bộ lọc Cụm, Xã, Bưu cục.
+  - Sửa lỗi URL dư dấu `/` ở nút "Lọc Dữ liệu".
+- **Kiểm tra & Fix toàn diện 4 nội dung (09/06/2026 tối — Phase 12)**:
+  - ✅ Xác minh template trang chủ (nhom_chinh) vs trang con (nhom_dich_vu) khớp 100%.
+  - ✅ Xác minh bộ lọc địa lý 3 cấp hoạt động đúng (Toàn tỉnh → Cụm → BĐX → Bưu cục).
+  - 🔧 **Fix bug crash Tuần 1**: Xóa `return prev_value, prev_year` sai tại dòng 711 `global_metrics.py`.
+  - 🔧 **Fix auto-select tuần**: Sửa từ ISO week sang custom week (ISO=24 ≠ Custom=23).
+  - 🔧 **Fix reset chu kỳ**: Thêm callback reset tháng/tuần về hiện tại khi switch Tháng↔Tuần.
+  - 🔧 **Fix KH Lũy kế YTD**: `plans WHERE thang <= period_value` thay vì lấy cả năm.
+  - 🔧 **Fix UI Bảng B**: Xóa option "Kỳ trước" khỏi bảng Lũy kế (global & service overview) — bảng lũy kế chỉ có Cùng kỳ và Kế hoạch.
+- **Khắc phục triệt để lỗi Bộ lọc & Logic (09/06/2026)**:
+  - Sửa lỗi nhân bản doanh thu (multiplied totals) khi lọc số liệu qua bảng danh mục.
+  - Sửa lỗi bảng Lũy kế YTD so sánh nhầm kế hoạch tháng (đã chuyển sang so sánh kế hoạch cả năm).
+  - Khắc phục lỗi hiển thị mã Đại diện Cụm / Xã (ảo) tại Top 10 Bưu điện Xã.
+  - Sửa lỗi bộ lọc Tuần bất ổn định và bị nhảy sai số khi chuyển qua lại giữa các trang.
+  - Hoàn thiện Sidebar Menu Accordion, giữ trạng thái Active chính xác cho mọi trang con.
+- **Quy tắc Kế hoạch 3 cấp**: BCCP (cấp Bưu cục), HCC (cấp Xã), PHBC (cấp Cụm) hoạt động trơn tru. Sửa triệt để lỗi tỷ lệ hoàn thành >300%.
+- **Import & ETL**: Chuẩn hóa các mẫu Excel import mới rút gọn cột cốt lõi. Tự động hóa phân bổ kế hoạch năm ra 12 tháng theo tỷ lệ. Nạp thành công kế hoạch HCC 2026 và dữ liệu lịch sử tháng 4, 5, 6 năm 2025/2026.
+
+### 3. Trạng thái các file cốt lõi hiện tại (File Status)
+- [app.py](file:///E:/Projects/Dashboard-BCCP/dash_app/app.py): Đóng vai trò khởi chạy ứng dụng Dash. Đã fix lỗi trailing slash ở URL pathname.
+- Thư mục [callbacks/](file:///E:/Projects/Dashboard-BCCP/dash_app/callbacks/): Chứa các logic tương tác. Đã vá thành công các tệp `global_callbacks.py` và `service_callbacks.py` để bổ sung logic phân rã cấp bưu cục và service_key.
+- [global_metrics.py](file:///E:/Projects/Dashboard-BCCP/analytics/global_metrics.py): Cập nhật các hàm truy vấn SQL YTD, Top 10, biểu đồ 12 kỳ hỗ trợ bộ lọc bưu cục và service_key. **Fix bug 711 (crash tuần 1) và fix KH YTD lũy kế.**
+- [topbar_callbacks.py](file:///E:/Projects/Dashboard-BCCP/dash_app/callbacks/topbar_callbacks.py): **Fix auto-select custom week và thêm callback reset tháng/tuần về hiện tại.**
+- [global_overview.py](file:///E:/Projects/Dashboard-BCCP/dash_app/pages/global_overview.py): **Xóa option "Kỳ trước" khỏi bảng Lũy kế B.**
+- [service_overview.py](file:///E:/Projects/Dashboard-BCCP/dash_app/pages/service_overview.py): **Xóa option "Kỳ trước" khỏi bảng Lũy kế B cho 4 trang dịch vụ.**
+- [importer.py](file:///E:/Projects/Dashboard-BCCP/etl/importer.py) & [aggregator.py](file:///E:/Projects/Dashboard-BCCP/etl/aggregator.py): Hoạt động chuẩn xác, hỗ trợ nạp song song cả cấu trúc file cũ và file mẫu tinh giản mới.
+- [rebuild_summaries.py](file:///E:/Projects/Dashboard-BCCP/scripts/rebuild_summaries.py): Tính toán lại các bảng tổng hợp khi CSDL thay đổi.
+- [dashboard.db](file:///E:/OneDrive/z.Database-TTKD-Data/dashboard.db): Chứa dữ liệu sạch, đã đồng bộ kế hoạch HCC mới nhất.
+- Thư mục [mau-file-import/](file:///E:/Projects/Dashboard-BCCP/data/mau-file-import/): Chứa 3 file mẫu chuẩn hóa và file danh mục tham chiếu.
+
+
+
 ## Project Goal
-Dashboard doanh thu bưu chính chuyển phát (BCCP) hỗ trợ bộ lọc đa chiều, phân loại khách hàng tự động, import dữ liệu từ Excel vào SQLite. Phục vụ **20+ người dùng** từ nhiều phòng ban, dự kiến deploy lên **server nội bộ**.
+- Xây dựng hệ thống Dashboard doanh thu bưu chính chuyển phát (BCCP) chuyên nghiệp bằng Dash (Python).
+- Hỗ trợ bộ lọc đa chiều (Thời gian, Địa lý 3 cấp: Cụm/Bưu cục/Xã, Nhóm dịch vụ) ổn định trên cả giao diện web và đồng bộ URL.
+- Tự động phân loại khách hàng (Mới, Hiện hữu, Tái bán, Vãng lai).
+- Import dữ liệu trực tiếp từ các file Excel báo cáo thô vào cơ sở dữ liệu SQLite (sẽ chuyển sang PostgreSQL khi deploy).
+- Phục vụ cho hơn 20 người dùng từ các phòng ban nghiệp vụ và deploy lên server nội bộ để truy cập qua mạng LAN hoặc đường hầm Cloudflare (`dashboard.bdna.io.vn`).
 
 ## Tech Stack
 - **Language**: Python 3.13
@@ -11,6 +70,24 @@ Dashboard doanh thu bưu chính chuyển phát (BCCP) hỗ trợ bộ lọc đa 
 - **Encoding**: UTF-8 toàn bộ
 
 ## Current State
+- **Đồng bộ Lịch Tuần & Chuẩn hóa So sánh Doanh thu / Kế hoạch 3 cấp (Phase 13 - 10/06/2026)**:
+  - **Đồng bộ mốc lịch tuần**: Sửa đổi [week_calendar.py](file:///E:/Projects/Dashboard-BCCP/config/week_calendar.py) để đồng bộ mốc ngày của năm trước (2025) theo mốc ngày của năm chuẩn 2026, giải quyết triệt để lệch ngày khi so sánh cùng kỳ YoY theo tuần.
+  - **Chuẩn hóa gộp Doanh thu & Kế hoạch 3 cấp**:
+    - *Cấp Cụm (so sánh các Xã)*: Nhóm theo xã (`ma_bdx`), sử dụng outer join để tích hợp đầy đủ doanh thu thực tế và kế hoạch HCC của từng xã. Loại bỏ các xã ảo dạng `"Đại diện Cụm ..."` khỏi bộ lọc và bảng dữ liệu.
+    - *Cấp Xã (so sánh các bưu cục 6 số)*: Chỉ giữ lại các bưu cục thực tế có phát sinh doanh thu (`tong_dt > 0`). Đối với chỉ tiêu không giao kế hoạch (hoặc kế hoạch = 0) hiển thị rõ `"Không có KH"` thay vì tính % hoàn thành kế hoạch vô lý.
+  - **Nhãn tổng hợp dòng đầu động**: Thay vì hiển thị cứng `"⭐️ TOÀN TỈNH"`, dòng đầu tiên ở bảng Chi tiết doanh thu và Lũy kế YTD hiển thị động theo cấp bộ lọc: `"⭐️ CỤM: <tên cụm>"`, `"⭐️ XÃ: <tên xã>"`, hoặc `"⭐️ BC: <tên bưu cục>"` tại [global_callbacks.py](file:///E:/Projects/Dashboard-BCCP/dash_app/callbacks/global_callbacks.py) và [service_callbacks.py](file:///E:/Projects/Dashboard-BCCP/dash_app/callbacks/service_callbacks.py).
+  - **Cập nhật Top 10 HCC**: Chỉnh sửa hiển thị chỉ số % hoàn thành kế hoạch ở bảng Top 10 xã nổi bật (HCC) chỉ hiện chữ số màu đen thông thường, loại bỏ mũi tên lên/xuống và màu xanh/đỏ.
+  - **Rebuild cơ sở dữ liệu**: Thực thi thành công `rebuild_summaries.py` đồng bộ hóa lại toàn bộ các bảng tổng hợp (`agg_weekly`, `plans_weekly`, `new_customers`) theo lịch tuần đồng bộ mới.
+  - **Giải phóng port 8050 khi khởi động**: Nâng cấp [run_dashboard.bat](file:///E:/Projects/Dashboard-BCCP/run_dashboard.bat) để tự động kiểm tra và kill tiến trình Python cũ đang chiếm dụng cổng 8050 (nếu có) bằng lệnh `taskkill`, đồng thời in ra câu chào tiếng Việt có dấu.
+- **Sửa lỗi Phân loại Sản phẩm & Tinh gọn File Nhập (08/06/2026)**:
+  - Phân loại lại 4 mã `HCC001`-`HCC004` sang nhóm `Chuyển phát HCC` và xóa mã ảo thừa trong danh mục, xuất lại file tham chiếu `ma_tham_chieu.xlsx`.
+  - Tinh gọn mẫu Excel nhập kế hoạch (`mau_import_ke_hoach.xlsx`), xóa bỏ cột Tháng và Sản lượng. Nâng cấp ETL `import_plan_excel` tự động phân bổ Kế hoạch Doanh thu Năm thành 12 Tháng bằng mảng tỷ lệ trích xuất từ file `ty-le.xlsx`.
+  - Nghiệm thu nạp file thực tế: Đã import thành công Kế hoạch HCC chuẩn từ 103 Bưu cục/Xã, tự động phân bổ ra 1,236 bản ghi Kế hoạch tháng (Tổng KH: 14.77 tỷ đồng). Tiến trình `rebuild_summaries` đã hoàn tất để đồng bộ dữ liệu Dashboard.
+- **Đại tu Kế hoạch & Bưu cục Xã (08/06/2026)**:
+  - Sửa lỗi cột Kế hoạch: Đổi tên cột `nhom_dich_vu` -> `nhom_chinh` và `ten_dich_vu` -> `nhom_dich_vu` trong các bảng `plans`, `plans_weekly`.
+  - Khởi tạo 123 Bưu cục ảo cấp Xã (mã 4 số khớp `ma_bdx`) để hệ thống ghi nhận và phân bổ kế hoạch/doanh thu chính xác ở cấp Xã.
+  - Sinh file Excel `ma_tham_chieu.xlsx` gồm 3 sheet (Nhóm dịch vụ, Danh mục bưu cục, Sản phẩm) hỗ trợ tra cứu mã nạp file.
+  - Xóa sạch 100% dữ liệu kế hoạch (tháng/tuần) của nhóm `HCC` cũ để sẵn sàng nạp kế hoạch mới theo cấu trúc chuẩn.
 - **Fix "Bug Tàng Hình" Tuần & Hoàn thiện Bộ Lọc Cụm Trang Chủ (08/06/2026)**:
   - Khắc phục lỗi Off-by-one truy xuất nhầm số liệu tuần (chọn Tuần 22 hiển thị Tuần 23) tại file `utils.py` do sử dụng sai cấu trúc index mảng thay vì đối chiếu ID tuần.
   - Sửa lỗi Bộ lọc Địa lý (Cụm) không hoạt động ở trang Tổng quan: Bổ sung liên kết `State("sidebar-cum")` vào `global_callbacks.py` và nhúng cơ chế gọt số liệu theo Cụm (`WHERE ten_cum = ?`) vào các hàm truy vấn DB như `get_period_detail_by_xa`, `get_ytd_detail_by_xa`, `get_12_periods_revenue`.

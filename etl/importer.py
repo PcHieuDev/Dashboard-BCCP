@@ -717,7 +717,7 @@ def import_plan_excel(db_path, excel_path):
         engine = "openpyxl" if str(excel_path).endswith(".xlsx") else "xlrd"
         df = pd.read_excel(excel_path, engine=engine)
         
-        if len(df.columns) < 6:
+        if len(df.columns) < 5:
             return {'batch_id': batch_id, 'file': filename, 'thang': 'N/A', 'total_rows': 0, 'inserted': 0, 'skipped': 0, 'warnings': [f"File Kế hoạch không đủ số cột cơ bản. Số cột: {len(df.columns)}"]}
             
         conn = sqlite3.connect(db_path)
@@ -725,7 +725,7 @@ def import_plan_excel(db_path, excel_path):
         
         insert_sql = """
         INSERT OR REPLACE INTO plans 
-        (nam, thang, nhom_dich_vu, ten_dich_vu, ma_buu_cuc, ke_hoach_doanh_thu, ke_hoach_san_luong)
+        (nam, thang, nhom_chinh, nhom_dich_vu, ma_buu_cuc, ke_hoach_doanh_thu, ke_hoach_san_luong)
         VALUES (?, ?, ?, ?, ?, ?, ?)
         """
         
@@ -736,28 +736,28 @@ def import_plan_excel(db_path, excel_path):
         
         valid_groups = {'BCCP', 'HCC', 'TCBC', 'PPBL', 'Hành chính công', 'Tài chính Bưu chính', 'Phân phối bán lẻ'}
         
+        # Tỷ lệ phân bổ 12 tháng (từ ty-le.xlsx)
+        MONTHLY_RATIOS = [0.098266, 0.081857, 0.088313, 0.092610, 0.081116, 0.079334, 0.076506, 0.073452, 0.075493, 0.087763, 0.078089, 0.087201]
+        
         for idx, row in df.iterrows():
             nam = _safe_int(row.iloc[0])
-            thang = _safe_int(row.iloc[1])
-            if nam == 0 or thang == 0:
+            if nam == 0:
                 continue # Bỏ qua dòng trống
                 
             total_rows += 1
-            nhom_dv = clean_str_field(row.iloc[2])
-            ten_dv = clean_str_field(row.iloc[3]) if len(df.columns) > 3 and pd.notna(row.iloc[3]) else None
-            ma_bc = clean_str_field(row.iloc[4]) if len(df.columns) > 4 else None
-            kh_dt = _safe_float(row.iloc[5]) if len(df.columns) > 5 else 0.0
-            kh_sl = _safe_int(row.iloc[6]) if len(df.columns) > 6 else 0
+            nhom_chinh = clean_str_field(row.iloc[1])
+            nhom_dv = clean_str_field(row.iloc[2]) if len(df.columns) > 2 and pd.notna(row.iloc[2]) else None
+            ma_bc = clean_str_field(row.iloc[3]) if len(df.columns) > 3 else None
+            kh_dt_nam = _safe_float(row.iloc[4]) if len(df.columns) > 4 else 0.0
+            kh_sl = 0
             
-            if nhom_dv not in valid_groups:
-                warnings.append(f"Dòng {idx+2}: Nhóm DV không hợp lệ ('{nhom_dv}')")
+            if nhom_chinh not in valid_groups:
+                warnings.append(f"Dòng {idx+2}: Nhóm Chính không hợp lệ ('{nhom_chinh}')")
                 continue
                 
-            if thang < 1 or thang > 12:
-                warnings.append(f"Dòng {idx+2}: Tháng không hợp lệ ('{thang}')")
-                continue
-                
-            batch_buffer.append((nam, thang, nhom_dv, ten_dv, ma_bc, kh_dt, kh_sl))
+            for thang_idx, ratio in enumerate(MONTHLY_RATIOS, start=1):
+                kh_dt_thang = kh_dt_nam * ratio
+                batch_buffer.append((nam, thang_idx, nhom_chinh, nhom_dv, ma_bc, kh_dt_thang, kh_sl))
             
             if len(batch_buffer) >= BATCH_SIZE:
                 cursor.executemany(insert_sql, batch_buffer)

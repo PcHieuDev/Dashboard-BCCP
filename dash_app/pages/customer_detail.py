@@ -34,7 +34,7 @@ def create_customer_detail_layout():
                             multi=True,
                             placeholder="Tất cả Nhóm DV..."
                         )
-                    ], md=3, xs=12),
+                    ], md=2, xs=12),
                     
                     # 1.1 Dịch vụ cụ thể
                     dbc.Col([
@@ -76,7 +76,13 @@ def create_customer_detail_layout():
                             inline=True,
                             style={"paddingTop": "8px"}
                         )
-                    ], md=3, xs=12)
+                    ], md=2, xs=12),
+                    
+                    # 4. Hành động
+                    dbc.Col([
+                        html.Label("Hành động", className="filter-label", style={"color": "transparent", "display": "block"}),
+                        dbc.Button("🔍 Lọc Dữ liệu", id="btn-customer-filter", color="primary", style={"width": "100%", "marginTop": "-5px"})
+                    ], md=2, xs=12)
                 ], style={"marginBottom": "0px"})
             ])
         ], style={"marginBottom": "20px", "background": "#F8FAFC", "borderRadius": "8px", "border": "1px solid #E2E8F0"}),

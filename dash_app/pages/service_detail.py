@@ -44,7 +44,13 @@ def create_service_detail_layout():
         dbc.Row([
             dbc.Col([
                 dbc.Card([
-                    dbc.CardHeader("Bảng thống kê chi tiết doanh thu & sản lượng theo mã SPDV", style={"fontWeight": "bold", "backgroundColor": "#F8FAFC"}),
+                    dbc.CardHeader([
+                        html.Div("Bảng thống kê chi tiết doanh thu & sản lượng theo mã SPDV", style={"display": "inline-block"}),
+                        html.Div([
+                            dbc.Button("📥 Tải Excel", id="btn-export-service-detail", color="success", size="sm"),
+                            dcc.Download(id="download-service-detail")
+                        ], style={"float": "right", "marginTop": "-4px"})
+                    ], style={"fontWeight": "bold", "backgroundColor": "#F8FAFC"}),
                     dbc.CardBody([
                         dbc.Spinner(html.Div(id="spdv-table-container"), color="primary")
                     ])

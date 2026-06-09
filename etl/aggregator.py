@@ -395,10 +395,10 @@ def rebuild_plans_weekly(conn, nam: int):
     
     # Đọc tất cả kế hoạch tháng của năm đó
     cursor.execute("""
-    SELECT thang, ma_buu_cuc, nhom_dich_vu, SUM(ke_hoach_doanh_thu) as kh_thang
+    SELECT thang, ma_buu_cuc, nhom_chinh, nhom_dich_vu, SUM(ke_hoach_doanh_thu) as kh_thang
     FROM plans 
     WHERE nam = ?
-    GROUP BY thang, ma_buu_cuc, nhom_dich_vu
+    GROUP BY thang, ma_buu_cuc, nhom_chinh, nhom_dich_vu
     """, (nam,))
     
     plans_data = cursor.fetchall()
@@ -406,13 +406,13 @@ def rebuild_plans_weekly(conn, nam: int):
         print(f"[Aggregator] Không tìm thấy kế hoạch tháng nào trong bảng plans cho năm {nam}. Bỏ qua rebuild_plans_weekly.")
         return 0
         
-    # Tổ chức plans_data dưới dạng dict để tra cứu nhanh: {(thang, ma_buu_cuc, nhom_dich_vu): kh_thang}
+    # Tổ chức plans_data dưới dạng dict để tra cứu nhanh: {(thang, ma_buu_cuc, nhom_chinh, nhom_dich_vu): kh_thang}
     plans_dict = {}
-    for thang, ma_buu_cuc, nhom_dich_vu, kh_thang in plans_data:
-        plans_dict[(thang, ma_buu_cuc, nhom_dich_vu)] = kh_thang
+    for thang, ma_buu_cuc, nhom_chinh, nhom_dich_vu, kh_thang in plans_data:
+        plans_dict[(thang, ma_buu_cuc, nhom_chinh, nhom_dich_vu)] = kh_thang
         
-    # Tập hợp danh sách tất cả các tổ hợp (ma_buu_cuc, nhom_dich_vu) có trong kế hoạch
-    buucuc_dichvu_pairs = set((ma_buu_cuc, nhom_dich_vu) for (_, ma_buu_cuc, nhom_dich_vu, _) in plans_data)
+    # Tập hợp danh sách tất cả các tổ hợp có trong kế hoạch
+    buucuc_dichvu_pairs = set((ma_buu_cuc, nhom_chinh, nhom_dich_vu) for (_, ma_buu_cuc, nhom_chinh, nhom_dich_vu, _) in plans_data)
     
     print(f"[Aggregator] Đang phân bổ plans_weekly cho năm {nam}...")
     
@@ -422,22 +422,21 @@ def rebuild_plans_weekly(conn, nam: int):
         start_str = w_start.isoformat()
         end_str = w_end.isoformat()
         
-        # Với mỗi tổ hợp bưu cục + dịch vụ, ta tính kế hoạch tuần bằng cách sum(kh_thang * ratio)
-        for ma_buu_cuc, nhom_dich_vu in buucuc_dichvu_pairs:
+        for ma_buu_cuc, nhom_chinh, nhom_dich_vu in buucuc_dichvu_pairs:
             ke_hoach_tuan = 0.0
             has_value = False
             
             for thang, nam_cua_thang, days_count, total_days in months_dist:
-                kh_thang = plans_dict.get((thang, ma_buu_cuc, nhom_dich_vu), 0.0)
+                kh_thang = plans_dict.get((thang, ma_buu_cuc, nhom_chinh, nhom_dich_vu), 0.0)
                 if kh_thang > 0:
                     ke_hoach_tuan += kh_thang * (days_count / total_days)
                     has_value = True
                     
             if has_value and ke_hoach_tuan > 0:
                 cursor.execute("""
-                INSERT INTO plans_weekly (nam, tuan_so, tuan_bat_dau, tuan_ket_thuc, ma_buu_cuc, nhom_dich_vu, ke_hoach_doanh_thu)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (nam, w_num, start_str, end_str, ma_buu_cuc, nhom_dich_vu, ke_hoach_tuan))
+                INSERT INTO plans_weekly (nam, tuan_so, tuan_bat_dau, tuan_ket_thuc, ma_buu_cuc, nhom_chinh, nhom_dich_vu, ke_hoach_doanh_thu)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (nam, w_num, start_str, end_str, ma_buu_cuc, nhom_chinh, nhom_dich_vu, ke_hoach_tuan))
                 total_inserted += 1
                 
     conn.commit()

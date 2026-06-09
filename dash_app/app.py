@@ -25,7 +25,7 @@ from components.sidebar import create_sidebar_layout
 from components.topbar import create_topbar_layout
 
 # Import các trang Layouts
-from pages.kpi_page import create_kpi_page_layout
+from pages.service_overview import create_service_page_layout
 from pages.customer_detail import create_customer_detail_layout
 from pages.import_data import create_import_page_layout
 from pages.hcc_revenue import create_hcc_revenue_layout
@@ -39,7 +39,7 @@ from pages.service_detail import create_service_detail_layout
 # Import các Callbacks đăng ký
 from callbacks.sidebar_callbacks import register_sidebar_callbacks
 from callbacks.topbar_callbacks import register_topbar_callbacks
-from callbacks.kpi_callbacks import register_kpi_callbacks
+
 from callbacks.customer_callbacks import register_customer_callbacks
 from callbacks.import_callbacks import register_import_callbacks
 from callbacks.service_detail_callbacks import register_service_detail_callbacks
@@ -136,7 +136,7 @@ def load_filter_options():
             options["cum"] = df_cum.iloc[:, 0].tolist()
         
         # Load Bưu điện huyện/xã (BDX)
-        df_bdx = pd.read_sql_query("SELECT DISTINCT ten_bdx FROM dim_buucuc WHERE ten_bdx IS NOT NULL ORDER BY ten_bdx", conn)
+        df_bdx = pd.read_sql_query("SELECT DISTINCT ten_bdx FROM dim_buucuc WHERE ten_bdx IS NOT NULL AND ten_bdx NOT LIKE 'Đại diện Cụm%' ORDER BY ten_bdx", conn)
         if not df_bdx.empty:
             options["bdx"] = df_bdx.iloc[:, 0].tolist()
         
@@ -243,6 +243,13 @@ def sync_url_to_tabs_navigation(pathname):
     Đồng bộ URL pathname với value của tabs-navigation ảo để kích hoạt 
     các callback cũ của BCCP mà không phải sửa mã nguồn của chúng.
     """
+    if not pathname:
+        return None
+        
+    # Chuẩn hóa pathname: xóa dấu slash ở cuối nếu có (trừ trang chủ)
+    if pathname != "/" and pathname.endswith("/"):
+        pathname = pathname.rstrip("/")
+        
     if pathname == "/bccp":
         return "tab-kpi"
     elif pathname == "/bccp/customer":
@@ -281,7 +288,7 @@ def render_page(pathname):
             return html.Div("Trang Tổng quan chung đang được xây dựng...", className="empty-state-container"), "📊 Tổng quan điều hành doanh thu"
             
     elif pathname == "/bccp":
-        return create_kpi_page_layout(), "📊 Bưu chính chuyển phát - KPI"
+        return create_service_page_layout("BCCP"), "📊 Bưu chính chuyển phát - KPI"
     elif pathname == "/bccp/customer":
         return create_customer_detail_layout(), "📊 Bưu chính chuyển phát - Khách hàng"
     elif pathname == "/bccp/new-customer":
@@ -358,7 +365,7 @@ def handle_logout(n_clicks):
 # --------------------------------------------------------------------------
 register_sidebar_callbacks(app)
 register_topbar_callbacks(app)
-register_kpi_callbacks(app)
+
 register_customer_callbacks(app)
 register_import_callbacks(app)
 register_service_detail_callbacks(app)

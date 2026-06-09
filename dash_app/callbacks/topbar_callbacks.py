@@ -47,25 +47,72 @@ def register_topbar_callbacks(app):
         else:  # Mặc định là Tháng
             return {"display": "none"}, {"display": "block"}
 
-    # 2. Callback cập nhật options Tuần khi đổi Năm
     @app.callback(
         [Output("sidebar-week-select", "options"),
          Output("sidebar-week-select", "value")],
-        [Input("sidebar-year", "value")]
+        [Input("sidebar-year", "value"),
+         Input("sidebar-period", "value")],
+        [State("sidebar-week-select", "value")]
     )
-    def update_week_dropdown(year):
+    def update_week_dropdown(year, period, current_week):
         if not year:
-            return [], None
+            return dash.no_update, dash.no_update
+
         weeks = get_week_list(int(year))
         options = []
+        valid_weeks = []
         for w_num, w_from, w_to in weeks:
+            valid_weeks.append(w_num)
             options.append({
                 "label": f"Tuần {w_num:02d} ({w_from.strftime('%d/%m')} - {w_to.strftime('%d/%m')})",
-                "value": w_num  # Đổi thành w_num (1-indexed) để đồng bộ với query DB tuần của các trang
+                "value": w_num
             })
-        return options, 1 if options else None
+
+        # Xác định tuần mặc định dùng CUSTOM week (không dùng ISO week)
+        from datetime import date
+        today = date.today()
+        current_year = today.year
+
+        default_week = None
+        if int(year) == current_year:
+            # Tìm tuần custom chứa ngày hôm nay
+            for w_num, w_from, w_to in weeks:
+                if w_from <= today <= w_to:
+                    default_week = w_num
+                    break
+            if default_week is None and valid_weeks:
+                default_week = valid_weeks[-1]
+        elif valid_weeks:
+            default_week = valid_weeks[-1] if int(year) < current_year else valid_weeks[0]
+
+        ctx = dash.callback_context
+        triggered_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else ""
+
+        # Nếu user switch sang Tuần: luôn reset về tuần hiện tại
+        if triggered_id == "sidebar-period" and period == "Tuần":
+            final_week = default_week
+        # Nếu đổi năm hoặc giữ nguyên tuần đang chọn nếu hợp lệ
+        elif current_week and current_week in valid_weeks:
+            final_week = current_week
+        else:
+            final_week = default_week
+
+        return options, final_week
+
+    # 2b. Callback reset tháng về tháng hiện tại khi switch sang Tháng
+    @app.callback(
+        Output("sidebar-month-select", "value", allow_duplicate=True),
+        [Input("sidebar-period", "value")],
+        prevent_initial_call=True
+    )
+    def reset_month_on_period_switch(period):
+        if period == "Tháng":
+            from datetime import date
+            return date.today().month
+        return dash.no_update
 
     # 3 & 4. Callback cascade địa lý: Cụm -> BĐX -> Bưu cục
+
     # Gộp chung để tránh lỗi trùng lặp output trong Dash
     @app.callback(
         [Output("sidebar-bdx", "options"),
@@ -96,7 +143,7 @@ def register_topbar_callbacks(app):
             # TH1: Callback kích hoạt lần đầu hoặc do đổi Cụm
             if not triggered_id or triggered_id == "sidebar-cum":
                 # Lấy tất cả Xã/Phường thuộc Cụm
-                query_bdx = "SELECT DISTINCT ten_bdx FROM dim_buucuc WHERE ten_bdx IS NOT NULL"
+                query_bdx = "SELECT DISTINCT ten_bdx FROM dim_buucuc WHERE ten_bdx IS NOT NULL AND ten_bdx NOT LIKE 'Đại diện Cụm%'"
                 params_bdx = []
                 if cum_val and cum_val != "Tất cả":
                     query_bdx += " AND ten_cum = ?"
@@ -104,10 +151,13 @@ def register_topbar_callbacks(app):
                 query_bdx += " ORDER BY ten_bdx"
                 df_bdx = pd.read_sql_query(query_bdx, conn, params=params_bdx)
                 bdx_opts = [{"label": "Tất cả BĐX", "value": "Tất cả"}] + [{"label": b, "value": b} for b in df_bdx["ten_bdx"].tolist()]
-                bdx_value = "Tất cả"
+                if bdx_val and bdx_val in df_bdx["ten_bdx"].tolist():
+                    bdx_value = bdx_val
+                else:
+                    bdx_value = "Tất cả"
                 
-                # Lấy tất cả Bưu cục thuộc Cụm
-                query_bc = "SELECT ma_bc, ten_buu_cuc FROM dim_buucuc WHERE ma_bc IS NOT NULL"
+                # Lấy tất cả Bưu cục thuộc Cụm (loại bỏ mã đại diện cụm và đại diện xã)
+                query_bc = "SELECT ma_bc, ten_buu_cuc FROM dim_buucuc WHERE ma_bc IS NOT NULL AND ma_bc != ma_bdx AND ma_bc NOT LIKE 'CUM_%'"
                 params_bc = []
                 if cum_val and cum_val != "Tất cả":
                     query_bc += " AND ten_cum = ?"
@@ -119,7 +169,7 @@ def register_topbar_callbacks(app):
                 
             # TH2: Đổi Xã/Phường -> chỉ cascade xuống Bưu cục
             elif triggered_id == "sidebar-bdx":
-                query_bc = "SELECT ma_bc, ten_buu_cuc FROM dim_buucuc WHERE ma_bc IS NOT NULL"
+                query_bc = "SELECT ma_bc, ten_buu_cuc FROM dim_buucuc WHERE ma_bc IS NOT NULL AND ma_bc != ma_bdx AND ma_bc NOT LIKE 'CUM_%'"
                 params_bc = []
                 if cum_val and cum_val != "Tất cả":
                     query_bc += " AND ten_cum = ?"

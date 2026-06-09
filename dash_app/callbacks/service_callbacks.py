@@ -47,18 +47,14 @@ def get_plans_current_period_sub(db_path, service_key, period_type, period_value
                 SELECT p.nhom_dich_vu, SUM(p.ke_hoach_doanh_thu) 
                 FROM plans p
                 INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_bc
-                WHERE p.nam = ? AND p.thang = ? AND p.nhom_dich_vu IN (
-                    SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
-                )
+                WHERE p.nam = ? AND p.thang = ? AND p.nhom_chinh = ? AND p.nhom_dich_vu IS NOT NULL
             """
         else:
             sql = """
                 SELECT p.nhom_dich_vu, SUM(p.ke_hoach_doanh_thu) 
                 FROM plans_weekly p
                 INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_bc
-                WHERE p.nam = ? AND p.tuan_so = ? AND p.nhom_dich_vu IN (
-                    SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
-                )
+                WHERE p.nam = ? AND p.tuan_so = ? AND p.nhom_chinh = ? AND p.nhom_dich_vu IS NOT NULL
             """
         
         clauses = []
@@ -86,7 +82,7 @@ def get_plans_current_period_sub(db_path, service_key, period_type, period_value
         conn.close()
     return res
 
-def create_top10_table_sub(df):
+def create_top10_table_sub(df, is_plan=False):
     """Tạo bảng Top 10 đơn giản cho dịch vụ con"""
     if df.empty:
         return html.Div("Không có dữ liệu phù hợp", style={"color": "#64748B", "fontSize": "12px", "textAlign": "center", "padding": "10px"})
@@ -94,20 +90,26 @@ def create_top10_table_sub(df):
     rows = []
     for idx, row in df.iterrows():
         ratio_val = row['ratio']
-        color = "#10B981" if ratio_val >= 0 else "#EF4444"
-        icon = "▲" if ratio_val >= 0 else "▼"
+        if is_plan:
+            color = "#0F172A"
+            display_val = f"{ratio_val:.1f}%"
+        else:
+            color = "#10B981" if ratio_val >= 0 else "#EF4444"
+            icon = "▲" if ratio_val >= 0 else "▼"
+            display_val = f"{icon} {abs(ratio_val):.1f}%"
+            
         rows.append(html.Tr([
             html.Td(f"{idx+1}", style={"width": "30px", "fontWeight": "bold", "color": "#64748B"}),
             html.Td(row['ten_cum'], style={"color": "#475569"}),
             html.Td(row['ten_bdx'], style={"fontWeight": "medium", "color": "#0F172A"}),
-            html.Td(f"{icon} {abs(ratio_val):.1f}%", style={"color": color, "fontWeight": "bold", "textAlign": "right"})
+            html.Td(display_val, style={"color": color, "fontWeight": "bold", "textAlign": "right"})
         ]))
         
     return html.Table([
         html.Tbody(rows)
     ], className="table table-sm table-borderless", style={"fontSize": "12px", "marginBottom": 0})
 
-def create_detail_table_sub(df, sub_services, compare_type):
+def create_detail_table_sub(df, sub_services, compare_type, title_label="⭐️ TOÀN TỈNH"):
     """Tạo bảng DataTable hiển thị chi tiết xã theo các nhóm dịch vụ con"""
     if df.empty:
         return html.Div("Không có dữ liệu", style={"textAlign": "center", "padding": "20px"})
@@ -122,13 +124,13 @@ def create_detail_table_sub(df, sub_services, compare_type):
         df['ratio_display'] = df['ratio'].map(lambda x: f"{x:+.1f}%" if pd.notna(x) and x != float('inf') and x != float('-inf') else "—")
         ratio_col_name = "Tăng trưởng vs Cùng kỳ"
     else: # plan
-        df['ratio'] = (df['tong_dt'] / df['plan_dt']) * 100.0
-        df['ratio_display'] = df['ratio'].map(lambda x: f"{x:.1f}%" if pd.notna(x) and x != float('inf') and x != float('-inf') else "—")
+        df['ratio'] = df.apply(lambda r: (r['tong_dt'] / r['plan_dt'] * 100.0) if pd.notna(r['plan_dt']) and r['plan_dt'] > 0 else None, axis=1)
+        df['ratio_display'] = df['ratio'].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "Không có KH")
         ratio_col_name = "Hoàn thành Kế hoạch"
         
     # Tính dòng TOÀN TỈNH
     prov_dict = {
-        "ten_cum": "⭐️ TOÀN TỈNH",
+        "ten_cum": title_label,
         "ten_bdx": "",
         "tong_dt": df["tong_dt"].sum(),
         "dt_prev": df["dt_prev"].sum(),
@@ -151,7 +153,7 @@ def create_detail_table_sub(df, sub_services, compare_type):
     else: # plan
         p_plan = prov_row.iloc[0]['plan_dt']
         prov_row['ratio'] = (prov_row['tong_dt'] / p_plan * 100.0) if p_plan > 0 else None
-        prov_row['ratio_display'] = prov_row['ratio'].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
+        prov_row['ratio_display'] = prov_row['ratio'].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "Không có KH")
         
     df_sorted = df.sort_values(by=['ten_cum', 'ten_bdx'], ascending=True)
     df_final = pd.concat([prov_row, df_sorted], ignore_index=True)
@@ -208,10 +210,13 @@ def create_detail_table_sub(df, sub_services, compare_type):
 
 def query_sub_service_data(conn, service_key, period_type, period_val, year, sub_services, cum=None, bdx=None, buu_cuc=None):
     """Query chi tiết doanh thu theo bưu cục xã, phân rã theo nhóm dịch vụ con"""
+    import config.week_calendar as calendar_helper
+    cursor = conn.cursor()
+    
     # 1. Tìm kỳ trước và cùng kỳ
     prev_val, prev_yr = get_prev_period_info(period_type, period_val, year)
     
-    # 2. Query doanh thu kỳ hiện tại
+    # 2. Query doanh thu dịch vụ kỳ hiện tại
     if period_type == 'Tháng':
         sql = """
             SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
@@ -221,7 +226,6 @@ def query_sub_service_data(conn, service_key, period_type, period_val, year, sub
             )
             GROUP BY buu_cuc, nhom_dich_vu
         """
-        params = (year, period_val, service_key)
     else:
         sql = """
             SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
@@ -231,9 +235,8 @@ def query_sub_service_data(conn, service_key, period_type, period_val, year, sub
             )
             GROUP BY buu_cuc, nhom_dich_vu
         """
-        params = (year, period_val, service_key)
         
-    df_raw = pd.read_sql_query(sql, conn, params=params)
+    df_raw = pd.read_sql_query(sql, conn, params=(year, period_val, service_key))
     
     if not df_raw.empty:
         df_pivot = df_raw.pivot(index='buu_cuc', columns='nhom_dich_vu', values='dt').fillna(0.0).reset_index()
@@ -243,7 +246,6 @@ def query_sub_service_data(conn, service_key, period_type, period_val, year, sub
     for sub in sub_services:
         if sub not in df_pivot.columns:
             df_pivot[sub] = 0.0
-            
     df_pivot['tong_dt'] = df_pivot[sub_services].sum(axis=1)
     
     # 3. Query tổng doanh thu kỳ trước
@@ -254,7 +256,6 @@ def query_sub_service_data(conn, service_key, period_type, period_val, year, sub
             WHERE nam = ? AND thang = ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
             GROUP BY buu_cuc
         """
-        prev_params = (prev_yr, prev_val, service_key)
     else:
         prev_sql = """
             SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev 
@@ -262,9 +263,7 @@ def query_sub_service_data(conn, service_key, period_type, period_val, year, sub
             WHERE nam = ? AND tuan_so = ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
             GROUP BY buu_cuc
         """
-        prev_params = (prev_yr, prev_val, service_key)
-        
-    df_prev = pd.read_sql_query(prev_sql, conn, params=prev_params)
+    df_prev = pd.read_sql_query(prev_sql, conn, params=(prev_yr, prev_val, service_key))
     
     # 4. Query tổng doanh thu cùng kỳ năm trước
     if period_type == 'Tháng':
@@ -281,47 +280,136 @@ def query_sub_service_data(conn, service_key, period_type, period_val, year, sub
             WHERE nam = ? AND tuan_so = ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
             GROUP BY buu_cuc
         """
-    yoy_params = (year - 1, period_val, service_key)
-    df_yoy = pd.read_sql_query(yoy_sql, conn, params=yoy_params)
+    df_yoy = pd.read_sql_query(yoy_sql, conn, params=(year - 1, period_val, service_key))
     
     # 5. Query kế hoạch
     if period_type == 'Tháng':
-        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans WHERE nam = ? AND thang = ? AND nhom_dich_vu = ? GROUP BY ma_buu_cuc"
+        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans WHERE nam = ? AND thang = ? AND nhom_chinh = ? GROUP BY ma_buu_cuc"
     else:
-        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans_weekly WHERE nam = ? AND tuan_so = ? AND nhom_dich_vu = ? GROUP BY ma_buu_cuc"
-    plan_params = (year, period_val, service_key)
-    df_plan = pd.read_sql_query(plan_sql, conn, params=plan_params)
+        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans_weekly WHERE nam = ? AND tuan_so = ? AND nhom_chinh = ? GROUP BY ma_buu_cuc"
+    df_plan = pd.read_sql_query(plan_sql, conn, params=(year, period_val, service_key))
     
-    # Merge all
-    df_merge = df_pivot
-    for df_c, col_name in [(df_prev, 'dt_prev'), (df_yoy, 'dt_yoy'), (df_plan, 'plan_dt')]:
-        if not df_c.empty:
-            df_merge = pd.merge(df_merge, df_c, on='buu_cuc', how='left')
-        else:
-            df_merge[col_name] = 0.0
-            
-    df_merge = df_merge.fillna(0.0)
+    # Load danh mục địa lý dim_buucuc
+    df_geo_all = pd.read_sql_query("SELECT ma_bc, ma_bdx, ten_bdx, ten_cum, ten_buu_cuc FROM dim_buucuc", conn)
+    bc_to_xa = df_geo_all.set_index('ma_bc')['ma_bdx'].dropna().to_dict()
+    bc_to_ten_xa = df_geo_all.set_index('ma_bc')['ten_bdx'].dropna().to_dict()
+    bc_to_cum = df_geo_all.set_index('ma_bc')['ten_cum'].dropna().to_dict()
+    bc_to_ten_bc = df_geo_all.set_index('ma_bc')['ten_buu_cuc'].dropna().to_dict()
     
-    df_buucuc = pd.read_sql_query("SELECT ma_bc as buu_cuc, ten_bdx, ten_cum FROM dim_buucuc", conn)
-    df_final = pd.merge(df_merge, df_buucuc, on='buu_cuc', how='inner')
+    df_xa_geo = df_geo_all[['ma_bdx', 'ten_bdx', 'ten_cum']].dropna().drop_duplicates(subset=['ma_bdx'])
+    xa_to_ten = df_xa_geo.set_index('ma_bdx')['ten_bdx'].to_dict()
+    xa_to_cum = df_xa_geo.set_index('ma_bdx')['ten_cum'].to_dict()
     
-    # Lọc địa lý
-    if cum and cum != "Tất cả":
-        df_final = df_final[df_final['ten_cum'] == cum]
-    if bdx and bdx != "Tất cả":
-        df_final = df_final[df_final['ten_bdx'] == bdx]
-    if buu_cuc and buu_cuc != "Tất cả":
-        df_final = df_final[df_final['buu_cuc'] == buu_cuc]
+    def assign_geo_info(df, code_col='buu_cuc'):
+        if df.empty:
+            df['ma_bdx'] = None
+            df['ten_bdx'] = None
+            df['ten_cum'] = None
+            df['ten_buu_cuc'] = None
+            return df
         
-    # Gộp bưu cục cùng xã lại
-    df_final = df_final.groupby(['ten_cum', 'ten_bdx'], as_index=False)[
-        sub_services + ['tong_dt', 'dt_prev', 'dt_yoy', 'plan_dt']
-    ].sum()
-    
-    return df_final
+        ma_bdx_list = []
+        ten_bdx_list = []
+        ten_cum_list = []
+        ten_bc_list = []
+        
+        for val in df[code_col]:
+            val_str = str(val).strip()
+            if len(val_str) == 4:
+                ma_bdx_list.append(val_str)
+                ten_bdx_list.append(xa_to_ten.get(val_str, None))
+                ten_cum_list.append(xa_to_cum.get(val_str, None))
+                ten_bc_list.append(None)
+            elif len(val_str) == 6:
+                ma_bdx_list.append(bc_to_xa.get(val_str, None))
+                ten_bdx_list.append(bc_to_ten_xa.get(val_str, None))
+                ten_cum_list.append(bc_to_cum.get(val_str, None))
+                ten_bc_list.append(bc_to_ten_bc.get(val_str, None))
+            else:
+                ma_bdx_list.append(val_str)
+                ten_bdx_list.append(None)
+                ten_cum_list.append(None)
+                ten_bc_list.append(None)
+                
+        df['ma_bdx'] = ma_bdx_list
+        df['ten_bdx'] = ten_bdx_list
+        df['ten_cum'] = ten_cum_list
+        df['ten_buu_cuc'] = ten_bc_list
+        return df
+
+    # Gán địa lý
+    df_pivot = assign_geo_info(df_pivot, 'buu_cuc')
+    df_prev = assign_geo_info(df_prev, 'buu_cuc')
+    df_yoy = assign_geo_info(df_yoy, 'buu_cuc')
+    df_plan = assign_geo_info(df_plan, 'buu_cuc')
+
+    if bdx == 'Tất cả' or not bdx:
+        # Cấp Cụm: So sánh các Xã
+        def grp_df(df, sum_cols):
+            if df.empty:
+                return pd.DataFrame(columns=['ma_bdx'] + sum_cols)
+            df_filtered = df[df['ma_bdx'].notna() & (~df['ma_bdx'].str.startswith('CUM_'))]
+            if not df_filtered.empty:
+                df_filtered = df_filtered[~df_filtered['ten_bdx'].fillna('').str.contains('Đại diện Cụm', na=False)]
+            return df_filtered.groupby('ma_bdx')[sum_cols].sum().reset_index()
+
+        df_curr_grp = grp_df(df_pivot, sub_services + ['tong_dt'])
+        df_prev_grp = grp_df(df_prev, ['dt_prev'])
+        df_yoy_grp = grp_df(df_yoy, ['dt_yoy'])
+        df_plan_grp = grp_df(df_plan, ['plan_dt'])
+
+        # Merge các bảng đã gộp
+        df_merge = df_curr_grp
+        for df_c in [df_prev_grp, df_yoy_grp, df_plan_grp]:
+            df_merge = pd.merge(df_merge, df_c, on='ma_bdx', how='outer')
+        df_merge = df_merge.fillna(0.0)
+
+        # Lấy lại ten_bdx và ten_cum
+        df_merge['ten_bdx'] = df_merge['ma_bdx'].map(xa_to_ten)
+        df_merge['ten_cum'] = df_merge['ma_bdx'].map(xa_to_cum)
+
+        # Áp dụng bộ lọc cụm
+        if cum and cum != 'Tất cả':
+            df_merge = df_merge[df_merge['ten_cum'] == cum]
+            
+        df_merge = df_merge[df_merge['ten_bdx'].notna()]
+        return df_merge.reset_index(drop=True)
+    else:
+        # Cấp Xã: So sánh các bưu cục con 6 số
+        df_buucuc_real = df_geo_all[
+            (df_geo_all['ten_bdx'] == bdx) & 
+            (df_geo_all['ten_cum'] == cum) & 
+            (df_geo_all['ma_bc'].str.len() == 6) & 
+            (~df_geo_all['ma_bc'].str.startswith('CUM_'))
+        ]
+        real_ma_bc_list = set(df_buucuc_real['ma_bc'])
+
+        # Merge trực tiếp theo buu_cuc
+        df_merge = df_pivot
+        for df_c in [df_prev, df_yoy, df_plan]:
+            if not df_c.empty:
+                df_merge = pd.merge(df_merge, df_c[['buu_cuc', 'dt_prev' if 'dt_prev' in df_c else ('dt_yoy' if 'dt_yoy' in df_c else 'plan_dt')]], on='buu_cuc', how='outer')
+        df_merge = df_merge.fillna(0.0)
+
+        # Chỉ giữ lại bưu cục con thực tế thuộc xã
+        df_merge = df_merge[df_merge['buu_cuc'].isin(real_ma_bc_list)]
+        
+        # Chỉ giữ bưu cục thực tế có phát sinh doanh thu thực tế (tong_dt > 0)
+        df_merge = df_merge[df_merge['tong_dt'] > 0]
+
+        # Gán tên bưu cục hiển thị
+        df_merge['ten_bdx'] = df_merge['buu_cuc'].map(bc_to_ten_bc)
+        df_merge['ma_bdx'] = df_merge['buu_cuc']
+        df_merge['ten_cum'] = cum
+
+        return df_merge.reset_index(drop=True)
+
 
 def query_sub_service_data_ytd(conn, service_key, period_type, period_val, year, sub_services, cum=None, bdx=None, buu_cuc=None):
     """Query chi tiết doanh thu lũy kế YTD theo bưu cục xã, phân rã theo nhóm dịch vụ con"""
+    import config.week_calendar as calendar_helper
+    cursor = conn.cursor()
+    
     # 1. Query doanh thu YTD hiện tại
     if period_type == 'Tháng':
         sql = """
@@ -332,7 +420,6 @@ def query_sub_service_data_ytd(conn, service_key, period_type, period_val, year,
             )
             GROUP BY buu_cuc, nhom_dich_vu
         """
-        params = (year, period_val, service_key)
     else:
         sql = """
             SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
@@ -342,9 +429,8 @@ def query_sub_service_data_ytd(conn, service_key, period_type, period_val, year,
             )
             GROUP BY buu_cuc, nhom_dich_vu
         """
-        params = (year, period_val, service_key)
         
-    df_raw = pd.read_sql_query(sql, conn, params=params)
+    df_raw = pd.read_sql_query(sql, conn, params=(year, period_val, service_key))
     
     if not df_raw.empty:
         df_pivot = df_raw.pivot(index='buu_cuc', columns='nhom_dich_vu', values='dt').fillna(0.0).reset_index()
@@ -354,29 +440,35 @@ def query_sub_service_data_ytd(conn, service_key, period_type, period_val, year,
     for sub in sub_services:
         if sub not in df_pivot.columns:
             df_pivot[sub] = 0.0
-            
     df_pivot['tong_dt'] = df_pivot[sub_services].sum(axis=1)
     
-    # 2. Query tổng doanh thu kỳ trước lũy kế
-    prev_val, prev_yr = get_prev_period_info(period_type, period_val, year)
+    # 2. Query tổng doanh thu YTD kỳ trước (lũy kế YTD đến kỳ trước liền kề)
     if period_type == 'Tháng':
+        prev_val = period_val - 1
+        prev_yr = year
+        if prev_val == 0:
+            prev_val = 12
+            prev_yr = year - 1
         prev_sql = """
             SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev 
             FROM agg_monthly 
             WHERE nam = ? AND thang BETWEEN 1 AND ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
             GROUP BY buu_cuc
         """
-        prev_params = (prev_yr, prev_val, service_key)
     else:
+        prev_val = period_val - 1
+        prev_yr = year
+        if prev_val == 0:
+            prev_yr = year - 1
+            weeks = calendar_helper.get_week_list(prev_yr)
+            prev_val = weeks[-1][0] if weeks else 52
         prev_sql = """
             SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev 
             FROM agg_weekly 
             WHERE nam = ? AND tuan_so BETWEEN 1 AND ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
             GROUP BY buu_cuc
         """
-        prev_params = (prev_yr, prev_val, service_key)
-        
-    df_prev = pd.read_sql_query(prev_sql, conn, params=prev_params)
+    df_prev = pd.read_sql_query(prev_sql, conn, params=(prev_yr, prev_val, service_key))
     
     # 3. Query tổng doanh thu cùng kỳ YTD
     if period_type == 'Tháng':
@@ -393,43 +485,129 @@ def query_sub_service_data_ytd(conn, service_key, period_type, period_val, year,
             WHERE nam = ? AND tuan_so BETWEEN 1 AND ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
             GROUP BY buu_cuc
         """
-    yoy_params = (year - 1, period_val, service_key)
-    df_yoy = pd.read_sql_query(yoy_sql, conn, params=yoy_params)
+    df_yoy = pd.read_sql_query(yoy_sql, conn, params=(year - 1, period_val, service_key))
     
-    # 4. Query kế hoạch lũy kế YTD
+    # 4. Query kế hoạch cả năm
     if period_type == 'Tháng':
-        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans WHERE nam = ? AND thang BETWEEN 1 AND ? AND nhom_dich_vu = ? GROUP BY ma_buu_cuc"
+        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans WHERE nam = ? AND nhom_chinh = ? GROUP BY ma_buu_cuc"
     else:
-        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans_weekly WHERE nam = ? AND tuan_so BETWEEN 1 AND ? AND nhom_dich_vu = ? GROUP BY ma_buu_cuc"
-    plan_params = (year, period_val, service_key)
-    df_plan = pd.read_sql_query(plan_sql, conn, params=plan_params)
+        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans_weekly WHERE nam = ? AND nhom_chinh = ? GROUP BY ma_buu_cuc"
+    df_plan = pd.read_sql_query(plan_sql, conn, params=(year, service_key))
     
-    df_merge = df_pivot
-    for df_c, col_name in [(df_prev, 'dt_prev'), (df_yoy, 'dt_yoy'), (df_plan, 'plan_dt')]:
-        if not df_c.empty:
-            df_merge = pd.merge(df_merge, df_c, on='buu_cuc', how='left')
-        else:
-            df_merge[col_name] = 0.0
-            
-    df_merge = df_merge.fillna(0.0)
+    # Load danh mục địa lý dim_buucuc
+    df_geo_all = pd.read_sql_query("SELECT ma_bc, ma_bdx, ten_bdx, ten_cum, ten_buu_cuc FROM dim_buucuc", conn)
+    bc_to_xa = df_geo_all.set_index('ma_bc')['ma_bdx'].dropna().to_dict()
+    bc_to_ten_xa = df_geo_all.set_index('ma_bc')['ten_bdx'].dropna().to_dict()
+    bc_to_cum = df_geo_all.set_index('ma_bc')['ten_cum'].dropna().to_dict()
+    bc_to_ten_bc = df_geo_all.set_index('ma_bc')['ten_buu_cuc'].dropna().to_dict()
     
-    df_buucuc = pd.read_sql_query("SELECT ma_bc as buu_cuc, ten_bdx, ten_cum FROM dim_buucuc", conn)
-    df_final = pd.merge(df_merge, df_buucuc, on='buu_cuc', how='inner')
+    df_xa_geo = df_geo_all[['ma_bdx', 'ten_bdx', 'ten_cum']].dropna().drop_duplicates(subset=['ma_bdx'])
+    xa_to_ten = df_xa_geo.set_index('ma_bdx')['ten_bdx'].to_dict()
+    xa_to_cum = df_xa_geo.set_index('ma_bdx')['ten_cum'].to_dict()
     
-    # Lọc địa lý
-    if cum and cum != "Tất cả":
-        df_final = df_final[df_final['ten_cum'] == cum]
-    if bdx and bdx != "Tất cả":
-        df_final = df_final[df_final['ten_bdx'] == bdx]
-    if buu_cuc and buu_cuc != "Tất cả":
-        df_final = df_final[df_final['buu_cuc'] == buu_cuc]
+    def assign_geo_info(df, code_col='buu_cuc'):
+        if df.empty:
+            df['ma_bdx'] = None
+            df['ten_bdx'] = None
+            df['ten_cum'] = None
+            df['ten_buu_cuc'] = None
+            return df
         
-    # Gộp bưu cục cùng xã lại
-    df_final = df_final.groupby(['ten_cum', 'ten_bdx'], as_index=False)[
-        sub_services + ['tong_dt', 'dt_prev', 'dt_yoy', 'plan_dt']
-    ].sum()
-    
-    return df_final
+        ma_bdx_list = []
+        ten_bdx_list = []
+        ten_cum_list = []
+        ten_bc_list = []
+        
+        for val in df[code_col]:
+            val_str = str(val).strip()
+            if len(val_str) == 4:
+                ma_bdx_list.append(val_str)
+                ten_bdx_list.append(xa_to_ten.get(val_str, None))
+                ten_cum_list.append(xa_to_cum.get(val_str, None))
+                ten_bc_list.append(None)
+            elif len(val_str) == 6:
+                ma_bdx_list.append(bc_to_xa.get(val_str, None))
+                ten_bdx_list.append(bc_to_ten_xa.get(val_str, None))
+                ten_cum_list.append(bc_to_cum.get(val_str, None))
+                ten_bc_list.append(bc_to_ten_bc.get(val_str, None))
+            else:
+                ma_bdx_list.append(val_str)
+                ten_bdx_list.append(None)
+                ten_cum_list.append(None)
+                ten_bc_list.append(None)
+                
+        df['ma_bdx'] = ma_bdx_list
+        df['ten_bdx'] = ten_bdx_list
+        df['ten_cum'] = ten_cum_list
+        df['ten_buu_cuc'] = ten_bc_list
+        return df
+
+    # Gán địa lý
+    df_pivot = assign_geo_info(df_pivot, 'buu_cuc')
+    df_prev = assign_geo_info(df_prev, 'buu_cuc')
+    df_yoy = assign_geo_info(df_yoy, 'buu_cuc')
+    df_plan = assign_geo_info(df_plan, 'buu_cuc')
+
+    if bdx == 'Tất cả' or not bdx:
+        # Cấp Cụm: So sánh các Xã
+        def grp_df(df, sum_cols):
+            if df.empty:
+                return pd.DataFrame(columns=['ma_bdx'] + sum_cols)
+            df_filtered = df[df['ma_bdx'].notna() & (~df['ma_bdx'].str.startswith('CUM_'))]
+            if not df_filtered.empty:
+                df_filtered = df_filtered[~df_filtered['ten_bdx'].fillna('').str.contains('Đại diện Cụm', na=False)]
+            return df_filtered.groupby('ma_bdx')[sum_cols].sum().reset_index()
+
+        df_curr_grp = grp_df(df_pivot, sub_services + ['tong_dt'])
+        df_prev_grp = grp_df(df_prev, ['dt_prev'])
+        df_yoy_grp = grp_df(df_yoy, ['dt_yoy'])
+        df_plan_grp = grp_df(df_plan, ['plan_dt'])
+
+        # Merge các bảng đã gộp
+        df_merge = df_curr_grp
+        for df_c in [df_prev_grp, df_yoy_grp, df_plan_grp]:
+            df_merge = pd.merge(df_merge, df_c, on='ma_bdx', how='outer')
+        df_merge = df_merge.fillna(0.0)
+
+        # Lấy lại ten_bdx và ten_cum
+        df_merge['ten_bdx'] = df_merge['ma_bdx'].map(xa_to_ten)
+        df_merge['ten_cum'] = df_merge['ma_bdx'].map(xa_to_cum)
+
+        # Áp dụng bộ lọc cụm
+        if cum and cum != 'Tất cả':
+            df_merge = df_merge[df_merge['ten_cum'] == cum]
+            
+        df_merge = df_merge[df_merge['ten_bdx'].notna()]
+        return df_merge.reset_index(drop=True)
+    else:
+        # Cấp Xã: So sánh các bưu cục con 6 số
+        df_buucuc_real = df_geo_all[
+            (df_geo_all['ten_bdx'] == bdx) & 
+            (df_geo_all['ten_cum'] == cum) & 
+            (df_geo_all['ma_bc'].str.len() == 6) & 
+            (~df_geo_all['ma_bc'].str.startswith('CUM_'))
+        ]
+        real_ma_bc_list = set(df_buucuc_real['ma_bc'])
+
+        # Merge trực tiếp theo buu_cuc
+        df_merge = df_pivot
+        for df_c in [df_prev, df_yoy, df_plan]:
+            if not df_c.empty:
+                df_merge = pd.merge(df_merge, df_c[['buu_cuc', 'dt_prev' if 'dt_prev' in df_c else ('dt_yoy' if 'dt_yoy' in df_c else 'plan_dt')]], on='buu_cuc', how='outer')
+        df_merge = df_merge.fillna(0.0)
+
+        # Chỉ giữ lại bưu cục con thực tế thuộc xã
+        df_merge = df_merge[df_merge['buu_cuc'].isin(real_ma_bc_list)]
+        
+        # Chỉ giữ bưu cục thực tế có phát sinh doanh thu thực tế (tong_dt > 0)
+        df_merge = df_merge[df_merge['tong_dt'] > 0]
+
+        # Gán tên bưu cục hiển thị
+        df_merge['ten_bdx'] = df_merge['buu_cuc'].map(bc_to_ten_bc)
+        df_merge['ma_bdx'] = df_merge['buu_cuc']
+        df_merge['ten_cum'] = cum
+
+        return df_merge.reset_index(drop=True)
 
 def register_service_callbacks(app):
     """Đăng ký các callback động cho các trang dịch vụ (BCCP, HCC, TCBC, PPBL) sử dụng mô hình Pattern Matching Callbacks hoặc tương tự"""
@@ -506,13 +684,13 @@ def register_service_callbacks(app):
                 
                 try:
                     # 1. Query Top 10 của dịch vụ chính
-                    df_top_prev = get_top10_by_comparison(conn, cycle, period_val, year, 'prev', cum=cum, bdx=bdx, buu_cuc=buu_cuc)
-                    df_top_yoy = get_top10_by_comparison(conn, cycle, period_val, year, 'yoy', cum=cum, bdx=bdx, buu_cuc=buu_cuc)
-                    df_top_plan = get_top10_by_comparison(conn, cycle, period_val, year, 'plan', cum=cum, bdx=bdx, buu_cuc=buu_cuc)
+                    df_top_prev = get_top10_by_comparison(conn, cycle, period_val, year, 'prev', cum=cum, bdx=bdx, buu_cuc=buu_cuc, service_key=service_key)
+                    df_top_yoy = get_top10_by_comparison(conn, cycle, period_val, year, 'yoy', cum=cum, bdx=bdx, buu_cuc=buu_cuc, service_key=service_key)
+                    df_top_plan = get_top10_by_comparison(conn, cycle, period_val, year, 'plan', cum=cum, bdx=bdx, buu_cuc=buu_cuc, service_key=service_key)
                     
                     top10_prev = create_top10_table_sub(df_top_prev)
                     top10_yoy = create_top10_table_sub(df_top_yoy)
-                    top10_plan = create_top10_table_sub(df_top_plan)
+                    top10_plan = create_top10_table_sub(df_top_plan, is_plan=True)
                     
                     # 2. Query doanh thu 12 kỳ của các dịch vụ con
                     df_12p = get_12_periods_revenue_sub(conn, service_key, cycle, period_val, year, sub_services, cum=cum, bdx=bdx, buu_cuc=buu_cuc)
@@ -550,7 +728,12 @@ def register_service_callbacks(app):
                     rev_prev = query_sub_revenue_total(conn, service_key, cycle, prev_val, prev_yr, cum=cum, bdx=bdx, buu_cuc=buu_cuc)
                     
                     # Doanh thu cùng kỳ năm trước
-                    rev_yoy = query_sub_revenue_total(conn, service_key, cycle, period_val, year - 1, cum=cum, bdx=bdx, buu_cuc=buu_cuc)
+                    if cycle == 'Tháng':
+                        rev_yoy = query_sub_revenue_total(conn, service_key, cycle, period_val, year - 1, cum=cum, bdx=bdx, buu_cuc=buu_cuc)
+                    else:
+                        from analytics.global_metrics import get_weekly_yoy_query_params
+                        prev_yr, w_ratios = get_weekly_yoy_query_params(year, period_val)
+                        rev_yoy = query_sub_revenue_total(conn, service_key, cycle, period_val, prev_yr, cum=cum, bdx=bdx, buu_cuc=buu_cuc, w_ratios=w_ratios)
                     
                     # Kế hoạch
                     rev_plan = get_plans_current_period_sub(DB_PATH, service_key, cycle, period_val, year, cum=cum, bdx=bdx, buu_cuc=buu_cuc)
@@ -667,8 +850,23 @@ def register_service_callbacks(app):
                 
                 conn = sqlite3.connect(str(DB_PATH))
                 try:
+                    # Tính nhãn title_label động
+                    title_label = "⭐️ TOÀN TỈNH"
+                    if buu_cuc and buu_cuc != "Tất cả":
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT ten_buu_cuc FROM dim_buucuc WHERE ma_bc = ?", (buu_cuc,))
+                        row = cursor.fetchone()
+                        if row:
+                            title_label = f"⭐️ BC: {row[0].upper()}"
+                        else:
+                            title_label = f"⭐️ BC: {buu_cuc.upper()}"
+                    elif bdx and bdx != "Tất cả":
+                        title_label = f"⭐️ XÃ: {bdx.upper()}"
+                    elif cum and cum != "Tất cả" and cum != "Tất cả Cụm":
+                        title_label = f"⭐️ CỤM: {cum.upper()}"
+                        
                     df = query_sub_service_data(conn, service_key, cycle, period_val, year, sub_services, cum=cum, bdx=bdx, buu_cuc=buu_cuc)
-                    return create_detail_table_sub(df, sub_services, compare_type)
+                    return create_detail_table_sub(df, sub_services, compare_type, title_label=title_label)
                 except Exception as e:
                     return html.Div(f"Lỗi load bảng chi tiết xã: {e}")
                 finally:
@@ -715,8 +913,23 @@ def register_service_callbacks(app):
                 
                 conn = sqlite3.connect(str(DB_PATH))
                 try:
+                    # Tính nhãn title_label động
+                    title_label = "⭐️ TOÀN TỈNH"
+                    if buu_cuc and buu_cuc != "Tất cả":
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT ten_buu_cuc FROM dim_buucuc WHERE ma_bc = ?", (buu_cuc,))
+                        row = cursor.fetchone()
+                        if row:
+                            title_label = f"⭐️ BC: {row[0].upper()}"
+                        else:
+                            title_label = f"⭐️ BC: {buu_cuc.upper()}"
+                    elif bdx and bdx != "Tất cả":
+                        title_label = f"⭐️ XÃ: {bdx.upper()}"
+                    elif cum and cum != "Tất cả" and cum != "Tất cả Cụm":
+                        title_label = f"⭐️ CỤM: {cum.upper()}"
+                        
                     df = query_sub_service_data_ytd(conn, service_key, cycle, period_val, year, sub_services, cum=cum, bdx=bdx, buu_cuc=buu_cuc)
-                    return create_detail_table_sub(df, sub_services, compare_type)
+                    return create_detail_table_sub(df, sub_services, compare_type, title_label=title_label)
                 except Exception as e:
                     return html.Div(f"Lỗi load bảng lũy kế YTD: {e}")
                 finally:
@@ -725,7 +938,7 @@ def register_service_callbacks(app):
         # Chạy hàm khởi tạo callbacks
         make_callbacks(prefix)
 
-def query_sub_revenue_total(conn, service_key, period_type, period_val, year, cum=None, bdx=None, buu_cuc=None):
+def query_sub_revenue_total(conn, service_key, period_type, period_val, year, cum=None, bdx=None, buu_cuc=None, w_ratios=None):
     """Tính tổng doanh thu hiện tại theo từng nhóm dịch vụ con"""
     res = {}
     cursor = conn.cursor()
@@ -738,17 +951,34 @@ def query_sub_revenue_total(conn, service_key, period_type, period_val, year, cu
                 SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
             )
         """
+        params = [year, period_val, service_key]
     else:
-        sql = """
-            SELECT a.nhom_dich_vu, SUM(a.tong_doanh_thu) 
-            FROM agg_weekly a
-            INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc
-            WHERE a.nam = ? AND a.tuan_so = ? AND a.nhom_dich_vu IN (
-                SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
-            )
-        """
+        if w_ratios:
+            cases = []
+            for w_num, ratio in w_ratios:
+                cases.append(f"WHEN a.tuan_so = {w_num} THEN a.tong_doanh_thu * {ratio:.8f}")
+            cases_str = " + ".join(cases)
+            sql = f"""
+                SELECT a.nhom_dich_vu, SUM(CASE {cases_str} ELSE 0 END) 
+                FROM agg_weekly a
+                INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc
+                WHERE a.nam = ? AND a.tuan_so IN ({','.join(str(w[0]) for w in w_ratios)}) AND a.nhom_dich_vu IN (
+                    SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
+                )
+            """
+            params = [year, service_key]
+        else:
+            sql = """
+                SELECT a.nhom_dich_vu, SUM(a.tong_doanh_thu) 
+                FROM agg_weekly a
+                INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc
+                WHERE a.nam = ? AND a.tuan_so = ? AND a.nhom_dich_vu IN (
+                    SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
+                )
+            """
+            params = [year, period_val, service_key]
+            
     clauses = []
-    params = [year, period_val, service_key]
     if cum and cum != "Tất cả":
         clauses.append("b.ten_cum = ?")
         params.append(cum)

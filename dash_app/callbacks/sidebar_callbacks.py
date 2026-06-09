@@ -82,7 +82,7 @@ def register_sidebar_callbacks(app):
         
         # Xác định active accordion item: Mở theo từng nhóm trang
         if not pathname or pathname == "/":
-            active_accordion = ""
+            active_accordion = "close-all"
         elif pathname.startswith("/bccp"):
             active_accordion = "menu-bccp"
         elif pathname.startswith("/hcc"):
@@ -92,26 +92,29 @@ def register_sidebar_callbacks(app):
         elif pathname.startswith("/ppbl"):
             active_accordion = "menu-ppbl"
         else:
-            active_accordion = ""
+            active_accordion = "close-all"
                 
         # Highlight active menu link
-        if not pathname or pathname == "/":
+        # Xóa trailing slash để so sánh chính xác
+        clean_path = pathname.rstrip('/') if pathname and pathname != "/" else pathname
+        
+        if not clean_path or clean_path == "/":
             classes["global"] = "sidebar-menu-item active"
-        elif pathname == "/bccp":
+        elif clean_path == "/bccp":
             classes["bccp-kpi"] = "sidebar-menu-item active active-bccp"
-        elif pathname == "/bccp/customer":
+        elif clean_path == "/bccp/customer":
             classes["bccp-cust"] = "sidebar-menu-item active active-bccp"
-        elif pathname == "/bccp/new-customer":
+        elif clean_path == "/bccp/new-customer":
             classes["bccp-new-cust"] = "sidebar-menu-item active active-bccp"
-        elif pathname == "/bccp/retention":
+        elif clean_path == "/bccp/retention":
             classes["bccp-ret"] = "sidebar-menu-item active active-bccp"
-        elif pathname == "/bccp/service-detail":
+        elif clean_path == "/bccp/service-detail":
             classes["bccp-detail"] = "sidebar-menu-item active active-bccp"
-        elif pathname == "/hcc":
+        elif clean_path == "/hcc":
             classes["hcc-over"] = "sidebar-menu-item active active-hcc"
-        elif pathname == "/tcbc":
+        elif clean_path == "/tcbc":
             classes["tcbc-over"] = "sidebar-menu-item active active-tcbc"
-        elif pathname == "/ppbl":
+        elif clean_path == "/ppbl":
             classes["ppbl-over"] = "sidebar-menu-item active active-ppbl"
             
         return (

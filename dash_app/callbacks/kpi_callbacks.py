@@ -51,7 +51,7 @@ def get_bccp_plan(db_path, year, month, cum=None, bdx=None, buu_cuc=None):
         SELECT SUM(p.ke_hoach_doanh_thu)
         FROM plans p
         INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_bc
-        WHERE p.nam = :nam AND p.thang = :thang AND p.nhom_dich_vu = 'BCCP'
+        WHERE p.nam = :nam AND p.thang = :thang AND p.nhom_chinh = 'BCCP'
     """
     params = {"nam": year, "thang": month}
     if cum and cum != "Tất cả":

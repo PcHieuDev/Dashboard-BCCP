@@ -3,6 +3,124 @@
 > Báo cáo này đã được **sắp xếp theo thời gian chỉnh sửa mới nhất (Từ gần đây nhất đến cũ nhất)**.
 > Các cuộc trò chuyện ở phía trên có thời gian cập nhật muộn hơn, do đó chứa các quyết định và chỉnh sửa **có độ ưu tiên cao hơn**, ghi đè lên các thay đổi hoặc logic cũ ở các cuộc trò chuyện phía dưới.
 
+---
+
+## Cuộc trò chuyện `051bef8c-70c1-4b89-b999-26942544cca7`
+- **Thời gian chỉnh sửa cuối:** `10/06/2026 00:30:00`
+
+### 📋 Tóm tắt nội dung thi công — Phase 13: Đồng bộ lịch tuần & Chuẩn hóa so sánh 3 cấp
+
+> ## Nội dung thực hiện
+>
+> ### 1. Đồng bộ lịch tuần các năm cũ theo năm 2026
+> - Cập nhật [week_calendar.py](file:///E:/Projects/Dashboard-BCCP/config/week_calendar.py) để khi năm lọc khác 2026 (ví dụ: 2025), lịch tuần sẽ được kế thừa chính xác theo mốc ngày của năm 2026 (chỉ đổi phần năm). 
+> - Việc này giải quyết triệt để lỗi lệch ngày khi chạy báo cáo so sánh cùng kỳ (YoY) theo Tuần.
+>
+> ### 2. Chuẩn hóa so sánh Doanh thu / Kế hoạch 3 cấp
+> - **Cấp Cụm (so sánh các Xã)**: 
+>   - Gộp nhóm theo mã xã `ma_bdx`. Doanh thu tính tổng các bưu cục, kế hoạch tính tổng kế hoạch HCC cộng dồn từ plans.
+>   - Sử dụng cơ chế ghép ngoài (`outer join`) để giữ lại các dòng chỉ có kế hoạch (ví dụ chỉ có kế hoạch HCC nhưng không phát sinh doanh thu BCCP).
+>   - Loại trừ hoàn toàn các xã ảo đại diện cụm như `"Đại diện Cụm Anh Sơn"`, `"Đại diện Cụm Con Cuông"`... trên bộ chọn dropdown xã và trong bảng chi tiết.
+> - **Cấp Xã (so sánh các bưu cục con 6 số)**:
+>   - Chỉ hiển thị các bưu cục 6 số thực tế thuộc xã và có doanh thu phát sinh thực tế (`tong_dt > 0`).
+>   - Đối với các chỉ tiêu bưu cục phát sinh doanh thu thực tế nhưng không giao kế hoạch (hoặc kế hoạch = 0) hiển thị rõ `"Không có KH"`, không tính % hoàn thành kế hoạch sai lệch.
+>
+> ### 3. Nhãn dòng tổng hợp đầu tiên động
+> - Chỉnh sửa `create_detail_table` và `create_detail_table_sub` tại [global_callbacks.py](file:///E:/Projects/Dashboard-BCCP/dash_app/callbacks/global_callbacks.py) và [service_callbacks.py](file:///E:/Projects/Dashboard-BCCP/dash_app/callbacks/service_callbacks.py) để dòng đầu tiên của bảng Chi tiết và Lũy kế hiển thị động theo bộ lọc địa lý:
+>   - Chọn bưu cục: `"⭐️ BC: <Tên bưu cục>"`
+>   - Chọn xã: `"⭐️ XÃ: <Tên xã>"`
+>   - Chọn cụm: `"⭐️ CỤM: <Tên cụm>"`
+>   - Mặc định: `"⭐️ TOÀN TỈNH"`
+>
+> ### 4. Top 10 hoàn thành kế hoạch HCC
+> - Cập nhật hiển thị % hoàn thành kế hoạch tại bảng Top 10 Bưu điện Xã/Phường nổi bật ở trang HCC chỉ hiện số chữ đen bình thường, loại bỏ các icon mũi tên lên/xuống và màu sắc xanh/đỏ không phù hợp.
+>
+> ### 5. Rebuild database & Nghiệm thu
+> - Chạy thành công tiến trình nạp lại và tính toán lại dữ liệu tổng hợp `rebuild_summaries.py` cho các bảng `agg_weekly`, `plans_weekly`, `new_customers` theo lịch tuần đồng bộ mới.
+> - Chạy test app bằng `test_import_app.py` và khởi động lại server Dash thành công trên port 8050.
+> - Nâng cấp [run_dashboard.bat](file:///E:/Projects/Dashboard-BCCP/run_dashboard.bat) để tự động kiểm tra và giải phóng port 8050 bị treo và in câu chào tiếng Việt UTF-8 của Sếp.
+
+### 💬 Nội dung trao đổi chính của Sếp
+- *Yêu cầu 1:* Thay đổi nội dung dòng đầu tiên ở 2 bảng Chi tiết doanh thu và Chi tiết doanh thu lũy kế YTD theo giá trị cụm/xã tương ứng ở bộ lọc.
+- *Yêu cầu 2:* Loại trừ các xã ảo dạng "Đại diện Cụm..." trên bộ lọc xã.
+- *Yêu cầu 3:* Top 10 hoàn thành kế hoạch của Bưu điện Xã nổi bật chỉ hiển thị số chữ đen, không có màu sắc xanh/đỏ hay mũi tên lên/xuống.
+- *Yêu cầu 4:* Điều chỉnh logic tính toán % hoàn thành kế hoạch 3 cấp (gộp tổng ở cấp cụm và so sánh 1-1 ở cấp xã, hiển thị "Không có KH" khi kế hoạch bằng 0).
+- *Yêu cầu 5:* Đồng bộ lịch tuần giữa các năm để tính YoY tuần chính xác.
+- *Yêu cầu 6:* Cập nhật các thay đổi vào `project_state.md` và `conversations_summary.md`.
+- *Yêu cầu 7:* Bổ sung câu thông báo tắt tiến trình cũ bị treo trong RAM và khởi động lại thành công vào file `run_dashboard.bat`.
+
+---
+
+## Cuộc trò chuyện `992f1cbc-ac0d-4836-88b8-248d31d40742` (Phiên tối)
+- **Thời gian chỉnh sửa cuối:** `09/06/2026 19:45:00`
+
+### 📋 Tóm tắt nội dung thi công — Phase 12: Kiểm tra & Fix toàn diện
+
+> ## Nội dung thực hiện
+> Kiểm tra toàn diện 4 yêu cầu chức năng theo /goal của Sếp, kết hợp audit bằng sub-agent và mô phỏng số liệu trực tiếp từ DB.
+>
+> ### 1. Template trang chủ vs trang con — ĐÃ XÁC MINH ✅
+> - Trang chủ GROUP BY `nhom_chinh` (BCCP/HCC/TCBC/PPBL).
+> - Trang con (/bccp, /hcc...) GROUP BY `nhom_dich_vu` thuộc nhóm chính đó.
+> - Kiểm tra chéo: BCCP+HCC T6/2026 = 2,389,705,773đ — khớp tuyệt đối với trang chủ (sai số 0đ).
+>
+> ### 2. Bộ lọc địa lý 3 cấp — ĐÃ XÁC MINH ✅
+> - Toàn tỉnh → hiển thị tất cả xã (116 xã), Top 10 theo xã.
+> - Chọn Cụm → chỉ còn xã trong cụm đó (`ten_cum unique = [Cụm đã chọn]`).
+> - Chọn BĐX → bảng và Top 10 **tự động chuyển sang hiển thị cấp bưu cục** (`ten_bdx = tên bưu cục`).
+>
+> ### 3. Bộ lọc thời gian — ĐÃ FIX 3 lỗi 🔧
+> - **Fix auto-select tuần sai**: Hệ thống đang dùng ISO week (24) thay vì custom week (23). Đã sửa `topbar_callbacks.py` dùng vòng lặp tìm custom week chứa ngày hôm nay.
+> - **Fix reset khi switch Tháng→Tuần**: Thêm trigger `Input("sidebar-period")` vào callback tuần, luôn reset về tuần hiện tại.
+> - **Fix reset khi switch Tuần→Tháng**: Thêm callback mới `reset_month_on_period_switch`, luôn reset về tháng hiện tại khi switch.
+>
+> ### 4. Bảng Chi tiết (A) vs Bảng Lũy kế (B) — ĐÃ FIX 3 lỗi 🔧
+> - **Fix bug crash Tuần 1** (`global_metrics.py` dòng 711): Xóa `return prev_value, prev_year` lọt sai chỗ khiến hàm trả về tuple thay vì DataFrame.
+> - **Fix KH Lũy kế YTD**: Bảng B trước đây lấy kế hoạch cả năm (166 tỷ). Đã sửa thành `AND thang <= period_value` để lấy kế hoạch tích lũy đến kỳ hiện tại (T1-T6 = 77 tỷ).
+> - **Fix UI Bảng B**: Xóa option "Kỳ trước" khỏi bộ chọn so sánh của bảng Lũy kế trong cả `global_overview.py` và `service_overview.py` — bảng lũy kế chỉ được so sánh với Cùng kỳ hoặc Kế hoạch.
+>
+> ### 5. Mô phỏng & Xác minh số liệu Tuần 2 (09-15/01/2026)
+> - BCCP từ `agg_weekly` (hàm dashboard): **3,041,288,413đ** — khớp 100% với `transactions.ngay_chap_nhan BETWEEN '2026-01-09' AND '2026-01-15'`.
+> - HCC/TCBC/PPBL: phân bổ theo tỷ lệ ngày giao thoa (không có dữ liệu theo ngày, chỉ theo tháng).
+> - Kiểm tra nhất quán: tổng `agg_weekly` Tuần 1-4 (T1) cộng phần Tuần 5 trong T1 ≈ `agg_monthly` T1 — **nhất quán**.
+>
+> ### 6. Dọn dẹp thư mục
+> - Xóa 51 file rác tại root: `scratch_test*.py/csv`, `temp_*.json`, `*.txt` debug, file `.py` thử nghiệm.
+> - Giữ nguyên toàn bộ thư mục con (`scratch/`, `data/`, `analytics/`, v.v.).
+
+### 💬 Nội dung trao đổi chính của Sếp
+- *Yêu cầu:* "/goal kiểm tra 3 nội dung: template, bộ lọc địa lý, thời gian, bảng chi tiết vs lũy kế"
+- *Hỏi:* "Tuần 1 thì trong các hàm sẽ có số thứ tự là week 0 đúng không?" → Không, hệ thống dùng 1-indexed xuyên suốt.
+- *Yêu cầu:* "Mô phỏng hệ thống so sánh với số liệu tính toán trực tiếp từ bảng, ví dụ chọn Tuần 2" → Đã chạy simulation, BCCP khớp 100%.
+- *Yêu cầu:* "Dọn dẹp thư mục, cập nhật conversations_summary.md và project_state.md"
+
+---
+
+## Cuộc trò chuyện `992f1cbc-ac0d-4836-88b8-248d31d40742` (Phiên sáng)
+- **Thời gian chỉnh sửa cuối:** `09/06/2026 10:37:00`
+
+
+### 📋 Tóm tắt nội dung thi công
+> # Báo cáo Vá lỗi Hồi quy (Phase 11 - Regression Bugs)
+> ## Nội dung thực hiện
+> Đã phát hiện và xử lý dứt điểm 6 lỗi logic và giao diện được báo cáo sau đợt nâng cấp.
+> ### Các lỗi đã khắc phục
+> 1. **Lỗi nhân bản doanh thu**: Do cơ chế JOIN bảng dịch vụ chưa chặt chẽ, đã được sửa bằng câu lệnh truy vấn phụ (Subquery `LIMIT 1`).
+> 2. **Lỗi bảng Lũy kế YTD**: Bảng YTD đang so sánh sai với kế hoạch của tháng, đã sửa lại thành so sánh với tổng kế hoạch nguyên năm.
+> 3. **Lỗi tuột bộ lọc Xã/Phường**: Đã thêm cơ chế giữ State trên Topbar để duy trì đúng Xã/Phường khi chuyển đổi các trang, đồng thời lọc sạch mã bưu cục khi truy vấn bảng.
+> 4. **Lỗi mã Đại diện hiển thị trên Topbar**: Đã chặn hiển thị các mã đại diện ảo (`CUM_%`) tại ô chọn Bưu cục.
+> 5. **Lỗi Top 10 Bưu điện Xã có chỉ số Kế hoạch vô lý**: Đã thay thế code chặn tĩnh bằng cơ chế kết nối bảng Động (`INNER JOIN dim_buucuc`) giúp tự động đối chiếu độ sâu của mã kế hoạch (Xã hay Bưu cục). Kế hoạch Xã tự động bị loại khi ghép với view Bưu cục ("Không có dữ liệu phù hợp"), trong tương lai nếu có Kế hoạch Bưu cục, hệ thống sẽ tự nhận diện và tính toán chuẩn xác mà không cần sửa code.
+> 6. **Lỗi Sidebar và Bộ lọc Tuần**: Đã loại bỏ hoàn toàn thuộc tính `persistence=True` và chuyển Store sang cấu hình `memory` để bộ lọc tự động Reset sạch về mặc định khi Sếp Tải lại trang (F5), đồng thời vẫn bảo lưu tính ổn định khi duyệt qua lại các trang nội bộ (SPA Navigation).
+> ---
+
+### 💬 Nội dung trao đổi chính của Sếp
+- *Yêu cầu:* "Tổng doanh thu ở cả 2 bảng đang bị nhân lên cao hơn nhiều lần so với số thực tế..."
+- *Yêu cầu:* "Bộ lọc xã trên topbar không được giữ nguyên khi chuyển trang..."
+- *Yêu cầu:* "Tại sao ở Top 10 Bưu điện Xã nổi bật (HCC) lại có chỉ số hoàn thành Kế hoạch..."
+- *Yêu cầu:* "Bộ lọc tuần mặc định nhảy đến tuần hiện tại, chuyển trang bị mất ổn định..."
+- *Yêu cầu:* "Khởi động lại app và ghi nhật ký..."
+
+---
 ## 1. Cuộc trò chuyện `4418f2b8-bd26-4dce-93db-1d6d4c635942`
 - **Thời gian chỉnh sửa cuối:** `08/06/2026 15:50:57`
 

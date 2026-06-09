@@ -1,46 +1,45 @@
 TECH_STACK:
   Language: Python 3.13
-  Framework: Dash
-  Styling: CSS (assets/style.css), dash-bootstrap-components
-  Database: SQLite (dashboard.db) -> planned PostgreSQL
-  Auth: Flask-Login (RBAC theo Cụm địa lý)
-  State: dcc.Store
+  Framework: Dash (converted from Streamlit)
+  Styling: dash-bootstrap-components, custom CSS in assets/style.css
+  Database: SQLite (dashboard.db)
+  Auth: Custom RBAC (in dash_app/db/auth.py)
+  State: dcc.Store, functools.lru_cache, URL/QueryParams
   Other: pandas, plotly, openpyxl, xlrd
 
 EXISTING_MODULES:
-  - dash_app: Main UI dashboard application (components, pages, callbacks, db)
-  - etl: Data import and aggregation (importer.py, aggregator.py)
-  - analytics: Core logic for revenue, customer classification, and global metrics
-  - scripts: Automation and utility scripts (generate_tokens.py, rebuild_summaries.py, sync_mappings.py)
-  - config: App configurations, holidays, and week calendar
-  - data: Raw CSV mappings and Excel import templates
+  - dash_app: Main Dash application (app.py, callbacks, components, pages, db).
+  - analytics: Business logic for calculating revenue, customer retention, metrics.
+  - etl: Data import and aggregation (importer.py, aggregator.py).
+  - scripts: Support scripts (rebuild_summaries.py, sync_mappings.py).
+  - config: App configuration (settings.py, holidays.py).
+  - data: Static CSV files and Excel templates for mapping and imports.
 
 PATTERNS_DETECTED:
-  - Architecture: Separated codebase from OneDrive data to avoid sync locks.
-  - Auth: Flask-Login with bypass support and RBAC restricting user views to their Cụm.
-  - Data Aggregation: Summary Tables (agg_monthly, plans_weekly) used for high performance UI instead of raw transactions.
-  - Business Rules: "Nạp cấp nào, so sánh cấp đó" for 3 levels of plans (BCCP, HCC, PHBC).
+  - Architecture: Separated backend logic (analytics, etl, db) from frontend callbacks.
+  - Performance: Summary Tables (agg_monthly, plans_weekly) used to optimize read operations instead of querying raw transactions.
+  - Caching: Extensively using `@functools.lru_cache`.
+  - Routing: Multi-page Dash application (dash.page_registry).
 
 REUSABLE_COMPONENTS:
-  - dash_app/components: Reusable UI widgets and layout modules.
-  - analytics/global_metrics.py: Shared metrics calculations.
+  - dash_app/components: Contains reusable UI components (Topbar, Sidebar, Filters).
 
 GAPS_DETECTED:
-  - Deployment: Currently running via local Cloudflare tunnel & SQLite. Pending Phase 5C for internal server deployment and PostgreSQL migration.
-  - Pending Data: [RESOLVED] Data for end of May and June 2026 has been added.
-  - Data Cleanliness: [RESOLVED] Old backup .csv files have been cleaned up.
+  - Debug Artifacts: Excessive use of `print()` for error logging (~130+ instances). Should ideally be replaced with a structured `logging` module.
+  - Production Deployment: Currently running via batch files and SQLite. Needs migration to PostgreSQL and a proper server setup (Phase 5C is pending).
+  - Testing: Lack of an automated testing suite (no `tests/` folder).
 
 CODE_HEALTH:
-  Type Safety: Partial (Python type hints likely used but not strict)
-  Linting: Not strictly configured
-  Tests: Several manual debug/verify scripts exist, but no automated test suite.
-  Debug Artifacts: Scripts like `debug_cum.py`, `check_tables.py` present.
-  TODO/FIXME: Several pending items documented in project_state.md.
+  Type Safety: Partial (Relies heavily on dynamic Pandas DataFrames).
+  Linting: Not explicitly configured.
+  Tests: 0 files (Manual testing mainly).
+  Debug Artifacts: ~130+ `print()` statements across the codebase.
+  TODO/FIXME: 0 found.
 
 ESTIMATED_SIZE:
-  Files: > 50
-  Lines of Code: ~3000-5000+
-  Components/Modules: 15+
-  API Routes/Endpoints: Dash pages & callbacks
+  Files: ~50+ (.py, .md, .bat, .json, .xlsx)
+  Lines of Code: ~Large
+  Components/Modules: 4 core (dash_app, analytics, etl, scripts)
+  API Routes/Endpoints: N/A (Dash handles routing internally)
 
-COMPLEXITY_ASSESSMENT: Medium
+COMPLEXITY_ASSESSMENT: Large

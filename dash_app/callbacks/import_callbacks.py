@@ -192,7 +192,7 @@ def register_import_callbacks(app):
             return html.Div([
                 html.B("📋 Định dạng Kế hoạch chỉ tiêu: "),
                 html.Span("File Excel phân bổ kế hoạch cho các bưu cục. Yêu cầu các cột: "),
-                html.Code("Năm, Tháng, Nhóm DV (BCCP/HCC/TCBC/PPBL), Tên DV (nullable), Mã BC, KH Doanh thu, KH Sản lượng.")
+                html.Code("Năm, Nhóm Chính (BCCP/HCC/TCBC/PPBL), Nhóm DV (nullable), Mã BC, KH Doanh thu.")
             ])
         return ""
 

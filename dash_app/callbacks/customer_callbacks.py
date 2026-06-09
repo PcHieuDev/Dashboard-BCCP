@@ -67,13 +67,13 @@ def register_customer_callbacks(app):
     @app.callback(
         Output("customer-table-container", "children"),
         [Input("btn-apply-filter", "n_clicks"),
-         Input("tabs-navigation", "value"),
-         # Bộ lọc dịch vụ inline mới
-         Input("customer-filter-nhom-dv", "value"),
-         Input("customer-filter-loai-kh", "value"),
-         Input("customer-filter-hop-dong", "value"),
-         Input("customer-filter-spdv", "value")],
-        [# Bộ lọc địa lý từ Sidebar (State)
+         Input("btn-customer-filter", "n_clicks"),
+         Input("tabs-navigation", "value")],
+        [State("customer-filter-nhom-dv", "value"),
+         State("customer-filter-loai-kh", "value"),
+         State("customer-filter-hop-dong", "value"),
+         State("customer-filter-spdv", "value"),
+         # Bộ lọc địa lý từ Sidebar (State)
          State("sidebar-year", "value"),
          State("sidebar-period", "value"),
          State("sidebar-date-range", "start_date"),
@@ -84,11 +84,14 @@ def register_customer_callbacks(app):
          State("sidebar-bdx", "value"),
          State("sidebar-buu-cuc", "value")]
     )
-    def update_customer_table(n_clicks, tab_val, nhom_dv, loai_kh, hop_dong, spdv,
+    def update_customer_table(btn_global, btn_customer, tab_val, nhom_dv, loai_kh, hop_dong, spdv,
                               year, period, start_date, end_date, week_idx, month_val, cum, bdx, buu_cuc):
         # Chỉ chạy khi đang ở Tab Chi tiết Khách hàng
         if tab_val != "tab-customer" or tab_val is None:
             return dash.no_update
+            
+        if not btn_global and not btn_customer:
+            return html.Div("Vui lòng thiết lập bộ lọc và bấm 'Lọc Dữ liệu' để xem chi tiết.", className="text-center text-muted p-4")
             
         # 1. Truy vấn dữ liệu qua Cache
         _, _, _, df = resolve_filters_and_query_customer(

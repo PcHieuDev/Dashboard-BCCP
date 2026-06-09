@@ -59,6 +59,15 @@ def create_sidebar_layout() -> html.Div:
             dbc.AccordionItem([
                 dcc.Link("📈 Tổng quan dịch vụ", href="/ppbl", id="nav-ppbl-overview", className="sidebar-menu-item"),
             ], title="🛍️ Phân phối bán lẻ", item_id="menu-ppbl"),
+            
+            # Dummy item dùng để trigger đóng toàn bộ accordion
+            dbc.AccordionItem(
+                html.Div(), 
+                title="", 
+                item_id="close-all", 
+                style={"display": "none"}, 
+                class_name="d-none"
+            ),
         ], id="sidebar-accordion", active_item=None, flush=True, className="sidebar-accordion")
     ], style={"marginBottom": "20px"})
 

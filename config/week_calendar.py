@@ -12,41 +12,59 @@ def get_week_list(year: int) -> list[tuple[int, date, date]]:
     """
     Trả về danh sách các tuần trong năm chỉ định.
     Mỗi tuần là tuple (week_num, start_date, end_date).
+    Nếu year != 2026, lấy lịch tuần chuẩn tính toán từ năm 2026
+    và thay thế năm của các ngày bắt đầu/kết thúc sang year.
     """
-    weeks = []
-    start_date = date(year, 1, 1)
-    end_of_year = date(year, 12, 31)
-    
-    # Tìm ngày Thứ Sáu đầu tiên của năm
-    first_friday = start_date
-    while first_friday.weekday() != 4:  # 4 là Thứ Sáu
-        first_friday += timedelta(days=1)
+    if year == 2026:
+        weeks = []
+        start_date = date(2026, 1, 1)
+        end_of_year = date(2026, 12, 31)
         
-    # Nếu Thứ Sáu đầu tiên rơi vào ngày 1, 2, 3 tháng 1 (tuần đầu quá ngắn):
-    # gộp những ngày trước đó vào Tuần 1, Tuần 2 bắt đầu từ Thứ Sáu tiếp theo
-    if first_friday.day <= 3:
-        week2_start = first_friday + timedelta(days=7)
+        # Tìm ngày Thứ Sáu đầu tiên của năm
+        first_friday = start_date
+        while first_friday.weekday() != 4:  # 4 là Thứ Sáu
+            first_friday += timedelta(days=1)
+            
+        # Nếu Thứ Sáu đầu tiên rơi vào ngày 1, 2, 3 tháng 1 (tuần đầu quá ngắn):
+        # gộp những ngày trước đó vào Tuần 1, Tuần 2 bắt đầu từ Thứ Sáu tiếp theo
+        if first_friday.day <= 3:
+            week2_start = first_friday + timedelta(days=7)
+        else:
+            week2_start = first_friday
+            
+        # Tuần 1 bắt đầu từ 01/01 đến trước ngày bắt đầu Tuần 2
+        week1_end = week2_start - timedelta(days=1)
+        weeks.append((1, start_date, week1_end))
+        
+        # Các tuần tiếp theo
+        current_start = week2_start
+        week_num = 2
+        while current_start <= end_of_year:
+            current_end = current_start + timedelta(days=6)
+            if current_end >= end_of_year:
+                current_end = end_of_year
+            weeks.append((week_num, current_start, current_end))
+            if current_end == end_of_year:
+                break
+            current_start = current_end + timedelta(days=1)
+            week_num += 1
+            
+        return weeks
     else:
-        week2_start = first_friday
-        
-    # Tuần 1 bắt đầu từ 01/01 đến trước ngày bắt đầu Tuần 2
-    week1_end = week2_start - timedelta(days=1)
-    weeks.append((1, start_date, week1_end))
-    
-    # Các tuần tiếp theo
-    current_start = week2_start
-    week_num = 2
-    while current_start <= end_of_year:
-        current_end = current_start + timedelta(days=6)
-        if current_end >= end_of_year:
-            current_end = end_of_year
-        weeks.append((week_num, current_start, current_end))
-        if current_end == end_of_year:
-            break
-        current_start = current_end + timedelta(days=1)
-        week_num += 1
-        
-    return weeks
+        # Lấy lịch tuần của năm 2026 và đổi năm sang year
+        weeks_2026 = get_week_list(2026)
+        weeks = []
+        for w_num, start_dt, end_dt in weeks_2026:
+            try:
+                new_start = start_dt.replace(year=year)
+            except ValueError:
+                new_start = date(year, start_dt.month, start_dt.day)
+            try:
+                new_end = end_dt.replace(year=year)
+            except ValueError:
+                new_end = date(year, end_dt.month, end_dt.day)
+            weeks.append((w_num, new_start, new_end))
+        return weeks
 
 def allocate_weekly_plan(year: int) -> list[tuple[int, date, date, list[tuple[int, int, int, int]]]]:
     """

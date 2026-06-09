@@ -41,24 +41,32 @@ def get_prev_period_info(period_type, period_value, year):
             return prev_val, prev_yr
         return period_value - 1, year
 
-def get_plans_current_period(db_path, period_type, period_value, year, cum=None):
-    """Lấy kế hoạch doanh thu của 4 dịch vụ trong kỳ hiện tại"""
+def get_plans_current_period(db_path, period_type, period_value, year, cum=None, bdx=None, buu_cuc=None):
+    """Lấy kế hoạch doanh thu của 4 dịch vụ trong kỳ hiện tại, có bộ lọc địa lý chi tiết"""
     res = {"BCCP": 0.0, "HCC": 0.0, "TCBC": 0.0, "PPBL": 0.0}
     conn = sqlite3.connect(str(db_path))
     try:
         table = 'plans' if period_type == 'Tháng' else 'plans_weekly'
         time_col = 'thang' if period_type == 'Tháng' else 'tuan_so'
         
-        sql = f"SELECT nhom_dich_vu, SUM(ke_hoach_doanh_thu) FROM {table}"
+        sql = f"SELECT nhom_chinh, SUM(ke_hoach_doanh_thu) FROM {table}"
         where = ["nam = ?", f"{time_col} = ?"]
         params = [year, period_value]
         
-        if cum and cum != "Tất cả" and cum != "Tất cả Cụm":
+        if (cum and cum != "Tất cả" and cum != "Tất cả Cụm") or (bdx and bdx != "Tất cả") or (buu_cuc and buu_cuc != "Tất cả"):
             sql += f" INNER JOIN dim_buucuc b ON {table}.ma_buu_cuc = b.ma_bc"
+            
+        if cum and cum != "Tất cả" and cum != "Tất cả Cụm":
             where.append("b.ten_cum = ?")
             params.append(cum)
+        if bdx and bdx != "Tất cả":
+            where.append("b.ten_bdx = ?")
+            params.append(bdx)
+        if buu_cuc and buu_cuc != "Tất cả":
+            where.append(f"{table}.ma_buu_cuc = ?")
+            params.append(buu_cuc)
             
-        sql += " WHERE " + " AND ".join(where) + " GROUP BY nhom_dich_vu"
+        sql += " WHERE " + " AND ".join(where) + " GROUP BY nhom_chinh"
         
         cursor = conn.cursor()
         cursor.execute(sql, params)
@@ -71,35 +79,59 @@ def get_plans_current_period(db_path, period_type, period_value, year, cum=None)
         conn.close()
     return res
 
-def get_aggregated_revenue(db_path, cycle, year, period_val, cum=None):
-    """Tính tổng doanh thu từ bảng agg_monthly/agg_weekly theo 4 nhóm dịch vụ chính, có bộ lọc Cụm"""
+def get_aggregated_revenue(db_path, cycle, year, period_val, cum=None, bdx=None, buu_cuc=None, w_ratios=None):
+    """Tính tổng doanh thu từ bảng agg_monthly/agg_weekly theo 4 nhóm dịch vụ chính, có bộ lọc địa lý chi tiết"""
     res = {"BCCP": 0.0, "HCC": 0.0, "TCBC": 0.0, "PPBL": 0.0}
     conn = sqlite3.connect(str(db_path))
     try:
         table = 'agg_monthly' if cycle == 'Tháng' else 'agg_weekly'
         time_col = 'thang' if cycle == 'Tháng' else 'tuan_so'
         
-        sql = f"""
-            SELECT COALESCE(
-                (SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 
-                'Khác'
-            ) as nhom, SUM(a.tong_doanh_thu)
-            FROM {table} a
-        """
-        where = ["a.nam = ?", f"a.{time_col} = ?"]
-        params = [year, period_val]
-        
-        if cum and cum != "Tất cả" and cum != "Tất cả Cụm":
+        if cycle == 'Tuần' and w_ratios:
+            cases = []
+            for w_num, ratio in w_ratios:
+                cases.append(f"WHEN a.tuan_so = {w_num} THEN a.tong_doanh_thu * {ratio:.8f}")
+            cases_str = " + ".join(cases)
+            
+            sql = f"""
+                SELECT COALESCE(
+                    (SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 
+                    'Khác'
+                ) as nhom, SUM(CASE {cases_str} ELSE 0 END)
+                FROM agg_weekly a
+            """
+            where = ["a.nam = ?", f"a.tuan_so IN ({','.join(str(w[0]) for w in w_ratios)})"]
+            params = [year]
+        else:
+            sql = f"""
+                SELECT COALESCE(
+                    (SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 
+                    'Khác'
+                ) as nhom, SUM(a.tong_doanh_thu)
+                FROM {table} a
+            """
+            where = ["a.nam = ?", f"a.{time_col} = ?"]
+            params = [year, period_val]
+            
+        if (cum and cum != "Tất cả" and cum != "Tất cả Cụm") or (bdx and bdx != "Tất cả") or (buu_cuc and buu_cuc != "Tất cả"):
             sql += " INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc"
+            
+        if cum and cum != "Tất cả" and cum != "Tất cả Cụm":
             where.append("b.ten_cum = ?")
             params.append(cum)
+        if bdx and bdx != "Tất cả":
+            where.append("b.ten_bdx = ?")
+            params.append(bdx)
+        if buu_cuc and buu_cuc != "Tất cả":
+            where.append("a.buu_cuc = ?")
+            params.append(buu_cuc)
             
         sql += " WHERE " + " AND ".join(where)
         sql += """ GROUP BY COALESCE(
             (SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 
             'Khác'
         )"""
-        
+        print(f"DEBUG get_aggregated_revenue SQL: {sql} with params {params}", flush=True)
         cursor = conn.cursor()
         cursor.execute(sql, params)
         for row in cursor.fetchall():
@@ -113,7 +145,7 @@ def get_aggregated_revenue(db_path, cycle, year, period_val, cum=None):
         conn.close()
     return res
 
-def create_top10_table(df):
+def create_top10_table(df, is_plan=False):
     """Render bảng top 10 đơn giản đẹp mắt"""
     if df.empty:
         return html.Div("Không có dữ liệu phù hợp", style={"color": "#64748B", "fontSize": "12px", "textAlign": "center", "padding": "10px"})
@@ -121,20 +153,26 @@ def create_top10_table(df):
     rows = []
     for idx, row in df.iterrows():
         ratio_val = row['ratio']
-        color = "#10B981" if ratio_val >= 0 else "#EF4444"
-        icon = "▲" if ratio_val >= 0 else "▼"
+        if is_plan:
+            color = "#0F172A"
+            display_val = f"{ratio_val:.1f}%"
+        else:
+            color = "#10B981" if ratio_val >= 0 else "#EF4444"
+            icon = "▲" if ratio_val >= 0 else "▼"
+            display_val = f"{icon} {abs(ratio_val):.1f}%"
+            
         rows.append(html.Tr([
             html.Td(f"{idx+1}", style={"width": "30px", "fontWeight": "bold", "color": "#64748B"}),
             html.Td(row['ten_cum'], style={"color": "#475569"}),
             html.Td(row['ten_bdx'], style={"fontWeight": "medium", "color": "#0F172A"}),
-            html.Td(f"{icon} {abs(ratio_val):.1f}%", style={"color": color, "fontWeight": "bold", "textAlign": "right"})
+            html.Td(display_val, style={"color": color, "fontWeight": "bold", "textAlign": "right"})
         ]))
         
     return html.Table([
         html.Tbody(rows)
     ], className="table table-sm table-borderless", style={"fontSize": "12px", "marginBottom": 0})
 
-def create_detail_table(df, compare_type):
+def create_detail_table(df, compare_type, title_label="⭐️ TOÀN TỈNH"):
     """Tạo DataTable hiển thị danh sách chi tiết xã"""
     if df.empty:
         return html.Div("Không có dữ liệu", style={"textAlign": "center", "padding": "20px"})
@@ -149,13 +187,13 @@ def create_detail_table(df, compare_type):
         df['ratio_display'] = df['ratio'].map(lambda x: f"{x:+.1f}%" if pd.notna(x) and x != float('inf') and x != float('-inf') else "—")
         ratio_col_name = "Tăng trưởng vs Cùng kỳ"
     else: # plan
-        df['ratio'] = (df['tong_dt'] / df['plan_dt']) * 100.0
-        df['ratio_display'] = df['ratio'].map(lambda x: f"{x:.1f}%" if pd.notna(x) and x != float('inf') and x != float('-inf') else "—")
+        df['ratio'] = df.apply(lambda r: (r['tong_dt'] / r['plan_dt'] * 100.0) if pd.notna(r['plan_dt']) and r['plan_dt'] > 0 else None, axis=1)
+        df['ratio_display'] = df['ratio'].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "Không có KH")
         ratio_col_name = "Hoàn thành Kế hoạch"
         
     # Tính dòng TOÀN TỈNH
     prov_row = pd.DataFrame([{
-        "ten_cum": "⭐️ TOÀN TỈNH",
+        "ten_cum": title_label,
         "ten_bdx": "",
         "BCCP": df["BCCP"].sum(),
         "HCC": df["HCC"].sum(),
@@ -179,7 +217,7 @@ def create_detail_table(df, compare_type):
     else: # plan
         p_plan = prov_row.iloc[0]['plan_dt']
         prov_row['ratio'] = (prov_row['tong_dt'] / p_plan * 100.0) if p_plan > 0 else None
-        prov_row['ratio_display'] = prov_row['ratio'].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
+        prov_row['ratio_display'] = prov_row['ratio'].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "Không có KH")
         
     df_sorted = df.sort_values(by=['ten_cum', 'ten_bdx'], ascending=True)
     df_final = pd.concat([prov_row, df_sorted], ignore_index=True)
@@ -288,10 +326,13 @@ def register_global_callbacks(app):
             State("sidebar-month-select", "value"),
             State("sidebar-week-select", "value"),
             State("sidebar-period", "value"), # 'Tháng' hoặc 'Tuần'
-            State("sidebar-cum", "value")
+            State("sidebar-cum", "value"),
+            State("sidebar-bdx", "value"),
+            State("sidebar-buu-cuc", "value")
         ]
     )
-    def update_global_dashboard(n_clicks, year, month, week, cycle, cum):
+    def update_global_dashboard(n_clicks, year, month, week, cycle, cum, bdx, buu_cuc):
+        print(f"DEBUG update_global_dashboard: cycle={cycle}, year={year}, month={month}, week={week}, cum={cum}, bdx={bdx}, buu_cuc={buu_cuc}", flush=True)
         if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week):
             # Return empty/fallback values if filter is incomplete
             empty_kpi = ["—", "—", {"color": "#94A3B8"}, "—", {"color": "#94A3B8"}, "—", {"color": "#94A3B8"}]
@@ -304,17 +345,22 @@ def register_global_callbacks(app):
         try:
             # 1. KPI Calculation
             # Doanh thu hiện tại
-            rev_cur = get_aggregated_revenue(DB_PATH, cycle, year, period_val, cum)
+            rev_cur = get_aggregated_revenue(DB_PATH, cycle, year, period_val, cum, bdx, buu_cuc)
             
             # Doanh thu kỳ trước
             prev_val, prev_yr = get_prev_period_info(cycle, period_val, year)
-            rev_prev = get_aggregated_revenue(DB_PATH, cycle, prev_yr, prev_val, cum)
+            rev_prev = get_aggregated_revenue(DB_PATH, cycle, prev_yr, prev_val, cum, bdx, buu_cuc)
                     
             # Doanh thu cùng kỳ năm trước
-            rev_yoy = get_aggregated_revenue(DB_PATH, cycle, year - 1, period_val, cum)
+            if cycle == 'Tháng':
+                rev_yoy = get_aggregated_revenue(DB_PATH, cycle, year - 1, period_val, cum, bdx, buu_cuc)
+            else:
+                from analytics.global_metrics import get_weekly_yoy_query_params
+                prev_yr, w_ratios = get_weekly_yoy_query_params(year, period_val)
+                rev_yoy = get_aggregated_revenue(DB_PATH, cycle, prev_yr, period_val, cum, bdx, buu_cuc, w_ratios=w_ratios)
                     
             # Kế hoạch kỳ hiện tại
-            rev_plan = get_plans_current_period(DB_PATH, cycle, period_val, year, cum)
+            rev_plan = get_plans_current_period(DB_PATH, cycle, period_val, year, cum, bdx, buu_cuc)
             
             kpi_outputs = []
             for service in ["BCCP", "HCC", "TCBC", "PPBL"]:
@@ -358,16 +404,16 @@ def register_global_callbacks(app):
                 ])
                 
             # 2. Top 10 Tables
-            df_top_prev = get_top10_by_comparison(conn, cycle, period_val, year, 'prev', cum)
-            df_top_yoy = get_top10_by_comparison(conn, cycle, period_val, year, 'yoy', cum)
-            df_top_plan = get_top10_by_comparison(conn, cycle, period_val, year, 'plan', cum)
+            df_top_prev = get_top10_by_comparison(conn, cycle, period_val, year, 'prev', cum, bdx, buu_cuc)
+            df_top_yoy = get_top10_by_comparison(conn, cycle, period_val, year, 'yoy', cum, bdx, buu_cuc)
+            df_top_plan = get_top10_by_comparison(conn, cycle, period_val, year, 'plan', cum, bdx, buu_cuc)
             
             top10_prev_layout = create_top10_table(df_top_prev)
             top10_yoy_layout = create_top10_table(df_top_yoy)
-            top10_plan_layout = create_top10_table(df_top_plan)
+            top10_plan_layout = create_top10_table(df_top_plan, is_plan=True)
             
             # 3. 12 Periods Graph — Line chart (5 lines: Tổng + 4 nhóm dịch vụ)
-            df_12p = get_12_periods_revenue(conn, cycle, period_val, year, cum)
+            df_12p = get_12_periods_revenue(conn, cycle, period_val, year, cum, bdx, buu_cuc)
             
             fig = go.Figure()
             if not df_12p.empty:
@@ -427,18 +473,35 @@ def register_global_callbacks(app):
             State("sidebar-month-select", "value"),
             State("sidebar-week-select", "value"),
             State("sidebar-period", "value"),
-            State("sidebar-cum", "value")
+            State("sidebar-cum", "value"),
+            State("sidebar-bdx", "value"),
+            State("sidebar-buu-cuc", "value")
         ]
     )
-    def update_table_a(n_clicks, compare_type, year, month, week, cycle, cum):
+    def update_table_a(n_clicks, compare_type, year, month, week, cycle, cum, bdx, buu_cuc):
         if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week):
             return html.Div("Vui lòng chọn bộ lọc thời gian để xem chi tiết.")
             
         period_val = month if cycle == 'Tháng' else week
         conn = sqlite3.connect(str(DB_PATH))
         try:
-            df = get_period_detail_by_xa(conn, cycle, period_val, year, cum)
-            return create_detail_table(df, compare_type)
+            # Tính nhãn title_label động
+            title_label = "⭐️ TOÀN TỈNH"
+            if buu_cuc and buu_cuc != "Tất cả":
+                cursor = conn.cursor()
+                cursor.execute("SELECT ten_buu_cuc FROM dim_buucuc WHERE ma_bc = ?", (buu_cuc,))
+                row = cursor.fetchone()
+                if row:
+                    title_label = f"⭐️ BC: {row[0].upper()}"
+                else:
+                    title_label = f"⭐️ BC: {buu_cuc.upper()}"
+            elif bdx and bdx != "Tất cả":
+                title_label = f"⭐️ XÃ: {bdx.upper()}"
+            elif cum and cum != "Tất cả" and cum != "Tất cả Cụm":
+                title_label = f"⭐️ CỤM: {cum.upper()}"
+                
+            df = get_period_detail_by_xa(conn, cycle, period_val, year, cum, bdx, buu_cuc)
+            return create_detail_table(df, compare_type, title_label=title_label)
         except Exception as e:
             return html.Div(f"Lỗi load bảng kỳ hiện tại: {e}")
         finally:
@@ -456,18 +519,35 @@ def register_global_callbacks(app):
             State("sidebar-month-select", "value"),
             State("sidebar-week-select", "value"),
             State("sidebar-period", "value"),
-            State("sidebar-cum", "value")
+            State("sidebar-cum", "value"),
+            State("sidebar-bdx", "value"),
+            State("sidebar-buu-cuc", "value")
         ]
     )
-    def update_table_b(n_clicks, compare_type, year, month, week, cycle, cum):
+    def update_table_b(n_clicks, compare_type, year, month, week, cycle, cum, bdx, buu_cuc):
         if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week):
             return html.Div("Vui lòng chọn bộ lọc thời gian để xem chi tiết.")
             
         period_val = month if cycle == 'Tháng' else week
         conn = sqlite3.connect(str(DB_PATH))
         try:
-            df = get_ytd_detail_by_xa(conn, cycle, period_val, year, cum)
-            return create_detail_table(df, compare_type)
+            # Tính nhãn title_label động
+            title_label = "⭐️ TOÀN TỈNH"
+            if buu_cuc and buu_cuc != "Tất cả":
+                cursor = conn.cursor()
+                cursor.execute("SELECT ten_buu_cuc FROM dim_buucuc WHERE ma_bc = ?", (buu_cuc,))
+                row = cursor.fetchone()
+                if row:
+                    title_label = f"⭐️ BC: {row[0].upper()}"
+                else:
+                    title_label = f"⭐️ BC: {buu_cuc.upper()}"
+            elif bdx and bdx != "Tất cả":
+                title_label = f"⭐️ XÃ: {bdx.upper()}"
+            elif cum and cum != "Tất cả" and cum != "Tất cả Cụm":
+                title_label = f"⭐️ CỤM: {cum.upper()}"
+                
+            df = get_ytd_detail_by_xa(conn, cycle, period_val, year, cum, bdx, buu_cuc)
+            return create_detail_table(df, compare_type, title_label=title_label)
         except Exception as e:
             return html.Div(f"Lỗi load bảng lũy kế YTD: {e}")
         finally:

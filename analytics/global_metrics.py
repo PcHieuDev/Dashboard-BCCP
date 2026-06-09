@@ -42,6 +42,14 @@ _revenue_by_cum_cache = TTLDictCache(ttl=300)
 def clear_global_metrics_cache():
     _revenue_by_cum_cache.clear()
 
+def get_weekly_yoy_query_params(year, period_value):
+    """
+    Trả về (prev_year, w_ratios) gồm danh sách các tuple (tuan_so, ratio) giao thoa của năm trước.
+    Vì lịch tuần các năm đã đồng bộ ngày/tháng 100% với năm 2026,
+    ta chỉ cần trả về tuần cùng số thứ tự với ratio = 1.0.
+    """
+    return year - 1, [(period_value, 1.0)]
+
 def _get_thang_list(thang_den):
     """Tạo danh sách string 'T01', 'T02'... từ 1 đến thang_den"""
     return [f"T{i:02d}" for i in range(1, thang_den + 1)]
@@ -218,7 +226,7 @@ def get_ytd_plan(db_path, nam, thang_den, cum=None):
     """
     Kế hoạch lũy kế YTD từ tháng 1 đến thang_den.
     """
-    sql = "SELECT nhom_dich_vu, SUM(ke_hoach_doanh_thu) FROM plans"
+    sql = "SELECT nhom_chinh, SUM(ke_hoach_doanh_thu) FROM plans"
     where = ["nam = :nam", "thang >= 1", "thang <= :thang_den"]
     params = {"nam": nam, "thang_den": thang_den}
     
@@ -227,7 +235,7 @@ def get_ytd_plan(db_path, nam, thang_den, cum=None):
         where.append("b.ten_cum = :cum")
         params["cum"] = cum
         
-    sql += " WHERE " + " AND ".join(where) + " GROUP BY nhom_dich_vu"
+    sql += " WHERE " + " AND ".join(where) + " GROUP BY nhom_chinh"
     
     res = {"BCCP": 0.0, "HCC": 0.0, "TCBC": 0.0, "PPBL": 0.0}
     
@@ -447,13 +455,14 @@ def get_growth_heatmap_data(db_path, year, month, compare_mode="prev", cum=None)
     return df_growth
 
 
-def get_top10_by_comparison(conn, period_type, period_value, year, compare_type, cum=None, bdx=None, buu_cuc=None):
+def get_top10_by_comparison(conn, period_type, period_value, year, compare_type, cum=None, bdx=None, buu_cuc=None, service_key=None):
     """
     Tính top 10 xã có tỷ lệ tăng trưởng hoặc hoàn thành kế hoạch cao nhất.
     - compare_type: 'prev' (Kỳ trước), 'yoy' (Cùng kỳ năm trước), 'plan' (Kế hoạch)
     - period_type: 'Tháng' hoặc 'Tuần'
     - period_value: Số chu kỳ (ví dụ: 5 cho Tháng 5 hoặc 20 cho Tuần 20)
     - year: Năm hiện tại
+    - service_key: None (Global), 'BCCP', 'HCC', 'TCBC', 'PPBL'
 
     Nguyên tắc 3 cấp kế hoạch:
     - BCCP: plans.ma_buu_cuc = ma_bc (6 số) → gộp lên xã (ma_bdx) qua dim_buucuc
@@ -493,99 +502,123 @@ def get_top10_by_comparison(conn, period_type, period_value, year, compare_type,
         plan_tbl = 'plans_weekly'
         plan_col = 'tuan_so'
 
-    # ── Helper: lấy actual gộp theo ma_bdx ───────────────────────────────────
+    grp_col = "b.ma_bc" if bdx and bdx != 'Tất cả' else "b.ma_bdx"
+
+    # ── Helper: lấy actual gộp theo ma_bdx (hoặc ma_bc) ──────────────────────
     def _actual_by_xa(period_val, yr, nhom_filter=None):
         where_nhom = ""
         if nhom_filter:
             placeholders = ",".join(f"'{n}'" for n in nhom_filter)
             where_nhom = f" AND a.nhom_dich_vu IN ({placeholders})"
         sql = f"""
-            SELECT b.ma_bdx, SUM(a.tong_doanh_thu) AS dt
+            SELECT {grp_col} as ma_bdx, SUM(a.tong_doanh_thu) AS dt
             FROM {agg_tbl} a
             INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc
             WHERE a.nam = ? AND a.{prd_col} = ?{where_nhom}
               AND b.ma_bdx IS NOT NULL
               AND b.ma_bdx NOT LIKE 'CUM_%'
-            GROUP BY b.ma_bdx
+            GROUP BY {grp_col}
         """
         return pd.read_sql_query(sql, conn, params=(yr, period_val))
 
-    # Tên nhóm actual BCCP / HCC trong agg_monthly / agg_weekly
-    NHOM_BCCP = ['Truyền thống', 'TMĐT', 'Quốc tế', 'Bưu chính khác', 'Logistics']
-    NHOM_HCC  = ['Hành chính công']
+    nhom_filter = None
+    if service_key:
+        df_nhom = pd.read_sql_query("SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?", conn, params=(service_key,))
+        nhom_filter = df_nhom['nhom_dich_vu'].tolist()
 
     if compare_type == 'plan':
-        # Actual BCCP: gộp từ bưu cục lên xã
-        df_bccp_act = _actual_by_xa(period_value, year, NHOM_BCCP).rename(columns={'dt': 'dt_bccp'})
-        # Actual HCC: gộp theo xã
-        df_hcc_act  = _actual_by_xa(period_value, year, NHOM_HCC).rename(columns={'dt': 'dt_hcc'})
+        if not service_key:
+            # Global: gộp BCCP và HCC
+            df_nhom_bccp = pd.read_sql_query("SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = 'BCCP'", conn)
+            NHOM_BCCP = df_nhom_bccp['nhom_dich_vu'].tolist()
+            df_nhom_hcc = pd.read_sql_query("SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = 'HCC'", conn)
+            NHOM_HCC = df_nhom_hcc['nhom_dich_vu'].tolist()
+            
+            df_bccp_act = _actual_by_xa(period_value, year, NHOM_BCCP).rename(columns={'dt': 'dt_bccp'})
+            df_hcc_act  = _actual_by_xa(period_value, year, NHOM_HCC).rename(columns={'dt': 'dt_hcc'})
+            sql_plan_bccp = f"""
+                SELECT {grp_col} as ma_bdx, SUM(p.ke_hoach_doanh_thu) AS plan_bccp
+                FROM {plan_tbl} p
+                INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_bc
+                WHERE p.nam = ? AND p.{plan_col} = ? AND p.nhom_chinh = 'BCCP'
+                  AND b.ma_bdx IS NOT NULL
+                GROUP BY {grp_col}
+            """
+            df_plan_bccp = pd.read_sql_query(sql_plan_bccp, conn, params=(year, period_value))
+            sql_plan_hcc = f"""
+                SELECT p.ma_buu_cuc AS ma_bdx, SUM(p.ke_hoach_doanh_thu) AS plan_hcc
+                FROM {plan_tbl} p
+                WHERE p.nam = ? AND p.{plan_col} = ? AND p.nhom_chinh = 'HCC'
+                GROUP BY p.ma_buu_cuc
+            """
+            df_plan_hcc = pd.read_sql_query(sql_plan_hcc, conn, params=(year, period_value))
+            df = (df_bccp_act
+                  .merge(df_hcc_act,   on='ma_bdx', how='outer')
+                  .merge(df_plan_bccp, on='ma_bdx', how='outer')
+                  .merge(df_plan_hcc,  on='ma_bdx', how='outer')
+                  .fillna(0.0))
+            df['dt_curr']  = df['dt_bccp'] + df['dt_hcc']
+            df['plan_val'] = df['plan_bccp'] + df['plan_hcc']
+        else:
+            # Specific service
+            df_act = _actual_by_xa(period_value, year, nhom_filter).rename(columns={'dt': 'dt_curr'})
+            sql_plan = f"""
+                SELECT {grp_col} as ma_bdx, SUM(p.ke_hoach_doanh_thu) AS plan_val
+                FROM {plan_tbl} p
+                INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_bc
+                WHERE p.nam = ? AND p.{plan_col} = ? AND p.nhom_chinh = ?
+                AND b.ma_bdx IS NOT NULL
+                GROUP BY {grp_col}
+            """
+            df_plan = pd.read_sql_query(sql_plan, conn, params=(year, period_value, service_key))
+            df = df_act.merge(df_plan, on='ma_bdx', how='outer').fillna(0.0)
 
-        # Plan BCCP: ma_buu_cuc = ma_bc (6 số) → gộp lên xã qua dim_buucuc
-        sql_plan_bccp = f"""
-            SELECT b.ma_bdx, SUM(p.ke_hoach_doanh_thu) AS plan_bccp
-            FROM {plan_tbl} p
-            INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_bc
-            WHERE p.nam = ? AND p.{plan_col} = ? AND p.nhom_dich_vu = 'BCCP'
-              AND b.ma_bdx IS NOT NULL
-            GROUP BY b.ma_bdx
-        """
-        df_plan_bccp = pd.read_sql_query(sql_plan_bccp, conn, params=(year, period_value))
-
-        # Plan HCC: ma_buu_cuc = ma_bdx (4 số) → dùng thẳng
-        sql_plan_hcc = f"""
-            SELECT p.ma_buu_cuc AS ma_bdx, SUM(p.ke_hoach_doanh_thu) AS plan_hcc
-            FROM {plan_tbl} p
-            WHERE p.nam = ? AND p.{plan_col} = ? AND p.nhom_dich_vu = 'HCC'
-            GROUP BY p.ma_buu_cuc
-        """
-        df_plan_hcc = pd.read_sql_query(sql_plan_hcc, conn, params=(year, period_value))
-
-        # Gộp tất cả theo ma_bdx
-        df = (df_bccp_act
-              .merge(df_hcc_act,   on='ma_bdx', how='outer')
-              .merge(df_plan_bccp, on='ma_bdx', how='outer')
-              .merge(df_plan_hcc,  on='ma_bdx', how='outer')
-              .fillna(0.0))
-
-        df['dt_curr']  = df['dt_bccp'] + df['dt_hcc']
-        df['plan_val'] = df['plan_bccp'] + df['plan_hcc']
         df = df[(df['dt_curr'] > 0) & (df['plan_val'] > 0)]
         if df.empty:
             return pd.DataFrame(columns=['ten_cum', 'ten_bdx', 'ratio'])
         df['ratio'] = (df['dt_curr'] / df['plan_val']) * 100.0
 
     else:
-        # So sánh kỳ trước / cùng kỳ: gộp TẤT CẢ dịch vụ theo xã
-        df_curr = _actual_by_xa(period_value, year).rename(columns={'dt': 'dt_curr'})
-        df_prev = _actual_by_xa(prev_value, prev_year).rename(columns={'dt': 'dt_prev'})
+        # So sánh kỳ trước / cùng kỳ: áp dụng bộ lọc nhóm dịch vụ
+        df_curr = _actual_by_xa(period_value, year, nhom_filter).rename(columns={'dt': 'dt_curr'})
+        df_prev = _actual_by_xa(prev_value, prev_year, nhom_filter).rename(columns={'dt': 'dt_prev'})
         df = df_curr.merge(df_prev, on='ma_bdx', how='inner')
         df = df[(df['dt_curr'] > 0) & (df['dt_prev'] > 0)]
         if df.empty:
             return pd.DataFrame(columns=['ten_cum', 'ten_bdx', 'ratio'])
         df['ratio'] = ((df['dt_curr'] - df['dt_prev']) / df['dt_prev']) * 100.0
 
-    # ── Join địa lý: lấy ten_bdx, ten_cum theo ma_bdx ────────────────────────
-    df_geo = pd.read_sql_query(
-        "SELECT DISTINCT ma_bdx, ten_bdx, ten_cum FROM dim_buucuc "
-        "WHERE ma_bdx IS NOT NULL AND ma_bdx NOT LIKE 'CUM_%'",
-        conn
-    )
+    # ── Join địa lý: lấy ten_bdx, ten_cum theo ma_bdx (hoặc ma_bc) ───────────
+    if bdx and bdx != 'Tất cả':
+        df_geo = pd.read_sql_query(
+            "SELECT ma_bc as ma_bdx, ten_buu_cuc as display_name, ten_bdx as real_ten_bdx, ten_cum FROM dim_buucuc "
+            "WHERE ma_bdx IS NOT NULL AND ma_bc != ma_bdx AND ma_bc NOT LIKE 'CUM_%'",
+            conn
+        )
+    else:
+        df_geo = pd.read_sql_query(
+            "SELECT DISTINCT ma_bdx, ten_bdx as display_name, ten_bdx as real_ten_bdx, ten_cum FROM dim_buucuc "
+            "WHERE ma_bdx IS NOT NULL AND ma_bc = ma_bdx AND ma_bdx NOT LIKE 'CUM_%'",
+            conn
+        )
     df_final = df.merge(df_geo, on='ma_bdx', how='inner')
 
     # ── Lọc địa lý ───────────────────────────────────────────────────────────
     if cum and cum != 'Tất cả':
         df_final = df_final[df_final['ten_cum'] == cum]
     if bdx and bdx != 'Tất cả':
-        df_final = df_final[df_final['ten_bdx'] == bdx]
+        df_final = df_final[df_final['real_ten_bdx'] == bdx]
     if buu_cuc and buu_cuc != 'Tất cả':
         df_final = df_final[df_final['ma_bdx'] == buu_cuc]
+
+    df_final['ten_bdx'] = df_final['display_name']
 
     # ── Top 10 ───────────────────────────────────────────────────────────────
     df_final = df_final.sort_values(by='ratio', ascending=False).head(10)
     return df_final[['ten_cum', 'ten_bdx', 'ratio']]
 
 
-def get_12_periods_revenue(conn, period_type, current_period, current_year, cum=None):
+def get_12_periods_revenue(conn, period_type, current_period, current_year, cum=None, bdx=None, buu_cuc=None):
     """
     Truy vấn dữ liệu doanh thu của 12 kỳ liên tiếp tính đến kỳ hiện tại.
     Trả về DataFrame có: label (ví dụ: 'T01/2026' hoặc 'Tuần 12'), BCCP, HCC, TCBC, PPBL
@@ -619,25 +652,43 @@ def get_12_periods_revenue(conn, period_type, current_period, current_year, cum=
         
         if period_type == 'Tháng':
             query = """
-                SELECT COALESCE(d.nhom_chinh, 'Khác') as nhom_dich_vu, SUM(a.tong_doanh_thu)
-                FROM agg_monthly a
-                LEFT JOIN dim_dichvu d ON a.nhom_dich_vu = d.nhom_dich_vu OR a.nhom_dich_vu = d.ten_dich_vu OR d.ten_dich_vu LIKE a.nhom_dich_vu || '%'
-                WHERE a.nam = ? AND a.thang = ?
-                GROUP BY COALESCE(d.nhom_chinh, 'Khác')
+                SELECT nhom_dich_vu, SUM(tong_doanh_thu)
+                FROM (
+                    SELECT COALESCE((SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 'Khác') as nhom_dich_vu,
+                           a.tong_doanh_thu
+                    FROM agg_monthly a
+                    INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc
+                    WHERE a.nam = ? AND a.thang = ?
             """
-            params = (yr, val)
         else: # Tuần
             query = """
-                SELECT COALESCE(d.nhom_chinh, 'Khác') as nhom_chinh_group, SUM(a.tong_doanh_thu) as dt
-                FROM agg_weekly a
-                LEFT JOIN dim_dichvu d ON a.nhom_dich_vu = d.nhom_dich_vu OR a.nhom_dich_vu = d.ten_dich_vu OR d.ten_dich_vu LIKE a.nhom_dich_vu || '%'
-                WHERE a.nam = ? AND a.tuan_so = ?
-                GROUP BY COALESCE(d.nhom_chinh, 'Khác')
+                SELECT nhom_dich_vu, SUM(tong_doanh_thu)
+                FROM (
+                    SELECT COALESCE((SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 'Khác') as nhom_dich_vu,
+                           a.tong_doanh_thu
+                    FROM agg_weekly a
+                    INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc
+                    WHERE a.nam = ? AND a.tuan_so = ?
             """
-            params = (yr, val)
+            
+        params = [yr, val]
+        if cum and cum != "Tất cả" and cum != "Tất cả Cụm":
+            query += " AND b.ten_cum = ?"
+            params.append(cum)
+        if bdx and bdx != "Tất cả":
+            query += " AND b.ten_bdx = ?"
+            params.append(bdx)
+        if buu_cuc and buu_cuc != "Tất cả":
+            query += " AND a.buu_cuc = ?"
+            params.append(buu_cuc)
+            
+        query += """
+                )
+                GROUP BY nhom_dich_vu
+        """
             
         cursor = conn.cursor()
-        cursor.execute(query, params)
+        cursor.execute(query, tuple(params))
         for nhom, dt in cursor.fetchall():
             if nhom in row_dict:
                 row_dict[nhom] = dt or 0.0
@@ -647,10 +698,9 @@ def get_12_periods_revenue(conn, period_type, current_period, current_year, cum=
     return pd.DataFrame(result_data)
 
 
-def get_period_detail_by_xa(conn, period_type, period_value, year, cum=None):
+def get_period_detail_by_xa(conn, period_type, period_value, year, cum=None, bdx=None, buu_cuc=None):
     """
     Lấy chi tiết doanh thu theo bưu cục/xã bao gồm cả 4 dịch vụ ở kỳ hiện tại, kỳ trước, cùng kỳ và kế hoạch.
-    Trả về DataFrame chi tiết cho từng xã để render lên bảng hiển thị.
     """
     import config.week_calendar as calendar_helper
     cursor = conn.cursor()
@@ -665,34 +715,38 @@ def get_period_detail_by_xa(conn, period_type, period_value, year, cum=None):
             prev_year = year - 1
             weeks = calendar_helper.get_week_list(prev_year)
             prev_value = weeks[-1][0] if weeks else 52
-            return prev_value, prev_year
         else:
             prev_year = year
             prev_value = period_value - 1
             
-    # 2. Query doanh thu dịch vụ kỳ hiện tại theo xã (quy đổi nhóm con -> nhóm chính)
+    # 2. Query doanh thu dịch vụ kỳ hiện tại theo xã
     if period_type == 'Tháng':
         curr_sql = """
-            SELECT a.buu_cuc, COALESCE(d.nhom_chinh, 'Khác') as nhom_dich_vu, SUM(a.tong_doanh_thu) as dt
-            FROM agg_monthly a
-            LEFT JOIN dim_dichvu d ON a.nhom_dich_vu = d.nhom_dich_vu OR a.nhom_dich_vu = d.ten_dich_vu OR d.ten_dich_vu LIKE a.nhom_dich_vu || '%'
-            WHERE a.nam = ? AND a.thang = ?
-            GROUP BY a.buu_cuc, COALESCE(d.nhom_chinh, 'Khác')
+            SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
+            FROM (
+                SELECT a.buu_cuc,
+                       COALESCE((SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 'Khác') as nhom_dich_vu,
+                       a.tong_doanh_thu
+                FROM agg_monthly a
+                WHERE a.nam = ? AND a.thang = ?
+            )
+            GROUP BY buu_cuc, nhom_dich_vu
         """
-        curr_params = (year, period_value)
     else: # Tuần
         curr_sql = """
-            SELECT a.buu_cuc, COALESCE(d.nhom_chinh, 'Khác') as nhom_dich_vu, SUM(a.tong_doanh_thu) as dt
-            FROM agg_weekly a
-            LEFT JOIN dim_dichvu d ON a.nhom_dich_vu = d.nhom_dich_vu OR a.nhom_dich_vu = d.ten_dich_vu OR d.ten_dich_vu LIKE a.nhom_dich_vu || '%'
-            WHERE a.nam = ? AND a.tuan_so = ?
-            GROUP BY a.buu_cuc, COALESCE(d.nhom_chinh, 'Khác')
+            SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
+            FROM (
+                SELECT a.buu_cuc,
+                       COALESCE((SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 'Khác') as nhom_dich_vu,
+                       a.tong_doanh_thu
+                FROM agg_weekly a
+                WHERE a.nam = ? AND a.tuan_so = ?
+            )
+            GROUP BY buu_cuc, nhom_dich_vu
         """
-        curr_params = (year, period_value)
         
-    df_curr_raw = pd.read_sql_query(curr_sql, conn, params=curr_params)
+    df_curr_raw = pd.read_sql_query(curr_sql, conn, params=(year, period_value))
     
-    # Pivot dịch vụ để có cấu trúc: buu_cuc | BCCP | HCC | TCBC | PPBL
     if not df_curr_raw.empty:
         df_curr = df_curr_raw.pivot(index='buu_cuc', columns='nhom_dich_vu', values='dt').fillna(0.0).reset_index()
     else:
@@ -701,95 +755,179 @@ def get_period_detail_by_xa(conn, period_type, period_value, year, cum=None):
     for col in ['BCCP', 'HCC', 'TCBC', 'PPBL']:
         if col not in df_curr.columns:
             df_curr[col] = 0.0
-            
     df_curr['tong_dt'] = df_curr[['BCCP', 'HCC', 'TCBC', 'PPBL']].sum(axis=1)
     
-    # 3. Tính doanh thu tổng kỳ trước theo xã
+    # 3. Doanh thu tổng kỳ trước theo xã
     if period_type == 'Tháng':
         prev_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev FROM agg_monthly WHERE nam = ? AND thang = ? GROUP BY buu_cuc"
-        prev_params = (prev_year, prev_value)
     else:
         prev_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev FROM agg_weekly WHERE nam = ? AND tuan_so = ? GROUP BY buu_cuc"
-        prev_params = (prev_year, prev_value)
-        
-    df_prev = pd.read_sql_query(prev_sql, conn, params=prev_params)
+    df_prev = pd.read_sql_query(prev_sql, conn, params=(prev_year, prev_value))
     
-    # 4. Tính doanh thu tổng cùng kỳ năm trước theo xã
+    # 4. Doanh thu tổng cùng kỳ năm trước theo xã
     if period_type == 'Tháng':
         yoy_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy FROM agg_monthly WHERE nam = ? AND thang = ? GROUP BY buu_cuc"
-        yoy_params = (year - 1, period_value)
     else:
         yoy_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy FROM agg_weekly WHERE nam = ? AND tuan_so = ? GROUP BY buu_cuc"
-        yoy_params = (year - 1, period_value)
-        
-    df_yoy = pd.read_sql_query(yoy_sql, conn, params=yoy_params)
+    df_yoy = pd.read_sql_query(yoy_sql, conn, params=(year - 1, period_value))
     
     # 5. Kế hoạch kỳ hiện tại theo xã
     if period_type == 'Tháng':
         plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans WHERE nam = ? AND thang = ? GROUP BY ma_buu_cuc"
-        plan_params = (year, period_value)
     else:
         plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans_weekly WHERE nam = ? AND tuan_so = ? GROUP BY ma_buu_cuc"
-        plan_params = (year, period_value)
-        
-    df_plan = pd.read_sql_query(plan_sql, conn, params=plan_params)
+    df_plan = pd.read_sql_query(plan_sql, conn, params=(year, period_value))
     
-    # 6. Gộp tất cả dữ liệu so sánh vào df_curr
-    df_merge = df_curr
-    for df_c, col_name in [(df_prev, 'dt_prev'), (df_yoy, 'dt_yoy'), (df_plan, 'plan_dt')]:
-        if not df_c.empty:
-            df_merge = pd.merge(df_merge, df_c, on='buu_cuc', how='left')
-        else:
-            df_merge[col_name] = 0.0
+    # Load danh mục địa lý dim_buucuc
+    df_geo_all = pd.read_sql_query("SELECT ma_bc, ma_bdx, ten_bdx, ten_cum, ten_buu_cuc FROM dim_buucuc", conn)
+    bc_to_xa = df_geo_all.set_index('ma_bc')['ma_bdx'].dropna().to_dict()
+    bc_to_ten_xa = df_geo_all.set_index('ma_bc')['ten_bdx'].dropna().to_dict()
+    bc_to_cum = df_geo_all.set_index('ma_bc')['ten_cum'].dropna().to_dict()
+    bc_to_ten_bc = df_geo_all.set_index('ma_bc')['ten_buu_cuc'].dropna().to_dict()
+    
+    df_xa_geo = df_geo_all[['ma_bdx', 'ten_bdx', 'ten_cum']].dropna().drop_duplicates(subset=['ma_bdx'])
+    xa_to_ten = df_xa_geo.set_index('ma_bdx')['ten_bdx'].to_dict()
+    xa_to_cum = df_xa_geo.set_index('ma_bdx')['ten_cum'].to_dict()
+    
+    def assign_geo_info(df, code_col='buu_cuc'):
+        if df.empty:
+            df['ma_bdx'] = None
+            df['ten_bdx'] = None
+            df['ten_cum'] = None
+            df['ten_buu_cuc'] = None
+            return df
+        
+        ma_bdx_list = []
+        ten_bdx_list = []
+        ten_cum_list = []
+        ten_bc_list = []
+        
+        for val in df[code_col]:
+            val_str = str(val).strip()
+            if len(val_str) == 4:
+                ma_bdx_list.append(val_str)
+                ten_bdx_list.append(xa_to_ten.get(val_str, None))
+                ten_cum_list.append(xa_to_cum.get(val_str, None))
+                ten_bc_list.append(None)
+            elif len(val_str) == 6:
+                ma_bdx_list.append(bc_to_xa.get(val_str, None))
+                ten_bdx_list.append(bc_to_ten_xa.get(val_str, None))
+                ten_cum_list.append(bc_to_cum.get(val_str, None))
+                ten_bc_list.append(bc_to_ten_bc.get(val_str, None))
+            else:
+                ma_bdx_list.append(val_str)
+                ten_bdx_list.append(None)
+                ten_cum_list.append(None)
+                ten_bc_list.append(None)
+                
+        df['ma_bdx'] = ma_bdx_list
+        df['ten_bdx'] = ten_bdx_list
+        df['ten_cum'] = ten_cum_list
+        df['ten_buu_cuc'] = ten_bc_list
+        return df
+
+    # Gán địa lý
+    df_curr = assign_geo_info(df_curr, 'buu_cuc')
+    df_prev = assign_geo_info(df_prev, 'buu_cuc')
+    df_yoy = assign_geo_info(df_yoy, 'buu_cuc')
+    df_plan = assign_geo_info(df_plan, 'buu_cuc')
+
+    if bdx == 'Tất cả' or not bdx:
+        # Cấp Cụm: So sánh giữa các Xã
+        def grp_df(df, sum_cols):
+            if df.empty:
+                return pd.DataFrame(columns=['ma_bdx'] + sum_cols)
+            df_filtered = df[df['ma_bdx'].notna() & (~df['ma_bdx'].str.startswith('CUM_'))]
+            if not df_filtered.empty:
+                df_filtered = df_filtered[~df_filtered['ten_bdx'].fillna('').str.contains('Đại diện Cụm', na=False)]
+            return df_filtered.groupby('ma_bdx')[sum_cols].sum().reset_index()
+
+        df_curr_grp = grp_df(df_curr, ['BCCP', 'HCC', 'TCBC', 'PPBL', 'tong_dt'])
+        df_prev_grp = grp_df(df_prev, ['dt_prev'])
+        df_yoy_grp = grp_df(df_yoy, ['dt_yoy'])
+        df_plan_grp = grp_df(df_plan, ['plan_dt'])
+
+        # Merge các bảng đã gộp
+        df_merge = df_curr_grp
+        for df_c in [df_prev_grp, df_yoy_grp, df_plan_grp]:
+            df_merge = pd.merge(df_merge, df_c, on='ma_bdx', how='outer')
+        df_merge = df_merge.fillna(0.0)
+
+        # Lấy lại ten_bdx và ten_cum
+        df_merge['ten_bdx'] = df_merge['ma_bdx'].map(xa_to_ten)
+        df_merge['ten_cum'] = df_merge['ma_bdx'].map(xa_to_cum)
+
+        # Áp dụng bộ lọc cụm
+        if cum and cum != 'Tất cả':
+            df_merge = df_merge[df_merge['ten_cum'] == cum]
             
-    df_merge = df_merge.fillna(0.0)
-    
-    # 7. Join với danh mục địa lý dim_buucuc
-    sql_dim = "SELECT ma_bc as buu_cuc, ten_bdx, ten_cum, ma_bdx FROM dim_buucuc"
-    params_dim = []
-    if cum and cum != "Tất cả":
-        sql_dim += " WHERE ten_cum = ?"
-        params_dim.append(cum)
+        df_merge = df_merge[df_merge['ten_bdx'].notna()]
+        return df_merge.reset_index(drop=True)
+    else:
+        # Cấp Xã: So sánh các bưu cục con 6 số
+        df_buucuc_real = df_geo_all[
+            (df_geo_all['ten_bdx'] == bdx) & 
+            (df_geo_all['ten_cum'] == cum) & 
+            (df_geo_all['ma_bc'].str.len() == 6) & 
+            (~df_geo_all['ma_bc'].str.startswith('CUM_'))
+        ]
+        real_ma_bc_list = set(df_buucuc_real['ma_bc'])
+
+        # Merge trực tiếp theo buu_cuc
+        df_merge = df_curr
+        for df_c in [df_prev, df_yoy, df_plan]:
+            if not df_c.empty:
+                df_merge = pd.merge(df_merge, df_c[['buu_cuc', 'dt_prev' if 'dt_prev' in df_c else ('dt_yoy' if 'dt_yoy' in df_c else 'plan_dt')]], on='buu_cuc', how='outer')
+        df_merge = df_merge.fillna(0.0)
+
+        # Chỉ giữ lại bưu cục con thực tế thuộc xã
+        df_merge = df_merge[df_merge['buu_cuc'].isin(real_ma_bc_list)]
         
-    df_buucuc = pd.read_sql_query(sql_dim, conn, params=params_dim)
-    df_final = pd.merge(df_merge, df_buucuc, on='buu_cuc', how='inner')
-    
-    # Gộp bưu cục cùng xã lại
-    if not df_final.empty:
-        df_final = df_final.groupby(['ten_cum', 'ten_bdx', 'ma_bdx'], as_index=False)[
-            ['BCCP', 'HCC', 'TCBC', 'PPBL', 'tong_dt', 'dt_prev', 'dt_yoy', 'plan_dt']
-        ].sum()
-    
-    return df_final
+        # Chỉ giữ bưu cục thực tế có phát sinh doanh thu thực tế (tong_dt > 0)
+        df_merge = df_merge[df_merge['tong_dt'] > 0]
+
+        # Gán tên bưu cục hiển thị
+        df_merge['ten_bdx'] = df_merge['buu_cuc'].map(bc_to_ten_bc)
+        df_merge['ma_bdx'] = df_merge['buu_cuc']
+        df_merge['ten_cum'] = cum
+
+        return df_merge.reset_index(drop=True)
 
 
-def get_ytd_detail_by_xa(conn, period_type, period_value, year, cum=None):
+def get_ytd_detail_by_xa(conn, period_type, period_value, year, cum=None, bdx=None, buu_cuc=None):
     """
-    Tương tự như get_period_detail_by_xa nhưng tính lũy kế YTD từ đầu năm (tháng 1 hoặc tuần 1) đến kỳ hiện tại.
+    Tương tự như get_period_detail_by_xa nhưng tính lũy kế YTD từ đầu năm đến kỳ hiện tại.
     """
     import config.week_calendar as calendar_helper
+    cursor = conn.cursor()
     
-    # 1. Doanh thu lũy kế kỳ hiện tại theo xã (quy đổi nhóm con -> nhóm chính)
+    # 1. Doanh thu lũy kế kỳ hiện tại theo xã
     if period_type == 'Tháng':
         curr_sql = """
-            SELECT a.buu_cuc, COALESCE(d.nhom_chinh, 'Khác') as nhom_dich_vu, SUM(a.tong_doanh_thu) as dt
-            FROM agg_monthly a
-            LEFT JOIN dim_dichvu d ON a.nhom_dich_vu = d.nhom_dich_vu OR a.nhom_dich_vu = d.ten_dich_vu OR d.ten_dich_vu LIKE a.nhom_dich_vu || '%'
-            WHERE a.nam = ? AND a.thang BETWEEN 1 AND ?
-            GROUP BY a.buu_cuc, COALESCE(d.nhom_chinh, 'Khác')
+            SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
+            FROM (
+                SELECT a.buu_cuc,
+                       COALESCE((SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 'Khác') as nhom_dich_vu,
+                       a.tong_doanh_thu
+                FROM agg_monthly a
+                WHERE a.nam = ? AND a.thang <= ?
+            )
+            GROUP BY buu_cuc, nhom_dich_vu
         """
-        curr_params = (year, period_value)
     else: # Tuần
         curr_sql = """
-            SELECT a.buu_cuc, COALESCE(d.nhom_chinh, 'Khác') as nhom_dich_vu, SUM(a.tong_doanh_thu) as dt
-            FROM agg_weekly a
-            LEFT JOIN dim_dichvu d ON a.nhom_dich_vu = d.nhom_dich_vu OR a.nhom_dich_vu = d.ten_dich_vu OR d.ten_dich_vu LIKE a.nhom_dich_vu || '%'
-            WHERE a.nam = ? AND a.tuan_so BETWEEN 1 AND ?
-            GROUP BY a.buu_cuc, COALESCE(d.nhom_chinh, 'Khác')
+            SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
+            FROM (
+                SELECT a.buu_cuc,
+                       COALESCE((SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 'Khác') as nhom_dich_vu,
+                       a.tong_doanh_thu
+                FROM agg_weekly a
+                WHERE a.nam = ? AND a.tuan_so <= ?
+            )
+            GROUP BY buu_cuc, nhom_dich_vu
         """
-        curr_params = (year, period_value)
         
-    df_curr_raw = pd.read_sql_query(curr_sql, conn, params=curr_params)
+    df_curr_raw = pd.read_sql_query(curr_sql, conn, params=(year, period_value))
     
     if not df_curr_raw.empty:
         df_curr = df_curr_raw.pivot(index='buu_cuc', columns='nhom_dich_vu', values='dt').fillna(0.0).reset_index()
@@ -799,20 +937,16 @@ def get_ytd_detail_by_xa(conn, period_type, period_value, year, cum=None):
     for col in ['BCCP', 'HCC', 'TCBC', 'PPBL']:
         if col not in df_curr.columns:
             df_curr[col] = 0.0
-            
     df_curr['tong_dt'] = df_curr[['BCCP', 'HCC', 'TCBC', 'PPBL']].sum(axis=1)
     
     # 2. Doanh thu lũy kế kỳ trước (YTD cùng kỳ trước liền kề)
-    # Kỳ trước liền kề của YTD tháng hiện tại chính là YTD tháng trước
     if period_type == 'Tháng':
         prev_val = period_value - 1
         prev_yr = year
         if prev_val == 0:
             prev_val = 12
             prev_yr = year - 1
-            
         prev_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev FROM agg_monthly WHERE nam = ? AND thang BETWEEN 1 AND ? GROUP BY buu_cuc"
-        prev_params = (prev_yr, prev_val)
     else: # Tuần
         prev_val = period_value - 1
         prev_yr = year
@@ -820,55 +954,136 @@ def get_ytd_detail_by_xa(conn, period_type, period_value, year, cum=None):
             prev_yr = year - 1
             weeks = calendar_helper.get_week_list(prev_yr)
             prev_val = weeks[-1][0] if weeks else 52
-            
         prev_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev FROM agg_weekly WHERE nam = ? AND tuan_so BETWEEN 1 AND ? GROUP BY buu_cuc"
-        prev_params = (prev_yr, prev_val)
         
-    df_prev = pd.read_sql_query(prev_sql, conn, params=prev_params)
+    df_prev = pd.read_sql_query(prev_sql, conn, params=(prev_yr, prev_val))
     
     # 3. Doanh thu lũy kế cùng kỳ năm trước YTD
     if period_type == 'Tháng':
         yoy_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy FROM agg_monthly WHERE nam = ? AND thang BETWEEN 1 AND ? GROUP BY buu_cuc"
     else:
         yoy_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy FROM agg_weekly WHERE nam = ? AND tuan_so BETWEEN 1 AND ? GROUP BY buu_cuc"
-    yoy_params = (year - 1, period_value)
+    df_yoy = pd.read_sql_query(yoy_sql, conn, params=(year - 1, period_value))
     
-    df_yoy = pd.read_sql_query(yoy_sql, conn, params=yoy_params)
-    
-    # 4. Kế hoạch lũy kế YTD
+    # 4. Kế hoạch lũy kế YTD (kế hoạch CẢ NĂM theo yêu cầu của Sếp)
     if period_type == 'Tháng':
-        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans WHERE nam = ? AND thang BETWEEN 1 AND ? GROUP BY ma_buu_cuc"
+        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans WHERE nam = ? GROUP BY ma_buu_cuc"
     else:
-        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans_weekly WHERE nam = ? AND tuan_so BETWEEN 1 AND ? GROUP BY ma_buu_cuc"
-    plan_params = (year, period_value)
+        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans_weekly WHERE nam = ? GROUP BY ma_buu_cuc"
+    df_plan = pd.read_sql_query(plan_sql, conn, params=(year,))
     
-    df_plan = pd.read_sql_query(plan_sql, conn, params=plan_params)
+    # Load danh mục địa lý dim_buucuc
+    df_geo_all = pd.read_sql_query("SELECT ma_bc, ma_bdx, ten_bdx, ten_cum, ten_buu_cuc FROM dim_buucuc", conn)
+    bc_to_xa = df_geo_all.set_index('ma_bc')['ma_bdx'].dropna().to_dict()
+    bc_to_ten_xa = df_geo_all.set_index('ma_bc')['ten_bdx'].dropna().to_dict()
+    bc_to_cum = df_geo_all.set_index('ma_bc')['ten_cum'].dropna().to_dict()
+    bc_to_ten_bc = df_geo_all.set_index('ma_bc')['ten_buu_cuc'].dropna().to_dict()
     
-    # Gộp tất cả
-    df_merge = df_curr
-    for df_c, col_name in [(df_prev, 'dt_prev'), (df_yoy, 'dt_yoy'), (df_plan, 'plan_dt')]:
-        if not df_c.empty:
-            df_merge = pd.merge(df_merge, df_c, on='buu_cuc', how='left')
-        else:
-            df_merge[col_name] = 0.0
-            
-    df_merge = df_merge.fillna(0.0)
+    df_xa_geo = df_geo_all[['ma_bdx', 'ten_bdx', 'ten_cum']].dropna().drop_duplicates(subset=['ma_bdx'])
+    xa_to_ten = df_xa_geo.set_index('ma_bdx')['ten_bdx'].to_dict()
+    xa_to_cum = df_xa_geo.set_index('ma_bdx')['ten_cum'].to_dict()
     
-    # 7. Join với danh mục địa lý dim_buucuc
-    sql_dim = "SELECT ma_bc as buu_cuc, ten_bdx, ten_cum, ma_bdx FROM dim_buucuc"
-    params_dim = []
-    if cum and cum != "Tất cả":
-        sql_dim += " WHERE ten_cum = ?"
-        params_dim.append(cum)
+    def assign_geo_info(df, code_col='buu_cuc'):
+        if df.empty:
+            df['ma_bdx'] = None
+            df['ten_bdx'] = None
+            df['ten_cum'] = None
+            df['ten_buu_cuc'] = None
+            return df
         
-    df_buucuc = pd.read_sql_query(sql_dim, conn, params=params_dim)
-    df_final = pd.merge(df_merge, df_buucuc, on='buu_cuc', how='inner')
-    
-    # Gộp bưu cục cùng xã lại
-    if not df_final.empty:
-        df_final = df_final.groupby(['ten_cum', 'ten_bdx', 'ma_bdx'], as_index=False)[
-            ['BCCP', 'HCC', 'TCBC', 'PPBL', 'tong_dt', 'dt_prev', 'dt_yoy', 'plan_dt']
-        ].sum()
-    
-    return df_final
+        ma_bdx_list = []
+        ten_bdx_list = []
+        ten_cum_list = []
+        ten_bc_list = []
+        
+        for val in df[code_col]:
+            val_str = str(val).strip()
+            if len(val_str) == 4:
+                ma_bdx_list.append(val_str)
+                ten_bdx_list.append(xa_to_ten.get(val_str, None))
+                ten_cum_list.append(xa_to_cum.get(val_str, None))
+                ten_bc_list.append(None)
+            elif len(val_str) == 6:
+                ma_bdx_list.append(bc_to_xa.get(val_str, None))
+                ten_bdx_list.append(bc_to_ten_xa.get(val_str, None))
+                ten_cum_list.append(bc_to_cum.get(val_str, None))
+                ten_bc_list.append(bc_to_ten_bc.get(val_str, None))
+            else:
+                ma_bdx_list.append(val_str)
+                ten_bdx_list.append(None)
+                ten_cum_list.append(None)
+                ten_bc_list.append(None)
+                
+        df['ma_bdx'] = ma_bdx_list
+        df['ten_bdx'] = ten_bdx_list
+        df['ten_cum'] = ten_cum_list
+        df['ten_buu_cuc'] = ten_bc_list
+        return df
+
+    # Gán địa lý
+    df_curr = assign_geo_info(df_curr, 'buu_cuc')
+    df_prev = assign_geo_info(df_prev, 'buu_cuc')
+    df_yoy = assign_geo_info(df_yoy, 'buu_cuc')
+    df_plan = assign_geo_info(df_plan, 'buu_cuc')
+
+    if bdx == 'Tất cả' or not bdx:
+        # Cấp Cụm: So sánh giữa các Xã
+        def grp_df(df, sum_cols):
+            if df.empty:
+                return pd.DataFrame(columns=['ma_bdx'] + sum_cols)
+            df_filtered = df[df['ma_bdx'].notna() & (~df['ma_bdx'].str.startswith('CUM_'))]
+            if not df_filtered.empty:
+                df_filtered = df_filtered[~df_filtered['ten_bdx'].fillna('').str.contains('Đại diện Cụm', na=False)]
+            return df_filtered.groupby('ma_bdx')[sum_cols].sum().reset_index()
+
+        df_curr_grp = grp_df(df_curr, ['BCCP', 'HCC', 'TCBC', 'PPBL', 'tong_dt'])
+        df_prev_grp = grp_df(df_prev, ['dt_prev'])
+        df_yoy_grp = grp_df(df_yoy, ['dt_yoy'])
+        df_plan_grp = grp_df(df_plan, ['plan_dt'])
+
+        # Merge các bảng đã gộp
+        df_merge = df_curr_grp
+        for df_c in [df_prev_grp, df_yoy_grp, df_plan_grp]:
+            df_merge = pd.merge(df_merge, df_c, on='ma_bdx', how='outer')
+        df_merge = df_merge.fillna(0.0)
+
+        # Lấy lại ten_bdx và ten_cum
+        df_merge['ten_bdx'] = df_merge['ma_bdx'].map(xa_to_ten)
+        df_merge['ten_cum'] = df_merge['ma_bdx'].map(xa_to_cum)
+
+        # Áp dụng bộ lọc cụm
+        if cum and cum != 'Tất cả':
+            df_merge = df_merge[df_merge['ten_cum'] == cum]
+            
+        df_merge = df_merge[df_merge['ten_bdx'].notna()]
+        return df_merge.reset_index(drop=True)
+    else:
+        # Cấp Xã: So sánh các bưu cục con 6 số
+        df_buucuc_real = df_geo_all[
+            (df_geo_all['ten_bdx'] == bdx) & 
+            (df_geo_all['ten_cum'] == cum) & 
+            (df_geo_all['ma_bc'].str.len() == 6) & 
+            (~df_geo_all['ma_bc'].str.startswith('CUM_'))
+        ]
+        real_ma_bc_list = set(df_buucuc_real['ma_bc'])
+
+        # Merge trực tiếp theo buu_cuc
+        df_merge = df_curr
+        for df_c in [df_prev, df_yoy, df_plan]:
+            if not df_c.empty:
+                df_merge = pd.merge(df_merge, df_c[['buu_cuc', 'dt_prev' if 'dt_prev' in df_c else ('dt_yoy' if 'dt_yoy' in df_c else 'plan_dt')]], on='buu_cuc', how='outer')
+        df_merge = df_merge.fillna(0.0)
+
+        # Chỉ giữ lại bưu cục con thực tế thuộc xã
+        df_merge = df_merge[df_merge['buu_cuc'].isin(real_ma_bc_list)]
+        
+        # Chỉ giữ bưu cục thực tế có phát sinh doanh thu thực tế (tong_dt > 0)
+        df_merge = df_merge[df_merge['tong_dt'] > 0]
+
+        # Gán tên bưu cục hiển thị
+        df_merge['ten_bdx'] = df_merge['buu_cuc'].map(bc_to_ten_bc)
+        df_merge['ma_bdx'] = df_merge['buu_cuc']
+        df_merge['ten_cum'] = cum
+
+        return df_merge.reset_index(drop=True)
 

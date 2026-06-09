@@ -105,7 +105,7 @@ def create_global_overview_layout():
         # Bảng A: Chi tiết kỳ hiện tại
         html.Div([
             html.Div([
-                html.Span("📋 Chi tiết doanh thu theo Bưu cục Xã (Kỳ hiện tại)", style={"fontWeight": "bold", "fontSize": "15px", "color": "#1E293B"}),
+                html.Span("📋 Chi tiết doanh thu", style={"fontWeight": "bold", "fontSize": "15px", "color": "#1E293B"}),
                 html.Div([
                     html.Span("So sánh với: ", style={"fontSize": "13px", "color": "#64748B", "marginRight": "10px"}),
                     dbc.RadioItems(
@@ -127,13 +127,12 @@ def create_global_overview_layout():
         # Bảng B: Chi tiết lũy kế YTD
         html.Div([
             html.Div([
-                html.Span("📋 Chi tiết doanh thu lũy kế YTD theo Bưu cục Xã (Đầu năm đến nay)", style={"fontWeight": "bold", "fontSize": "15px", "color": "#1E293B"}),
+                html.Span("📋 Chi tiết doanh thu lũy kế YTD", style={"fontWeight": "bold", "fontSize": "15px", "color": "#1E293B"}),
                 html.Div([
                     html.Span("So sánh với: ", style={"fontSize": "13px", "color": "#64748B", "marginRight": "10px"}),
                     dbc.RadioItems(
                         id="global-table-b-compare-selector",
                         options=[
-                            {"label": "Kỳ trước", "value": "prev"},
                             {"label": "Cùng kỳ năm trước", "value": "yoy"},
                             {"label": "Kế hoạch", "value": "plan"}
                         ],

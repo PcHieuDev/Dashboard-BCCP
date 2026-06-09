@@ -283,3 +283,109 @@ def register_service_detail_callbacks(app):
             return html.Div(f"Lỗi truy vấn dữ liệu: {e}", style={"color": "red"}), go.Figure(), go.Figure()
         finally:
             conn.close()
+
+    @app.callback(
+        Output("download-service-detail", "data"),
+        [Input("btn-export-service-detail", "n_clicks")],
+        [State("tabs-navigation", "value"),
+         State("sidebar-year", "value"),
+         State("sidebar-month-select", "value"),
+         State("sidebar-week-select", "value"),
+         State("sidebar-period", "value"),
+         State("sidebar-cum", "value"),
+         State("sidebar-bdx", "value"),
+         State("sidebar-buu-cuc", "value")],
+        prevent_initial_call=True
+    )
+    def export_service_detail(n_clicks, tab_val, year, month, week, cycle, cum_val, bdx_val, buu_cuc_val):
+        if not n_clicks or tab_val != "tab-service-detail" or not year:
+            return dash.no_update
+            
+        import config.week_calendar as calendar_helper
+        from datetime import datetime
+        
+        # Tương tự như hàm update, lấy dữ liệu
+        geo_clause = ""
+        geo_params = []
+        if cum_val and cum_val != "Tất cả":
+            geo_clause += " AND b.ten_cum = ? "
+            geo_params.append(cum_val)
+        if bdx_val and bdx_val != "Tất cả":
+            geo_clause += " AND b.ten_bdx = ? "
+            geo_params.append(bdx_val)
+        if buu_cuc_val and buu_cuc_val != "Tất cả":
+            geo_clause += " AND t.buu_cuc = ? "
+            geo_params.append(buu_cuc_val)
+            
+        curr_time_clause = ""
+        prev_time_clause = ""
+        curr_time_params = []
+        prev_time_params = []
+        
+        if cycle == 'Tuần':
+            if not week: return dash.no_update
+            weeks_list = calendar_helper.get_week_list(year)
+            c_start, c_end = None, None
+            for w_num, s_d, e_d in weeks_list:
+                if w_num == week:
+                    c_start, c_end = s_d.isoformat(), e_d.isoformat()
+                    break
+            prev_w, prev_yr = get_prev_period_info('Tuần', week, year)
+            prev_weeks_list = calendar_helper.get_week_list(prev_yr)
+            p_start, p_end = None, None
+            for w_num, s_d, e_d in prev_weeks_list:
+                if w_num == prev_w:
+                    p_start, p_end = s_d.isoformat(), e_d.isoformat()
+                    break
+            if not c_start or not p_start: return dash.no_update
+            curr_time_clause = " t.ngay_chap_nhan BETWEEN ? AND ? "
+            curr_time_params = [c_start, c_end]
+            prev_time_clause = " t.ngay_chap_nhan BETWEEN ? AND ? "
+            prev_time_params = [p_start, p_end]
+            period_name = f"Tuần {week}-{year}"
+            prev_period_name = f"Tuần {prev_w}-{prev_yr}"
+        else:
+            if not month: return dash.no_update
+            curr_time_clause = " t.nam_du_lieu = ? AND t.thang_du_lieu = ? "
+            curr_time_params = [year, f"T{month:02d}"]
+            prev_m, prev_yr = get_prev_period_info('Tháng', month, year)
+            prev_time_clause = " t.nam_du_lieu = ? AND t.thang_du_lieu = ? "
+            prev_time_params = [prev_yr, f"T{prev_m:02d}"]
+            period_name = f"Tháng {month:02d}-{year}"
+            prev_period_name = f"Tháng {prev_m:02d}-{prev_yr}"
+            
+        conn = sqlite3.connect(str(DB_PATH))
+        try:
+            sql_curr = f"SELECT d.ma_dich_vu, d.ten_dich_vu, d.nhom_dich_vu, SUM(t.cuoc_tt_tong) as dt_curr, SUM(t.san_luong) as sl_curr FROM transactions t INNER JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc WHERE d.nhom_chinh = 'BCCP' {geo_clause} AND {curr_time_clause} GROUP BY d.ma_dich_vu, d.ten_dich_vu, d.nhom_dich_vu"
+            df_curr = pd.read_sql_query(sql_curr, conn, params=geo_params + curr_time_params)
+            
+            sql_prev = f"SELECT d.ma_dich_vu, SUM(t.cuoc_tt_tong) as dt_prev, SUM(t.san_luong) as sl_prev FROM transactions t INNER JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc WHERE d.nhom_chinh = 'BCCP' {geo_clause} AND {prev_time_clause} GROUP BY d.ma_dich_vu"
+            df_prev = pd.read_sql_query(sql_prev, conn, params=geo_params + prev_time_params)
+            
+            if df_curr.empty: return dash.no_update
+            if df_prev.empty: df_prev = pd.DataFrame(columns=['ma_dich_vu', 'dt_prev', 'sl_prev'])
+                
+            df_merged = pd.merge(df_curr, df_prev, on='ma_dich_vu', how='left')
+            df_merged.fillna({'dt_prev':0, 'dt_curr':0, 'sl_prev':0, 'sl_curr':0}, inplace=True)
+            df_merged['pct_change'] = df_merged.apply(lambda row: ((row['dt_curr'] - row['dt_prev']) / row['dt_prev']) * 100.0 if row['dt_prev'] > 0 else 0.0, axis=1)
+            df_merged = df_merged.sort_values(by='dt_curr', ascending=False)
+            
+            # Đổi tên cột cho Excel
+            df_excel = df_merged.rename(columns={
+                'ma_dich_vu': 'Mã DV',
+                'ten_dich_vu': 'Tên dịch vụ',
+                'nhom_dich_vu': 'Nhóm dịch vụ',
+                'sl_curr': f'Sản lượng ({period_name})',
+                'dt_curr': f'DT hiện tại ({period_name})',
+                'dt_prev': f'DT kỳ trước ({prev_period_name})',
+                'pct_change': 'Thay đổi (%)'
+            })
+            df_excel = df_excel[['Mã DV', 'Tên dịch vụ', 'Nhóm dịch vụ', f'Sản lượng ({period_name})', f'DT hiện tại ({period_name})', f'DT kỳ trước ({prev_period_name})', 'Thay đổi (%)']]
+            
+            return dcc.send_data_frame(df_excel.to_excel, f"chi_tiet_spdv_{period_name}.xlsx", sheet_name="SPDV", index=False)
+            
+        except Exception as e:
+            print(f"Lỗi xuất Excel: {e}")
+            return dash.no_update
+        finally:
+            conn.close()
