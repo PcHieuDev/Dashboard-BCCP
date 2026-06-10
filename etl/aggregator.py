@@ -102,13 +102,14 @@ def rebuild_monthly(conn, nam: int, thang: int):
             t.nam_du_lieu as nam,
             ? as thang,
             t.ma_buu_cuc as buu_cuc,
-            t.ten_dich_vu as nhom_dich_vu,
+            COALESCE(d.nhom_dich_vu, t.ten_dich_vu) as nhom_dich_vu,
             SUM(t.doanh_thu) as tong_doanh_thu,
             SUM(t.san_luong) as tong_san_luong,
             0 as so_kh_phat_sinh
         FROM transactions_hcc t
+        LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu OR t.ten_dich_vu = d.ten_dich_vu
         WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ?
-        GROUP BY t.ma_buu_cuc, t.ten_dich_vu
+        GROUP BY t.ma_buu_cuc, COALESCE(d.nhom_dich_vu, t.ten_dich_vu)
         
         UNION ALL
         
@@ -116,13 +117,14 @@ def rebuild_monthly(conn, nam: int, thang: int):
             t.nam_du_lieu as nam,
             ? as thang,
             t.ma_buu_cuc as buu_cuc,
-            t.ten_dich_vu as nhom_dich_vu,
+            COALESCE(d.nhom_dich_vu, t.ten_dich_vu) as nhom_dich_vu,
             SUM(t.doanh_thu) as tong_doanh_thu,
             SUM(t.san_luong) as tong_san_luong,
             0 as so_kh_phat_sinh
         FROM transactions_tcbc t
+        LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu OR t.ten_dich_vu = d.ten_dich_vu
         WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ?
-        GROUP BY t.ma_buu_cuc, t.ten_dich_vu
+        GROUP BY t.ma_buu_cuc, COALESCE(d.nhom_dich_vu, t.ten_dich_vu)
         
         UNION ALL
         
@@ -130,13 +132,14 @@ def rebuild_monthly(conn, nam: int, thang: int):
             t.nam_du_lieu as nam,
             ? as thang,
             t.ma_buu_cuc as buu_cuc,
-            t.ten_dich_vu as nhom_dich_vu,
+            COALESCE(d.nhom_dich_vu, t.ten_dich_vu) as nhom_dich_vu,
             SUM(t.doanh_thu) as tong_doanh_thu,
             SUM(t.san_luong) as tong_san_luong,
             0 as so_kh_phat_sinh
         FROM transactions_ppbl t
+        LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu OR t.ten_dich_vu = d.ten_dich_vu
         WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ?
-        GROUP BY t.ma_buu_cuc, t.ten_dich_vu
+        GROUP BY t.ma_buu_cuc, COALESCE(d.nhom_dich_vu, t.ten_dich_vu)
     )
     GROUP BY nam, thang, buu_cuc, nhom_dich_vu
     """
@@ -266,10 +269,11 @@ def rebuild_weekly(conn, nam: int):
     sub_services_data = []
     for table_name in ['transactions_hcc', 'transactions_tcbc', 'transactions_ppbl']:
         cursor.execute(f"""
-            SELECT ma_buu_cuc, ten_dich_vu, doanh_thu, san_luong,
-                   tu_ngay, tu_thang, tu_nam, den_ngay, den_thang, den_nam
-            FROM {table_name}
-            WHERE nam_du_lieu = ?
+            SELECT t.ma_buu_cuc, COALESCE(d.nhom_dich_vu, t.ten_dich_vu) as nhom_dich_vu, t.doanh_thu, t.san_luong,
+                   t.tu_ngay, t.tu_thang, t.tu_nam, t.den_ngay, t.den_thang, t.den_nam
+            FROM {table_name} t
+            LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu OR t.ten_dich_vu = d.ten_dich_vu
+            WHERE t.nam_du_lieu = ?
         """, (nam,))
         
         for row in cursor.fetchall():
@@ -395,10 +399,13 @@ def rebuild_plans_weekly(conn, nam: int):
     
     # Đọc tất cả kế hoạch tháng của năm đó
     cursor.execute("""
-    SELECT thang, ma_buu_cuc, nhom_chinh, nhom_dich_vu, SUM(ke_hoach_doanh_thu) as kh_thang
-    FROM plans 
-    WHERE nam = ?
-    GROUP BY thang, ma_buu_cuc, nhom_chinh, nhom_dich_vu
+    SELECT p.thang, p.ma_buu_cuc, p.nhom_chinh, COALESCE(d.nhom_dich_vu, p.nhom_dich_vu) as nhom_dich_vu, SUM(p.ke_hoach_doanh_thu) as kh_thang
+    FROM plans p
+    LEFT JOIN dim_dichvu d ON p.nhom_dich_vu = d.ma_dich_vu 
+                           OR p.nhom_dich_vu = d.ten_dich_vu 
+                           OR p.nhom_dich_vu = d.nhom_dich_vu
+    WHERE p.nam = ?
+    GROUP BY p.thang, p.ma_buu_cuc, p.nhom_chinh, COALESCE(d.nhom_dich_vu, p.nhom_dich_vu)
     """, (nam,))
     
     plans_data = cursor.fetchall()
