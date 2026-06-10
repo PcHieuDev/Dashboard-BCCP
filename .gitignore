@@ -9,9 +9,13 @@ __pycache__/
 database/*.db
 database/*.sqlite
 
-# Excel / Data files (ignore raw data, but keep mapping)
+# Excel / Data files (ignore raw data, but keep mapping and templates)
 *.xls
 *.xlsx
+!data/mau-file-import/*.xlsx
+!data/mau-file-import/*.xls
+!data/mapping-spdv.xlsx
+!data/mapping-BC-BDX-Cum.xlsx
 
 # Local environment / IDE
 .vscode/
