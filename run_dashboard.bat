@@ -1,20 +1,19 @@
 @echo off
-chcp 65001 >nul
 echo ==================================================
-echo   KHỞI ĐỘNG DASHBOARD DOANH THU BCCP (DASH APP)
+echo   KHOI DONG DASHBOARD DOANH THU BCCP (DASH APP)
 echo ==================================================
 echo.
-echo Đang kiểm tra và giải phóng port 8050...
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8050 ^| findstr LISTENING') do (
-    echo Đang tắt tiến trình cũ đang chạy trên port 8050 (PID: %%a)...
+echo Dang kiem tra va giai phong port 8050...
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr 8050') do (
+    echo Dang tat tien trinh cu dang chay tren port 8050 [PID: %%a]...
     taskkill /f /pid %%a >nul 2>&1
 )
 echo.
-echo Thưa Sếp, tôi đã kill các tiến trình cũ bị treo trong bộ nhớ RAM và khởi động lại thành công Dashboard.
+echo Thua Sep, toi da kill cac tien trinh cu bi treo trong bo nho RAM va khoi dong lai thanh cong Dashboard.
 echo.
-echo Đang mở trình duyệt...
+echo Dang mo trinh duyet...
 start "" http://127.0.0.1:8050
-echo Đang khởi động server (Bấm Ctrl+C để dừng)...
-cd /d "%~dp0\dash_app"
+echo Dang khoi dong server (Bam Ctrl+C de dung)...
+cd /d "%~dp0dash_app"
 python app.py
 pause
