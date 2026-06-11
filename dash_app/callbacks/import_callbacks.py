@@ -28,7 +28,8 @@ from db.connection import clear_db_cache
 
 def _get_db_connection(db_path):
     conn = sqlite3.connect(str(db_path))
-    conn.execute("PRAGMA journal_mode=WAL;")
+    # Da tat che do vua doc vua ghi (WAL) theo yeu cau cua Sep de tranh loi lock tren OneDrive
+    conn.execute("PRAGMA journal_mode=delete;")
     conn.execute("PRAGMA busy_timeout=30000;")
     return conn
 
@@ -283,6 +284,13 @@ def import_worker():
         # Cập nhật trạng thái sang PROCESSING
         _update_import_log_status(db_path, task_id, "PROCESSING", "Đang xử lý dữ liệu và tự động gộp số liệu...")
         
+        # Tự động sao lưu cơ sở dữ liệu dự phòng trước khi nạp dữ liệu thay đổi
+        try:
+            from etl.backup import backup_database
+            backup_database(str(db_path))
+        except Exception as e_backup:
+            print(f"[Backup] Lỗi khi tạo bản sao lưu trước khi import: {e_backup}")
+            
         try:
             res = _execute_import_task(db_path, tmp_path, service_type, mode, task_id)
             

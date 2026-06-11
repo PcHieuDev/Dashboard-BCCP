@@ -98,7 +98,8 @@ def _safe_int(value):
 
 def _get_db_connection(db_path):
     conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA journal_mode=WAL;")
+    # Da tat che do vua doc vua ghi (WAL) theo yeu cau cua Sep de tranh loi lock tren OneDrive
+    conn.execute("PRAGMA journal_mode=delete;")
     conn.execute("PRAGMA busy_timeout=30000;")
     return conn
 

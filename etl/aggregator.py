@@ -57,9 +57,10 @@ def create_summary_tables(conn):
         tuan_bat_dau      DATE    NOT NULL,
         tuan_ket_thuc     DATE    NOT NULL,
         ma_buu_cuc        TEXT    NOT NULL,
+        nhom_chinh        TEXT,
         nhom_dich_vu      TEXT,
         ke_hoach_doanh_thu REAL DEFAULT 0,
-        PRIMARY KEY (nam, tuan_so, ma_buu_cuc, nhom_dich_vu)
+        PRIMARY KEY (nam, tuan_so, ma_buu_cuc, nhom_chinh, nhom_dich_vu)
     );
     """)
     

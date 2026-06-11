@@ -6,7 +6,47 @@
 ---
 
 ## Cuộc trò chuyện `051bef8c-70c1-4b89-b999-26942544cca7`
-- **Thời gian chỉnh sửa cuối:** `10/06/2026 00:30:00`
+- **Thời gian chỉnh sửa cuối:** `11/06/2026 09:20:00`
+
+### 📋 Tóm tắt nội dung thi công — Phase 16: Tối ưu hóa Import thô phân rã ngày & Nâng cấp File mẫu Excel thông minh
+
+> ## Nội dung thực hiện
+> 
+> ### 1. Đồng bộ và tự động nâng cấp cấu trúc CSDL
+> - Thêm hàm `check_and_migrate_services_tables` trong [importer.py](file:///E:/Projects/worktrees/Dashboard-BCCP/feat-import-optimize/etl/importer.py).
+> - Tự động đồng bộ và di cư cấu trúc bảng thô dịch vụ phụ (`transactions_hcc/tcbc/ppbl/phbc`) bằng cách thêm các cột khoảng ngày (`tu_ngay`, `tu_thang`, `tu_nam`...), cột `ten_dich_vu`, `san_luong` và cột `stt` (Số thứ tự dòng gốc) nếu thiếu.
+> 
+> ### 2. Thuật toán Phân rã ngày từ import thô
+> - Viết lại hàm `import_service_excel` trong [importer.py](file:///E:/Projects/worktrees/Dashboard-BCCP/feat-import-optimize/etl/importer.py):
+>   - Phân rã dòng dữ liệu thô tuần/tháng thành từng ngày cụ thể (`tu_ngay = den_ngay`).
+>   - Doanh thu ngày chia đều dạng REAL. Sản lượng ngày được phân bổ bằng thuật toán làm tròn tích lũy (`cum_sl_i - cum_sl_(i-1)`) dạng INTEGER để đảm bảo tổng khớp 100% dòng gốc.
+>   - Giữ nguyên số thứ tự STT dòng gốc Excel trên các dòng ngày phân rã.
+> 
+> ### 3. Ghi đè sửa chữa (`mode == 'overwrite'`) tối ưu
+> - Xóa sạch chính xác dữ liệu cũ trùng khớp `(ten_dich_vu, ma_buu_cuc, tu_ngay, tu_thang, tu_nam)` của riêng các ngày/bưu cục/dịch vụ bị ảnh hưởng bằng `executemany` trước khi ghi đè, bảo toàn nguyên vẹn dữ liệu các ngày khác.
+> 
+> ### 4. Tối ưu hóa gộp số liệu Tuần/Tháng SQLite UPSERT
+> - Viết lại `rebuild_monthly` và `rebuild_weekly` trong [aggregator.py](file:///E:/Projects/worktrees/Dashboard-BCCP/feat-import-optimize/etl/aggregator.py):
+>   - Gộp trực tiếp từ cả 4 bảng thô (gồm cả bảng thô `transactions_phbc` mới nâng cấp) dựa trên ngày cụ thể.
+>   - Sử dụng cú pháp **SQLite UPSERT (`ON CONFLICT(tuan_bat_dau, buu_cuc, nhom_dich_vu) DO UPDATE`)** để tự động cộng dồn doanh thu/sản lượng, triệt tiêu hoàn toàn sai số làm tròn và tăng tốc độ gộp gấp nhiều lần.
+> 
+> ### 5. Sửa lỗi giao diện bảng Lịch sử import
+> - Cấu hình DataTable cột `file_name` hiển thị dấu ba chấm (`ellipsis`, `maxWidth: '220px'`, `overflow: 'hidden'`, `whiteSpace: 'nowrap'`), giúp bảng ngay ngắn không bị tràn ngang.
+> 
+> ### 6. Nâng cấp các file Excel mẫu đối chiếu tự động thông minh
+> - Nhúng sheet `Ref_BuuCuc` và `Ref_DichVu`/`Ref_NhomChinh` lấy trực tiếp từ DB thực tế vào cả 3 file mẫu Excel:
+>   - `mau_import_dich_vu_khac.xlsx` (Cột đối chiếu L, M)
+>   - `mau_import_doanh_thu_BCCP.xlsx` (Cột đối chiếu M, N)
+>   - `mau_import_ke_hoach.xlsx` (Cột đối chiếu F, G)
+> - Sử dụng công thức đối chiếu thông minh `OR(MATCH(val, ...), MATCH(val&"", ...), IFERROR(MATCH(VALUE(val), ...), FALSE))` chống lỗi kiểu dữ liệu Số vs Chuỗi.
+> - Phủ rộng công thức sẵn cho **5,000 dòng** (dịch vụ khác, kế hoạch) và **10,000 dòng** (doanh thu BCCP).
+> - Nhúng **Conditional Formatting Premium Pastel** tô màu xanh pastel (`OK`) và đỏ pastel (`Sai...`), giữ ô rỗng không có dữ liệu màu trắng sạch sẽ.
+> - Đã chạy kiểm thử thành công 100% các script `test_services_distribution.py` và `test_aggregation.py`.
+> 
+> ### 💬 Nội dung trao đổi chính của Sếp
+> - *Yêu cầu 1:* Chưa có cơ chế kiểm tra điền đúng bưu cục và sản phẩm trong file import.
+> - *Giải pháp đề xuất:* Chuyển bảng tham chiếu nhóm dịch vụ và sản phẩm vào trong file Excel mẫu, thêm cột đối chiếu MATCH ở cột L và M, tự động so sánh báo đúng/sai khi người dùng điền cột B và C.
+> - *Yêu cầu 2:* Đồng bộ toàn bộ lên GitHub, gộp nhánh này (`feat-import-optimize`) vào nhánh chính (`main`), cập nhật 2 file nhật ký và restart lại dashboard.
 
 ### 📋 Tóm tắt nội dung thi công — Phase 13: Đồng bộ lịch tuần & Chuẩn hóa so sánh 3 cấp
 

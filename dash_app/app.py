@@ -376,9 +376,35 @@ register_new_customer_callbacks(app)
 register_retention_callbacks(app)
 
 # --------------------------------------------------------------------------
+# TỰ ĐỘNG SAO LƯU CƠ SỞ DỮ LIỆU CUỐI NGÀY
+# --------------------------------------------------------------------------
+import threading
+import time
+from etl.backup import run_backup_by_schedule
+
+def start_auto_backup_thread():
+    def backup_worker():
+        print("[Auto-Backup] Khởi động background thread tự động backup CSDL...")
+        # Đợi 10 giây đầu để ứng dụng khởi chạy hoàn tất
+        time.sleep(10)
+        while True:
+            try:
+                run_backup_by_schedule(str(DB_PATH))
+            except Exception as e:
+                print(f"[Auto-Backup] Lỗi trong background thread backup: {e}")
+            # Ngủ 1 tiếng (3600 giây) rồi kiểm tra lại
+            time.sleep(3600)
+            
+    backup_thread = threading.Thread(target=backup_worker, daemon=True)
+    backup_thread.start()
+
+# --------------------------------------------------------------------------
 # CHẠY ỨNG DỤNG
 # --------------------------------------------------------------------------
 if __name__ == '__main__':
+    # Khởi động thread tự động backup
+    start_auto_backup_thread()
+    
     # Chạy trên cổng mặc định 8050
     app.run(debug=False, port=8050, host='127.0.0.1')
 

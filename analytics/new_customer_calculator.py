@@ -63,7 +63,8 @@ def calculate_new_customers(db_path: str, nam: int, thang: int) -> int:
     Trả về số lượng khách hàng mới tìm được.
     """
     conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA journal_mode=WAL;")
+    # Da tat che do vua doc vua ghi (WAL) theo yeu cau cua Sep de tranh loi lock tren OneDrive
+    conn.execute("PRAGMA journal_mode=delete;")
     conn.execute("PRAGMA busy_timeout=30000;")
     init_db(conn)
     cursor = conn.cursor()
