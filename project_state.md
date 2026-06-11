@@ -10,6 +10,13 @@
 - Phục vụ cho hơn 20 người dùng từ các phòng ban nghiệp vụ và deploy lên server nội bộ để truy cập qua mạng LAN hoặc đường hầm Cloudflare (`dashboard.bdna.io.vn`).
 
 ### 2. Các công việc chính đã hoàn thành (Completed Milestones)
+- **Phase 16 (11/06/2026): Tối ưu hóa ETL Import thô phân rã ngày, chế độ ghi đè sửa chữa, tối ưu hóa gộp số liệu SQLite UPSERT, sửa tràn bảng Lịch sử import, và nâng cấp file mẫu Excel đối chiếu thông minh**:
+  - **Cấu trúc bảng thô dịch vụ phụ (`transactions_hcc/tcbc/ppbl/phbc`):** Đồng nhất 100% cấu trúc, thêm các trường khoảng ngày (`tu_ngay`, `tu_thang`, `tu_nam`...), cột `ten_dich_vu`, `san_luong`, `stt` (Số thứ tự dòng gốc) và hàm tự động kiểm tra nâng cấp di cư CSDL.
+  - **Phân rã ngày từ import:** Hàm `import_service_excel` tự động phân rã dòng tuần/tháng thành từng ngày cụ thể; Doanh thu chia đều dạng REAL, Sản lượng phân bổ làm tròn tích lũy dạng INTEGER, giữ nguyên STT dòng.
+  - **Ghi đè sửa chữa (`mode == 'overwrite'`):** Xóa sạch chính xác dữ liệu cũ trùng bưu cục/dịch vụ/ngày cụ thể của dữ liệu nạp mới trước khi ghi đè, bảo toàn dữ liệu ngày khác.
+  - **Gộp tuần/tháng SQLite UPSERT:** Viết lại `rebuild_monthly` và `rebuild_weekly` gộp số liệu trực tiếp bằng SQL dựa trên ngày cụ thể, sử dụng SQLite UPSERT `ON CONFLICT DO UPDATE` để tự động cộng dồn/triệt tiêu sai số. Tốc độ gộp siêu nhanh và chính xác 100%.
+  - **Sửa giao diện bảng Lịch sử:** Cấu hình DataTable cột `file_name` hiển thị dấu ba chấm (`ellipsis`, `maxWidth: '220px'`), giúp bảng ngay ngắn không bị tràn ngang.
+  - **Nâng cấp file mẫu Excel đối chiếu:** Bổ sung sheet Ref và công thức đối chiếu thông minh chống lỗi định dạng Số/Chuỗi; kéo sẵn cho **5,000 dòng** (dịch vụ khác, kế hoạch) và **10,000 dòng** (doanh thu BCCP); nhúng **Conditional Formatting Premium Pastel** tô màu xanh pastel (`OK`) và đỏ pastel (`Sai...`), giữ các ô trống không có dữ liệu màu trắng sạch sẽ.
 - **Phase 13 (10/06/2026): Đồng bộ lịch tuần & Chuẩn hóa so sánh Doanh thu / Kế hoạch 3 cấp**:
   - Đồng bộ mốc lịch tuần các năm cũ (2025) theo mốc ngày năm 2026 trong [week_calendar.py](file:///E:/Projects/Dashboard-BCCP/config/week_calendar.py), fix lệch ngày so sánh YoY.
   - Chuẩn hóa logic gộp Doanh thu & Kế hoạch 3 cấp trong [global_metrics.py](file:///E:/Projects/Dashboard-BCCP/analytics/global_metrics.py): Cấp Cụm dùng `outer join` gom nhóm theo xã thực tế và kế hoạch HCC, loại trừ xã ảo `"Đại diện Cụm"`; Cấp Xã so sánh bưu cục thực tế có phát sinh doanh thu (`tong_dt > 0`), hiển thị `"Không có KH"` nếu kế hoạch bằng 0.
