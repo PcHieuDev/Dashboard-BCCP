@@ -95,7 +95,45 @@ def _safe_int(value):
     except (ValueError, TypeError):
         return 0
 
-def import_excel_file(db_path, excel_path, thang=None):
+
+def _get_db_connection(db_path):
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA busy_timeout=30000;")
+    return conn
+
+def _auto_aggregate_after_import(db_path, service_type, years_months_pairs):
+    """
+    Tự động gộp lại số liệu tháng/tuần ngay sau khi nạp thành công.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        from etl.aggregator import rebuild_monthly, rebuild_monthly_customer, rebuild_weekly, rebuild_plans_weekly
+        conn = _get_db_connection(db_path)
+        try:
+            for nam, thang_int in years_months_pairs:
+                logger.info(f"[Auto-Refresh] Đang gộp lại số liệu cho {service_type} - T{thang_int:02d}/{nam}...")
+                
+                # 1. Gộp doanh thu tháng
+                rebuild_monthly(conn, nam, thang_int)
+                if service_type in ('BCCP', 'RAW'):
+                    rebuild_monthly_customer(conn, nam, thang_int)
+                    
+                # 2. Gộp doanh thu tuần (weekly)
+                rebuild_weekly(conn, nam)
+                
+                # 3. Gộp kế hoạch tuần nếu là nạp Kế hoạch
+                if service_type == 'PLAN':
+                    rebuild_plans_weekly(conn, nam)
+                    
+                logger.info(f"[Auto-Refresh] Đã hoàn tất gộp số liệu cho T{thang_int:02d}/{nam}")
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.error(f"[Auto-Refresh] Lỗi khi tự động gộp số liệu: {e}", exc_info=True)
+
+def import_excel_file(db_path, excel_path, import_batch=None, thang=None, mode='append'):
     """
     Import 1 file Excel (.xlsx) vào SQLite.
     """
@@ -115,13 +153,47 @@ def import_excel_file(db_path, excel_path, thang=None):
         logger.warning(f"Không phát hiện được tháng cho file: {filename}, fallback sang T01")
         
     # Tạo batch_id
-    batch_id = datetime.now().strftime('%Y%m%d_%H%M%S') + '_' + filename
+    batch_id = import_batch or (datetime.now().strftime('%Y%m%d_%H%M%S') + '_' + filename)
     
+
+    # Nếu là overwrite, đọc qua file để lấy danh mục sản phẩm và tháng/năm xóa trước
+    if mode == 'overwrite':
+        logger.info("Chế độ ghi đè: Đang xác định các sản phẩm và tháng/năm để xóa dữ liệu cũ...")
+        try:
+            wb_temp = openpyxl.load_workbook(excel_path, read_only=True, data_only=True)
+            ws_temp = wb_temp.active
+            to_delete = set()
+            for r_idx, row in enumerate(ws_temp.iter_rows(min_row=EXCEL_DATA_START_ROW, max_col=10, values_only=True), start=EXCEL_DATA_START_ROW):
+                if row[0] is None:
+                    continue
+                buu_cuc = str(row[3]).strip() if row[3] is not None else None
+                sp_dv = str(row[4]).strip() if row[4] is not None else None
+                ngay_cn = _parse_date(row[5])
+                if sp_dv and ngay_cn and buu_cuc:
+                    y = int(ngay_cn[:4])
+                    m_str = f"T{int(ngay_cn[5:7]):02d}"
+                    to_delete.add((sp_dv, buu_cuc, m_str, y))
+            wb_temp.close()
+            
+            if to_delete:
+                conn_del = _get_db_connection(db_path)
+                cursor_del = conn_del.cursor()
+                for sp, bc, m_str, y in to_delete:
+                    logger.info(f"Xóa dữ liệu cũ sản phẩm '{sp}' bưu cục '{bc}' - {m_str}/{y} trong transactions...")
+                    cursor_del.execute("""
+                        DELETE FROM transactions 
+                        WHERE san_pham_dv = ? AND buu_cuc = ? AND thang_du_lieu = ? AND nam_du_lieu = ?
+                    """, (sp, bc, m_str, y))
+                conn_del.commit()
+                conn_del.close()
+        except Exception as ex_del:
+            logger.error(f"Lỗi khi xóa dữ liệu cũ BCCP: {ex_del}")
+
     # Mở file Excel
     wb = openpyxl.load_workbook(excel_path, read_only=True, data_only=True)
     ws = wb.active
     
-    conn = sqlite3.connect(db_path)
+    conn = _get_db_connection(db_path)
     cursor = conn.cursor()
     
     insert_cols = [
@@ -233,27 +305,24 @@ def import_excel_file(db_path, excel_path, thang=None):
     if missing['missing_post_offices']:
         warnings.append(f"Mã bưu cục mới chưa phân cụm: {', '.join(missing['missing_post_offices'][:3])}")
         
-    # Ghi log import
-    ghi_chu = '; '.join(warnings[:5]) if warnings else None
-    cursor.execute("""
-        INSERT INTO import_log (batch_id, file_name, thang_du_lieu, 
-                                so_dong_import, so_dong_trung, trang_thai, ghi_chu)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (
-        batch_id, filename, thang,
-        inserted, skipped,
-        'SUCCESS' if not warnings else 'SUCCESS_WITH_WARNINGS',
-        ghi_chu
-    ))
-    conn.commit()
     conn.close()
     
     # Auto-refresh summary tables cho tháng vừa import (Yêu cầu từ TIP-db-004)
     try:
         thang_int = int(thang[1:]) if thang.startswith('T') else int(thang)
+        _auto_aggregate_after_import(db_path, 'RAW', [(nam_du_lieu, thang_int)])
+    except Exception as ex_ref:
+        logger.error(f"Lỗi tự động refresh: {ex_ref}")
+    try:
+        thang_int = int(thang[1:]) if thang.startswith('T') else int(thang)
+        _auto_aggregate_after_import(db_path, 'BCCP', [(nam, thang_int)])
+    except Exception as ex_ref:
+        logger.error(f"Lỗi tự động refresh: {ex_ref}")
+    try:
+        thang_int = int(thang[1:]) if thang.startswith('T') else int(thang)
         from etl.aggregator import rebuild_monthly, rebuild_monthly_customer
         # Tạo kết nối mới để rebuild
-        rebuild_conn = sqlite3.connect(db_path)
+        rebuild_conn = _get_db_connection(db_path)
         try:
             rebuild_monthly(rebuild_conn, nam, thang_int)
             rebuild_monthly_customer(rebuild_conn, nam, thang_int)
@@ -287,7 +356,7 @@ def clean_str_field(val):
             pass
     return val_str
 
-def import_raw_excel_file(db_path, excel_path, thang=None):
+def import_raw_excel_file(db_path, excel_path, import_batch=None, thang=None, mode='append'):
     """
     Import file Excel dữ liệu chi tiết bưu gửi (RAW) từ CAS.
     Sẽ thực hiện đọc, trích xuất dòng, nén dữ liệu (group by) và chèn vào SQLite.
@@ -299,7 +368,7 @@ def import_raw_excel_file(db_path, excel_path, thang=None):
     filename = os.path.basename(excel_path)
     logger.info(f"Bắt đầu import RAW file: {filename}")
         
-    batch_id = datetime.now().strftime('%Y%m%d_%H%M%S') + '_RAW_' + filename
+    batch_id = import_batch or (datetime.now().strftime('%Y%m%d_%H%M%S') + '_RAW_' + filename)
     
     # 1. Đọc từng sheet để thu thập all_records
     all_records = []
@@ -411,6 +480,35 @@ def import_raw_excel_file(db_path, excel_path, thang=None):
             thang = "T01"
             warnings.append("Không tìm thấy ngày chấp nhận trong dữ liệu, fallback T01")
 
+
+    # Nếu là overwrite, xóa dữ liệu cũ trùng khớp dịch vụ và khoảng ngày trong file
+    if mode == 'overwrite' and len(all_records) > 0:
+        logger.info("Chế độ ghi đè RAW: Đang xác định các sản phẩm và tháng/năm để xóa dữ liệu cũ...")
+        try:
+            to_delete = set()
+            for rec in all_records:
+                sp = rec['San_Pham']
+                ngay_cn = rec['Ngay_CN']
+                buu_cuc = rec['Buu_Cuc']
+                if sp and ngay_cn and buu_cuc:
+                    y = int(ngay_cn[:4])
+                    m_str = f"T{int(ngay_cn[5:7]):02d}"
+                    to_delete.add((sp, buu_cuc, m_str, y))
+            
+            if to_delete:
+                conn_del = _get_db_connection(db_path)
+                cursor_del = conn_del.cursor()
+                for sp, m_str, y in to_delete:
+                    logger.info(f"Xóa dữ liệu cũ RAW của sản phẩm '{sp}' - {m_str}/{y} trong transactions...")
+                    cursor_del.execute("""
+                        DELETE FROM transactions 
+                        WHERE san_pham_dv = ? AND thang_du_lieu = ? AND nam_du_lieu = ?
+                    """, (sp, m_str, y))
+                conn_del.commit()
+                conn_del.close()
+        except Exception as ex_del:
+            logger.error(f"Lỗi khi xóa dữ liệu cũ RAW: {ex_del}")
+
     # 2. Gom nhóm — san_luong = nunique(Ma_BG) đảm bảo chỉ đếm số hiệu duy nhất
     df_all = pd.DataFrame(all_records)
     groupby_cols = ['CMS', 'Ma_HD', 'Buu_Cuc', 'San_Pham', 'Ngay_CN']
@@ -425,7 +523,7 @@ def import_raw_excel_file(db_path, excel_path, thang=None):
     df_grouped = df_all.groupby(groupby_cols, as_index=False).agg(agg_dict)
     
     # 3. Ghi vào SQLite
-    conn = sqlite3.connect(db_path)
+    conn = _get_db_connection(db_path)
     cursor = conn.cursor()
     
     # Trích năm từ tháng (VD: T01 → lấy từ first_date_str)
@@ -478,22 +576,24 @@ def import_raw_excel_file(db_path, excel_path, thang=None):
     if missing['missing_post_offices']:
         warnings.append(f"Mã bưu cục mới chưa phân cụm: {', '.join(missing['missing_post_offices'][:3])}")
 
-    # Ghi log
-    skipped = len(df_grouped) - inserted
-    cursor.execute("""
-        INSERT INTO import_log (batch_id, file_name, thang_du_lieu, 
-                                so_dong_import, so_dong_trung, trang_thai, ghi_chu)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (batch_id, filename, thang, inserted, skipped, 'SUCCESS_RAW' if not warnings else 'SUCCESS_RAW_WITH_WARNINGS', '; '.join(warnings[:5]) if warnings else None))
-    conn.commit()
     conn.close()
     
     # Auto-refresh summary tables cho tháng vừa import (Yêu cầu từ TIP-db-004)
     try:
         thang_int = int(thang[1:]) if thang.startswith('T') else int(thang)
+        _auto_aggregate_after_import(db_path, 'RAW', [(nam_du_lieu, thang_int)])
+    except Exception as ex_ref:
+        logger.error(f"Lỗi tự động refresh: {ex_ref}")
+    try:
+        thang_int = int(thang[1:]) if thang.startswith('T') else int(thang)
+        _auto_aggregate_after_import(db_path, 'BCCP', [(nam, thang_int)])
+    except Exception as ex_ref:
+        logger.error(f"Lỗi tự động refresh: {ex_ref}")
+    try:
+        thang_int = int(thang[1:]) if thang.startswith('T') else int(thang)
         from etl.aggregator import rebuild_monthly, rebuild_monthly_customer
         # Tạo kết nối mới để rebuild
-        rebuild_conn = sqlite3.connect(db_path)
+        rebuild_conn = _get_db_connection(db_path)
         try:
             rebuild_monthly(rebuild_conn, nam_du_lieu, thang_int)
             rebuild_monthly_customer(rebuild_conn, nam_du_lieu, thang_int)
@@ -519,7 +619,7 @@ def check_missing_mappings(db_path):
     Kiểm tra xem có mã sản phẩm hoặc bưu cục nào trong transactions chưa được định nghĩa trong bảng dim.
     Trả về dict chứa danh sách các mã thiếu.
     """
-    conn = sqlite3.connect(db_path)
+    conn = _get_db_connection(db_path)
     cursor = conn.cursor()
     
     missing_sp = []
@@ -553,7 +653,7 @@ def check_missing_mappings(db_path):
         'missing_post_offices': missing_bc
     }
 
-def import_any_excel_file(db_path, excel_path, thang=None):
+def import_any_excel_file(db_path, excel_path, import_batch=None, thang=None, mode='append'):
     """
     Hàm điều phối thông minh: Tự động phân tích cấu trúc file Excel để nhận diện
     đây là file dữ liệu thô (RAW từ CAS) hay file mẫu nén/thủ công (Template).
@@ -582,67 +682,120 @@ def import_any_excel_file(db_path, excel_path, thang=None):
                 
         if is_raw:
             logger.info(f"Nhận diện file '{filename}' là dữ liệu thô (RAW) từ CAS. Tiến hành nén và import...")
-            return import_raw_excel_file(db_path, excel_path, thang)
+            return import_raw_excel_file(db_path, excel_path, import_batch=import_batch, thang=thang, mode=mode)
         else:
             logger.info(f"Nhận diện file '{filename}' là tệp tin mẫu (Template). Tiến hành import trực tiếp...")
             # Nếu file template là .xls thì openpyxl hiện tại sẽ bị lỗi.
             # Ta có thể báo lỗi thân thiện nếu file template là .xls
             if excel_path.endswith(".xls"):
                 raise ValueError("Tệp mẫu điền tay (Template) phải là định dạng .xlsx (Excel mới). Vui lòng lưu tệp mẫu dưới dạng .xlsx và thử lại.")
-            return import_excel_file(db_path, excel_path, thang)
+            return import_excel_file(db_path, excel_path, import_batch=import_batch, thang=thang, mode=mode)
             
     except Exception as e:
         logger.error(f"Lỗi phân loại file Excel {filename}: {e}")
         raise
 
-def import_service_excel(db_path, excel_path, service_type, thang=None):
+def check_and_migrate_services_tables(conn):
     """
-    Import file Excel dữ liệu tổng hợp cho các dịch vụ mới (HCC, TCBC, PPBL).
-    Format mong đợi: STT | Mã bưu cục | Tên dịch vụ | Sản lượng | Doanh thu
+    Tự động kiểm tra và nâng cấp cấu trúc các bảng transactions_hcc/tcbc/ppbl/phbc
+    để đồng bộ các cột khoảng ngày, ten_dich_vu, san_luong, stt.
+    """
+    cursor = conn.cursor()
+    tables = ['transactions_hcc', 'transactions_tcbc', 'transactions_ppbl', 'transactions_phbc']
+    needed_columns = {
+        'ten_dich_vu': 'TEXT',
+        'san_luong': 'INTEGER',
+        'tu_ngay': 'INTEGER',
+        'tu_thang': 'INTEGER',
+        'tu_nam': 'INTEGER',
+        'den_ngay': 'INTEGER',
+        'den_thang': 'INTEGER',
+        'den_nam': 'INTEGER',
+        'stt': 'INTEGER'
+    }
+    
+    for table in tables:
+        # Lấy thông tin các cột hiện có
+        columns = [row[1] for row in cursor.execute(f"PRAGMA table_info({table})").fetchall()]
+        for col_name, col_type in needed_columns.items():
+            if col_name not in columns:
+                logger.info(f"Đang tự động nâng cấp bảng {table}: Thêm cột {col_name} ({col_type})...")
+                cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}")
+    conn.commit()
+
+def import_service_excel(db_path, excel_path, service_type, import_batch=None, thang=None, mode='append'):
+    """
+    Import file Excel dữ liệu dịch vụ khác (SERVICES) bao gồm HCC, TCBC, PPBL, PHBC.
+    Dữ liệu được phân rã thành từng dòng ngày cụ thể (tu_ngay == den_ngay == ngày phân rã)
+    trước khi ghi vào 4 bảng thô tương ứng (transactions_hcc/tcbc/ppbl/phbc).
     """
     import pandas as pd
-    filename = os.path.basename(excel_path)
-    logger.info(f"Bắt đầu import {service_type}: {filename}")
+    from datetime import date, timedelta
+    import calendar
     
+    filename = os.path.basename(excel_path)
+    logger.info(f"Bắt đầu import dịch vụ {service_type}: {filename} (mode={mode})")
+    
+    # 1. Tự động phát hiện tháng nếu chưa truyền vào
     if thang is None:
         thang = _detect_month(filename)
         if thang is None:
-            thang = "T01"
-            logger.warning(f"Không phát hiện được tháng cho file: {filename}, fallback sang T01")
+            # Thử thư mục cha
+            parent_dir = os.path.basename(os.path.dirname(excel_path))
+            thang = _detect_month(parent_dir)
             
-    # Lấy năm từ batch hoặc lấy mặc định năm nay
+    if thang is None:
+        thang = "T01"  # Fallback mặc định
+        logger.warning(f"Không phát hiện được tháng cho file: {filename}, fallback sang T01")
+        
+    # Tạo batch_id thống nhất
+    batch_id = import_batch or (datetime.now().strftime('%Y%m%d_%H%M%S') + f'_{service_type}_' + filename)
     nam_du_lieu = datetime.now().year
-            
-    batch_id = datetime.now().strftime('%Y%m%d_%H%M%S') + f'_{service_type}_' + filename
-    table_name = f"transactions_{service_type.lower()}"
     
     try:
+        # 2. Khởi tạo/Nâng cấp cấu trúc các bảng thô
+        conn_init = _get_db_connection(db_path)
+        check_and_migrate_services_tables(conn_init)
+        
+        # 3. Đọc mapping sản phẩm dịch vụ từ dim_dichvu
+        cursor_init = conn_init.cursor()
+        dim_dichvu = {}
+        try:
+            cursor_init.execute("SELECT ma_dich_vu, ten_dich_vu, nhom_chinh FROM dim_dichvu")
+            for ma_dv, ten_dv, nhom_ch in cursor_init.fetchall():
+                if ma_dv:
+                    dim_dichvu[ma_dv.strip().upper()] = (ma_dv.strip(), ten_dv.strip(), nhom_ch.strip())
+                if ten_dv:
+                    dim_dichvu[ten_dv.strip().upper()] = (ma_dv.strip(), ten_dv.strip(), nhom_ch.strip())
+        except sqlite3.Error as e:
+            logger.error(f"Lỗi khi đọc bảng dim_dichvu: {e}")
+        finally:
+            conn_init.close()
+            
+        # 4. Đọc file Excel
         engine = "openpyxl" if str(excel_path).endswith(".xlsx") else "xlrd"
         df = pd.read_excel(excel_path, engine=engine)
         
-        # Nếu DataFrame không có đủ 5 cột thì lấy theo thứ tự: Mã BC, Tên DV, Sản lượng, Doanh thu
         if len(df.columns) < 5:
-            return {'batch_id': batch_id, 'file': filename, 'thang': thang, 'total_rows': 0, 'inserted': 0, 'skipped': 0, 'warnings': [f"File không đủ 5 cột cơ bản (STT, Mã BC, Dịch vụ, SL, DT). Số cột: {len(df.columns)}"]}
+            return {
+                'batch_id': batch_id,
+                'file': filename,
+                'thang': thang,
+                'total_rows': 0,
+                'inserted': 0,
+                'skipped': 0,
+                'warnings': [f"File không đủ 5 cột cơ bản (STT, Mã BC, Dịch vụ, SL, DT). Số cột: {len(df.columns)}"]
+            }
             
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        
-        insert_sql = f"""
-        INSERT OR IGNORE INTO {table_name} 
-        (thang_du_lieu, nam_du_lieu, ma_buu_cuc, ten_dich_vu, san_luong, doanh_thu, import_batch,
-         tu_ngay, tu_thang, tu_nam, den_ngay, den_thang, den_nam)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """
-        
-        batch_buffer = []
-        inserted = 0
         total_rows = 0
         warnings = []
+        records_by_table = {}  # { 'transactions_hcc': [row_data, ...] }
         
+        # 5. Duyệt qua từng dòng và thực hiện phân rã ngày
         for idx, row in df.iterrows():
             stt_val = row.iloc[0]
             if pd.isna(stt_val) and idx > 0:
-                continue # Skip empty rows
+                continue  # Bỏ qua dòng trống
                 
             if str(stt_val).strip().upper() == 'STT':
                 continue
@@ -653,41 +806,138 @@ def import_service_excel(db_path, excel_path, service_type, thang=None):
             sl = _safe_int(row.iloc[3])
             dt = _safe_float(row.iloc[4])
             
-            # Đọc các cột ngày bắt đầu và kết thúc (Từ cột 6 đến 11)
+            if not ma_bc or not ten_dv:
+                warnings.append(f"Dòng {idx+2}: Thiếu mã bưu cục hoặc tên dịch vụ. Bỏ qua.")
+                continue
+                
+            # Tra cứu thông tin dịch vụ trong dim_dichvu
+            mapping = dim_dichvu.get(ten_dv.upper())
+            if mapping:
+                ma_dv_chuan, ten_dv_chuan, nhom_chinh = mapping
+            else:
+                ma_dv_chuan = ten_dv
+                ten_dv_chuan = ten_dv
+                nhom_chinh = "HCC"  # Mặc định thuộc HCC
+                warnings.append(f"Dòng {idx+2}: Dịch vụ '{ten_dv}' chưa được định nghĩa trong danh mục. Tạm xếp vào HCC.")
+                
+            # Đọc các cột ngày bắt đầu và kết thúc (Từ cột 5 đến 10)
             tu_ngay = _safe_int(row.iloc[5]) if len(row) > 5 and pd.notna(row.iloc[5]) else 1
-            tu_thang = _safe_int(row.iloc[6]) if len(row) > 6 and pd.notna(row.iloc[6]) else 1
+            tu_thang = _safe_int(row.iloc[6]) if len(row) > 6 and pd.notna(row.iloc[6]) else (int(thang[1:]) if thang.startswith('T') else 1)
             tu_nam = _safe_int(row.iloc[7]) if len(row) > 7 and pd.notna(row.iloc[7]) else nam_du_lieu
+            
             den_ngay = _safe_int(row.iloc[8]) if len(row) > 8 and pd.notna(row.iloc[8]) else 30
-            den_thang = _safe_int(row.iloc[9]) if len(row) > 9 and pd.notna(row.iloc[9]) else 12
+            den_thang = _safe_int(row.iloc[9]) if len(row) > 9 and pd.notna(row.iloc[9]) else (int(thang[1:]) if thang.startswith('T') else 12)
             den_nam = _safe_int(row.iloc[10]) if len(row) > 10 and pd.notna(row.iloc[10]) else nam_du_lieu
             
-            if not ma_bc:
-                warnings.append(f"Dòng {idx+2}: Thiếu mã bưu cục")
+            # Tính khoảng ngày và phân rã
+            try:
+                start_date = date(tu_nam, tu_thang, tu_ngay)
+                end_date = date(den_nam, den_thang, den_ngay)
+                if start_date > end_date:
+                    start_date, end_date = end_date, start_date
+            except Exception:
+                # Fallback về cả tháng
+                try:
+                    thang_num = int(thang[1:]) if thang.startswith('T') else int(thang)
+                    start_date = date(nam_du_lieu, thang_num, 1)
+                    _, last_day = calendar.monthrange(nam_du_lieu, thang_num)
+                    end_date = date(nam_du_lieu, thang_num, last_day)
+                except Exception:
+                    start_date = date(nam_du_lieu, 1, 1)
+                    end_date = date(nam_du_lieu, 1, 31)
+                    
+            total_days = (end_date - start_date).days + 1
+            if total_days <= 0:
+                total_days = 1
                 
-            batch_buffer.append((thang, nam_du_lieu, ma_bc, ten_dv, sl, dt, batch_id,
-                                 tu_ngay, tu_thang, tu_nam, den_ngay, den_thang, den_nam))
-            
-            if len(batch_buffer) >= BATCH_SIZE:
-                cursor.executemany(insert_sql, batch_buffer)
-                inserted += cursor.rowcount
-                batch_buffer = []
+            # Xác định bảng đích
+            table_dest = f"transactions_{nhom_chinh.lower()}"
+            if table_dest not in records_by_table:
+                records_by_table[table_dest] = []
                 
-        if batch_buffer:
-            cursor.executemany(insert_sql, batch_buffer)
-            inserted += cursor.rowcount
+            # Phân rã thành từng ngày
+            for day_idx in range(total_days):
+                curr_date = start_date + timedelta(days=day_idx)
+                curr_ngay = curr_date.day
+                curr_thang = curr_date.month
+                curr_nam = curr_date.year
+                curr_thang_str = f"T{curr_thang:02d}"
+                
+                # Doanh thu chia đều số thực
+                dt_day = dt / total_days
+                # Sản lượng phân bổ làm tròn tích lũy
+                cum_sl_current = round(sl * (day_idx + 1) / total_days)
+                cum_sl_prev = round(sl * day_idx / total_days)
+                sl_day = cum_sl_current - cum_sl_prev
+                
+                row_data = (
+                    curr_thang_str, curr_nam, ma_bc, ma_dv_chuan, sl_day, dt_day, batch_id,
+                    curr_ngay, curr_thang, curr_nam, curr_ngay, curr_thang, curr_nam,
+                    _safe_int(stt_val)
+                )
+                records_by_table[table_dest].append(row_data)
+                
+        # 6. Chế độ ghi đè: Xóa dữ liệu cũ trùng bưu cục + dịch vụ + ngày phân rã cụ thể
+        if mode == 'overwrite' and records_by_table:
+            logger.info("Chế độ ghi đè: Đang thực hiện xóa dữ liệu cũ trùng bưu cục, dịch vụ và ngày phân rã cụ thể...")
+            conn_del = _get_db_connection(db_path)
+            try:
+                cursor_del = conn_del.cursor()
+                for target_tbl, rows in records_by_table.items():
+                    # Xóa theo khóa: ten_dich_vu, ma_buu_cuc, tu_ngay, tu_thang, tu_nam
+                    # (Lưu ý: r[3]=ten_dich_vu, r[2]=ma_buu_cuc, r[7]=tu_ngay, r[8]=tu_thang, r[9]=tu_nam)
+                    delete_keys = set((r[3], r[2], r[7], r[8], r[9]) for r in rows)
+                    cursor_del.executemany(f"""
+                        DELETE FROM {target_tbl}
+                        WHERE ten_dich_vu = ? AND ma_buu_cuc = ? AND tu_ngay = ? AND tu_thang = ? AND tu_nam = ?
+                    """, list(delete_keys))
+                conn_del.commit()
+            except Exception as ex_del:
+                logger.error(f"Lỗi khi xóa dữ liệu cũ trong chế độ ghi đè: {ex_del}", exc_info=True)
+            finally:
+                conn_del.close()
+                
+        # 7. Thực hiện ghi dữ liệu mới vào SQLite
+        conn_ins = _get_db_connection(db_path)
+        inserted = 0
+        try:
+            cursor_ins = conn_ins.cursor()
+            for target_tbl, rows in records_by_table.items():
+                insert_sql = f"""
+                INSERT OR IGNORE INTO {target_tbl} 
+                (thang_du_lieu, nam_du_lieu, ma_buu_cuc, ten_dich_vu, san_luong, doanh_thu, import_batch,
+                 tu_ngay, tu_thang, tu_nam, den_ngay, den_thang, den_nam, stt)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """
+                cursor_ins.executemany(insert_sql, rows)
+                inserted += cursor_ins.rowcount
+            conn_ins.commit()
+        except Exception as ex_ins:
+            logger.error(f"Lỗi khi insert dữ liệu dịch vụ mới: {ex_ins}", exc_info=True)
+            raise
+        finally:
+            conn_ins.close()
             
-        skipped = total_rows - inserted
+        skipped = len([r for rows in records_by_table.values() for r in rows]) - inserted
         
-        # Ghi log
-        cursor.execute("""
-            INSERT INTO import_log (batch_id, file_name, thang_du_lieu, 
-                                    so_dong_import, so_dong_trung, trang_thai, ghi_chu)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (batch_id, filename, thang, inserted, skipped, 'SUCCESS' if not warnings else 'SUCCESS_WITH_WARNINGS', '; '.join(warnings[:5]) if warnings else None))
-        
-        conn.commit()
-        conn.close()
-        
+        # 8. Tự động gộp số liệu cho các tháng bị ảnh hưởng
+        if records_by_table:
+            # Thu thập các tổ hợp (nhom_chinh, nam, thang) duy nhất để rebuild
+            # nhom_chinh được suy ra từ tên bảng target_tbl (bỏ "transactions_")
+            affected_months = set()
+            for target_tbl, rows in records_by_table.items():
+                nhom_ch = target_tbl.replace("transactions_", "").upper()
+                for r in rows:
+                    # r[9] = tu_nam, r[8] = tu_thang
+                    affected_months.add((nhom_ch, r[9], r[8]))
+                    
+            for nhom_ch, nam_val, thang_val in affected_months:
+                try:
+                    logger.info(f"Tự động gộp số liệu cho {nhom_ch} - tháng T{thang_val:02d}/{nam_val}...")
+                    _auto_aggregate_after_import(db_path, nhom_ch, [(nam_val, thang_val)])
+                except Exception as ex_ref:
+                    logger.error(f"Lỗi tự động refresh {nhom_ch} cho T{thang_val:02d}/{nam_val}: {ex_ref}")
+                    
         return {
             'batch_id': batch_id,
             'file': filename,
@@ -698,11 +948,19 @@ def import_service_excel(db_path, excel_path, service_type, thang=None):
             'warnings': warnings
         }
     except Exception as e:
-        logger.error(f"Lỗi khi import {service_type}: {e}")
-        return {'batch_id': batch_id, 'file': filename, 'thang': thang, 'total_rows': 0, 'inserted': 0, 'skipped': 0, 'warnings': [str(e)]}
+        logger.error(f"Lỗi khi import {service_type}: {e}", exc_info=True)
+        return {
+            'batch_id': batch_id,
+            'file': filename,
+            'thang': thang,
+            'total_rows': 0,
+            'inserted': 0,
+            'skipped': 0,
+            'warnings': [str(e)]
+        }
 
 
-def import_plan_excel(db_path, excel_path):
+def import_plan_excel(db_path, excel_path, import_batch=None, mode='append'):
     """
     Import file Excel Kế hoạch vào bảng plans.
     Format mong đợi: Năm | Tháng | Nhóm DV | Tên DV | Mã BC | KH Doanh thu | KH Sản lượng
@@ -711,7 +969,7 @@ def import_plan_excel(db_path, excel_path):
     filename = os.path.basename(excel_path)
     logger.info(f"Bắt đầu import Kế hoạch: {filename}")
     
-    batch_id = datetime.now().strftime('%Y%m%d_%H%M%S') + '_PLAN_' + filename
+    batch_id = import_batch or (datetime.now().strftime('%Y%m%d_%H%M%S') + '_PLAN_' + filename)
     
     try:
         engine = "openpyxl" if str(excel_path).endswith(".xlsx") else "xlrd"
@@ -720,7 +978,45 @@ def import_plan_excel(db_path, excel_path):
         if len(df.columns) < 5:
             return {'batch_id': batch_id, 'file': filename, 'thang': 'N/A', 'total_rows': 0, 'inserted': 0, 'skipped': 0, 'warnings': [f"File Kế hoạch không đủ số cột cơ bản. Số cột: {len(df.columns)}"]}
             
-        conn = sqlite3.connect(db_path)
+
+        # Nếu là overwrite, xóa kế hoạch cũ của năm/dịch vụ/đơn vị tương ứng
+        if mode == 'overwrite' and len(df) > 0:
+            logger.info("Chế độ ghi đè Kế hoạch: Đang xác định các năm, nhóm dịch vụ và bưu cục để xóa...")
+            try:
+                to_delete = set()
+                valid_groups_local = {'BCCP', 'HCC', 'TCBC', 'PPBL', 'Hành chính công', 'Tài chính Bưu chính', 'Phân phối bán lẻ'}
+                for idx, row in df.iterrows():
+                    nam = _safe_int(row.iloc[0])
+                    if nam == 0:
+                        continue
+                    nhom_chinh = clean_str_field(row.iloc[1])
+                    nhom_dv = clean_str_field(row.iloc[2]) if len(df.columns) > 2 and pd.notna(row.iloc[2]) else None
+                    ma_bc = clean_str_field(row.iloc[3]) if len(df.columns) > 3 else None
+                    if nhom_chinh in valid_groups_local and ma_bc:
+                        to_delete.add((nam, nhom_chinh, nhom_dv, ma_bc))
+                
+                if to_delete:
+                    conn_del = _get_db_connection(db_path)
+                    cursor_del = conn_del.cursor()
+                    for nam, nhom_chinh, nhom_dv, ma_bc in to_delete:
+                        if nhom_dv:
+                            logger.info(f"Xóa kế hoạch cũ nam {nam} - {nhom_chinh}/{nhom_dv} bưu cục {ma_bc}...")
+                            cursor_del.execute("""
+                                DELETE FROM plans 
+                                WHERE nam = ? AND nhom_chinh = ? AND nhom_dich_vu = ? AND ma_buu_cuc = ?
+                            """, (nam, nhom_chinh, nhom_dv, ma_bc))
+                        else:
+                            logger.info(f"Xóa kế hoạch cũ nam {nam} - {nhom_chinh} bưu cục {ma_bc}...")
+                            cursor_del.execute("""
+                                DELETE FROM plans 
+                                WHERE nam = ? AND nhom_chinh = ? AND nhom_dich_vu IS NULL AND ma_buu_cuc = ?
+                            """, (nam, nhom_chinh, ma_bc))
+                    conn_del.commit()
+                    conn_del.close()
+            except Exception as ex_del:
+                logger.error(f"Lỗi khi xóa kế hoạch cũ: {ex_del}")
+
+        conn = _get_db_connection(db_path)
         cursor = conn.cursor()
         
         insert_sql = """
@@ -739,10 +1035,12 @@ def import_plan_excel(db_path, excel_path):
         # Tỷ lệ phân bổ 12 tháng (từ ty-le.xlsx)
         MONTHLY_RATIOS = [0.098266, 0.081857, 0.088313, 0.092610, 0.081116, 0.079334, 0.076506, 0.073452, 0.075493, 0.087763, 0.078089, 0.087201]
         
+        last_nam = datetime.now().year
         for idx, row in df.iterrows():
             nam = _safe_int(row.iloc[0])
             if nam == 0:
                 continue # Bỏ qua dòng trống
+            last_nam = nam
                 
             total_rows += 1
             nhom_chinh = clean_str_field(row.iloc[1])
@@ -779,7 +1077,13 @@ def import_plan_excel(db_path, excel_path):
         
         conn.commit()
         conn.close()
-        
+
+        # Tự động gộp số liệu cho tháng vừa nạp
+        try:
+            _auto_aggregate_after_import(db_path, 'PLAN', [(last_nam, 1)])
+        except Exception as ex_ref:
+            logger.error(f"Lỗi tự động refresh PLAN: {ex_ref}")
+
         return {
             'batch_id': batch_id,
             'file': filename,
@@ -793,7 +1097,7 @@ def import_plan_excel(db_path, excel_path):
         logger.error(f"Lỗi khi import Kế hoạch: {e}")
         return {'batch_id': batch_id, 'file': filename, 'thang': 'N/A', 'total_rows': 0, 'inserted': 0, 'skipped': 0, 'warnings': [str(e)]}
 
-def import_phbc_excel(db_path, excel_path, import_batch=None):
+def import_phbc_excel(db_path, excel_path, import_batch=None, mode='append'):
     """
     Import file Excel dữ liệu Phát hành báo chí (PHBC).
     """
@@ -826,7 +1130,43 @@ def import_phbc_excel(db_path, excel_path, import_batch=None):
             warnings = [f"File PHBC thiếu cột. Các cột: {', '.join(df.columns)}"]
             return {'batch_id': batch_id, 'file': filename, 'thang': 'N/A', 'total_rows': 0, 'inserted': 0, 'skipped': 0, 'warnings': warnings}
             
-        conn = sqlite3.connect(db_path)
+
+        # Nếu là overwrite, xóa dữ liệu PHBC cũ của tháng/năm
+        if mode == 'overwrite' and len(df) > 0:
+            logger.info("Chế độ ghi đè PHBC: Đang xác định tháng/năm và bưu cục để xóa...")
+            try:
+                to_delete = set()
+                for idx, row in df.iterrows():
+                    bc_val = str(row.iloc[bc_idx]).strip().upper() if pd.notna(row.iloc[bc_idx]) else ""
+                    thang_val = str(row.iloc[thang_idx]).strip() if pd.notna(row.iloc[thang_idx]) else ""
+                    nam_val = _safe_int(row.iloc[nam_idx])
+                    
+                    if bc_val and thang_val:
+                        if not thang_val.startswith("T"):
+                            try:
+                                thang_num = int(float(thang_val))
+                                thang_val = f"T{thang_num:02d}"
+                            except:
+                                continue
+                        if nam_val == 0:
+                            nam_val = datetime.now().year
+                        to_delete.add((thang_val, nam_val, bc_val))
+                
+                if to_delete:
+                    conn_del = _get_db_connection(db_path)
+                    cursor_del = conn_del.cursor()
+                    for thang_val, nam_val, bc_val in to_delete:
+                        logger.info(f"Xóa PHBC cũ của bưu cục {bc_val} tháng {thang_val}/{nam_val}...")
+                        cursor_del.execute("""
+                            DELETE FROM transactions_phbc
+                            WHERE thang_du_lieu = ? AND nam_du_lieu = ? AND ma_buu_cuc = ?
+                        """, (thang_val, nam_val, bc_val))
+                    conn_del.commit()
+                    conn_del.close()
+            except Exception as ex_del:
+                logger.error(f"Lỗi khi xóa PHBC cũ: {ex_del}")
+
+        conn = _get_db_connection(db_path)
         cursor = conn.cursor()
         
         insert_sql = """
@@ -840,6 +1180,7 @@ def import_phbc_excel(db_path, excel_path, import_batch=None):
         total_rows = 0
         warnings = []
         first_thang = "T01"
+        last_nam = datetime.now().year
         
         for idx, row in df.iterrows():
             total_rows += 1
@@ -888,7 +1229,14 @@ def import_phbc_excel(db_path, excel_path, import_batch=None):
         
         conn.commit()
         conn.close()
-        
+
+        # Tự động gộp số liệu cho tháng vừa nạp
+        try:
+            thang_int = int(thang[1:]) if thang.startswith('T') else int(thang)
+            _auto_aggregate_after_import(db_path, service_type, [(nam_du_lieu, thang_int)])
+        except Exception as ex_ref:
+            logger.error(f"Lỗi tự động refresh {service_type}: {ex_ref}")
+
         return {
             'batch_id': batch_id,
             'file': filename,

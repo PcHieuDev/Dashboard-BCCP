@@ -69,7 +69,7 @@ def create_summary_tables(conn):
 def rebuild_monthly(conn, nam: int, thang: int):
     """
     Rebuild dữ liệu cho bảng agg_monthly của tháng và năm chỉ định.
-    Gộp dữ liệu thực tế từ 4 bảng giao dịch: transactions, transactions_hcc, transactions_tcbc, transactions_ppbl.
+    Gộp dữ liệu thực tế từ 5 bảng giao dịch: transactions và 4 bảng dịch vụ phụ.
     """
     cursor = conn.cursor()
     thang_str = f"T{thang:02d}"
@@ -99,7 +99,7 @@ def rebuild_monthly(conn, nam: int, thang: int):
         UNION ALL
         
         SELECT 
-            t.nam_du_lieu as nam,
+            t.tu_nam as nam,
             ? as thang,
             t.ma_buu_cuc as buu_cuc,
             COALESCE(d.nhom_dich_vu, t.ten_dich_vu) as nhom_dich_vu,
@@ -108,13 +108,13 @@ def rebuild_monthly(conn, nam: int, thang: int):
             0 as so_kh_phat_sinh
         FROM transactions_hcc t
         LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu OR t.ten_dich_vu = d.ten_dich_vu
-        WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ?
+        WHERE t.tu_nam = ? AND t.tu_thang = ?
         GROUP BY t.ma_buu_cuc, COALESCE(d.nhom_dich_vu, t.ten_dich_vu)
         
         UNION ALL
         
         SELECT 
-            t.nam_du_lieu as nam,
+            t.tu_nam as nam,
             ? as thang,
             t.ma_buu_cuc as buu_cuc,
             COALESCE(d.nhom_dich_vu, t.ten_dich_vu) as nhom_dich_vu,
@@ -123,13 +123,13 @@ def rebuild_monthly(conn, nam: int, thang: int):
             0 as so_kh_phat_sinh
         FROM transactions_tcbc t
         LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu OR t.ten_dich_vu = d.ten_dich_vu
-        WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ?
+        WHERE t.tu_nam = ? AND t.tu_thang = ?
         GROUP BY t.ma_buu_cuc, COALESCE(d.nhom_dich_vu, t.ten_dich_vu)
         
         UNION ALL
         
         SELECT 
-            t.nam_du_lieu as nam,
+            t.tu_nam as nam,
             ? as thang,
             t.ma_buu_cuc as buu_cuc,
             COALESCE(d.nhom_dich_vu, t.ten_dich_vu) as nhom_dich_vu,
@@ -138,7 +138,22 @@ def rebuild_monthly(conn, nam: int, thang: int):
             0 as so_kh_phat_sinh
         FROM transactions_ppbl t
         LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu OR t.ten_dich_vu = d.ten_dich_vu
-        WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ?
+        WHERE t.tu_nam = ? AND t.tu_thang = ?
+        GROUP BY t.ma_buu_cuc, COALESCE(d.nhom_dich_vu, t.ten_dich_vu)
+
+        UNION ALL
+        
+        SELECT 
+            t.tu_nam as nam,
+            ? as thang,
+            t.ma_buu_cuc as buu_cuc,
+            COALESCE(d.nhom_dich_vu, t.ten_dich_vu) as nhom_dich_vu,
+            SUM(t.doanh_thu) as tong_doanh_thu,
+            SUM(t.san_luong) as tong_san_luong,
+            0 as so_kh_phat_sinh
+        FROM transactions_phbc t
+        LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu OR t.ten_dich_vu = d.ten_dich_vu
+        WHERE t.tu_nam = ? AND t.tu_thang = ?
         GROUP BY t.ma_buu_cuc, COALESCE(d.nhom_dich_vu, t.ten_dich_vu)
     )
     GROUP BY nam, thang, buu_cuc, nhom_dich_vu
@@ -146,9 +161,10 @@ def rebuild_monthly(conn, nam: int, thang: int):
     
     params = (
         thang, nam, thang_str,
-        thang, nam, thang_str,
-        thang, nam, thang_str,
-        thang, nam, thang_str
+        thang, nam, thang,
+        thang, nam, thang,
+        thang, nam, thang,
+        thang, nam, thang
     )
     
     cursor.execute(query, params)
@@ -216,10 +232,9 @@ def rebuild_weekly(conn, nam: int):
     Rebuild dữ liệu cho bảng agg_weekly của năm chỉ định.
     Gồm 2 bước:
     Bước 1: Tổng hợp doanh thu tuần có ngày cụ thể từ transactions (BCCP & HCC chuyển phát).
-    Bước 2: Phân bổ doanh thu/sản lượng của các dịch vụ con (HCC mới, TCBC, PPBL) theo khoảng ngày thô và tính giao thoa ngày thực tế.
+    Bước 2: Gộp trực tiếp doanh thu tuần từ 4 bảng dịch vụ phụ dựa trên ngày cụ thể (ngày phân rã).
     """
     from config.week_calendar import get_week_list
-    from datetime import date
     cursor = conn.cursor()
     
     # 1. Xóa dữ liệu cũ của năm đó
@@ -265,123 +280,51 @@ def rebuild_weekly(conn, nam: int):
     conn.commit()
     print(f"[Aggregator] Bước 1: Hoàn tất transactions weekly (BCCP). Đã ghi nhận {total_inserted} records.")
     
-    # BƯỚC 2: Phân bổ dữ liệu theo ngày thô thực tế từ transactions_hcc, transactions_tcbc, transactions_ppbl
-    sub_services_data = []
-    for table_name in ['transactions_hcc', 'transactions_tcbc', 'transactions_ppbl']:
-        cursor.execute(f"""
-            SELECT t.ma_buu_cuc, COALESCE(d.nhom_dich_vu, t.ten_dich_vu) as nhom_dich_vu, t.doanh_thu, t.san_luong,
-                   t.tu_ngay, t.tu_thang, t.tu_nam, t.den_ngay, t.den_thang, t.den_nam
-            FROM {table_name} t
-            LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu OR t.ten_dich_vu = d.ten_dich_vu
-            WHERE t.nam_du_lieu = ?
-        """, (nam,))
+    # BƯỚC 2: Gộp trực tiếp tuần cho 4 dịch vụ phụ (HCC, TCBC, PPBL, PHBC) dựa trên ngày cụ thể
+    total_sub_inserted = 0
+    for w_num, w_start, w_end in weeks:
+        start_str = w_start.isoformat()
+        end_str = w_end.isoformat()
         
-        for row in cursor.fetchall():
-            ma_buu_cuc, ten_dich_vu, doanh_thu, san_luong, tu_ngay, tu_thang, tu_nam, den_ngay, den_thang, den_nam = row
-            sub_services_data.append({
-                'buu_cuc': ma_buu_cuc,
-                'nhom_dich_vu': ten_dich_vu,
-                'doanh_thu': doanh_thu or 0.0,
-                'san_luong': san_luong or 0,
-                'tu_ngay': tu_ngay or 1,
-                'tu_thang': tu_thang or 1,
-                'tu_nam': tu_nam or nam,
-                'den_ngay': den_ngay or 30,
-                'den_thang': den_thang or 12,
-                'den_nam': den_nam or nam
-            })
-            
-    # Chuẩn bị một dict để chứa kết quả cộng dồn cho tuần:
-    # Key: (tuan_so, buu_cuc, nhom_dich_vu) -> Value: (doanh_thu, san_luong)
-    weekly_agg = {}
-    
-    for item in sub_services_data:
-        try:
-            ngay_bat_dau = date(item['tu_nam'], item['tu_thang'], item['tu_ngay'])
-            ngay_ket_thuc = date(item['den_nam'], item['den_thang'], item['den_ngay'])
-        except Exception:
-            # Fallback nếu ngày không hợp lệ (ví dụ ngày 31 tháng 2)
-            try:
-                ngay_bat_dau = date(nam, item['tu_thang'], 1)
-                m_end = item['den_thang']
-                d_end = 31 if m_end in [1, 3, 5, 7, 8, 10, 12] else (30 if m_end != 2 else 28)
-                ngay_ket_thuc = date(nam, m_end, d_end)
-            except Exception:
-                continue
-                
-        N = (ngay_ket_thuc - ngay_bat_dau).days + 1
-        if N <= 0:
-            N = 1
-            
-        # Tìm tất cả các tuần giao thoa và tính số ngày giao thoa
-        intersections = []
-        for w_num, w_start, w_end in weeks:
-            intersect_start = max(ngay_bat_dau, w_start)
-            intersect_end = min(ngay_ket_thuc, w_end)
-            if intersect_start <= intersect_end:
-                ngay_giao = (intersect_end - intersect_start).days + 1
-                intersections.append((w_num, ngay_giao))
-                
-        # Phân bổ tích lũy để triệt tiêu sai số làm tròn số nguyên
-        cum_days = 0
-        prev_cum_dt = 0.0
-        prev_cum_sl = 0
-        
-        for w_num, ngay_giao in intersections:
-            cum_days += ngay_giao
-            
-            # Tính tỷ lệ tích lũy
-            ratio = cum_days / N
-            
-            cum_dt = item['doanh_thu'] * ratio
-            cum_sl = round(item['san_luong'] * ratio)
-            
-            # Chênh lệch của tuần này so với tuần trước
-            dt_week = cum_dt - prev_cum_dt
-            sl_week = cum_sl - prev_cum_sl
-            
-            # Lưu lại mốc tích lũy
-            prev_cum_dt = cum_dt
-            prev_cum_sl = cum_sl
-            
-            key = (w_num, item['buu_cuc'], item['nhom_dich_vu'])
-            if key not in weekly_agg:
-                weekly_agg[key] = [0.0, 0.0]
-            weekly_agg[key][0] += dt_week
-            weekly_agg[key][1] += sl_week
-                
-    # Ghi dữ liệu tuần của các dịch vụ con vào agg_weekly
-    insert_weekly_sql = """
-    INSERT INTO agg_weekly (
-        tuan_bat_dau, tuan_ket_thuc, tuan_so, nam, buu_cuc, nhom_dich_vu,
-        tong_doanh_thu, tong_san_luong, so_kh_phat_sinh, so_kh_moi, so_kh_tai_ban
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 0)
-    """
-    
-    week_date_map = {w_num: (w_start, w_end) for w_num, w_start, w_end in weeks}
-    batch_insert = []
-    
-    for (w_num, bc, nhom_dv), (dt, sl) in weekly_agg.items():
-        if dt > 0 or sl > 0:
-            w_start, w_end = week_date_map[w_num]
-            batch_insert.append((
-                w_start.isoformat(),
-                w_end.isoformat(),
-                w_num,
-                nam,
-                bc,
-                nhom_dv,
-                dt,
-                int(round(sl))
-            ))
-            
-    if batch_insert:
-        cursor.executemany(insert_weekly_sql, batch_insert)
-        total_inserted += cursor.rowcount
+        query_sub = """
+        INSERT INTO agg_weekly (
+            tuan_bat_dau, tuan_ket_thuc, tuan_so, nam, buu_cuc, nhom_dich_vu, 
+            tong_doanh_thu, tong_san_luong, so_kh_phat_sinh, so_kh_moi, so_kh_tai_ban
+        )
+        SELECT 
+            ? as tuan_bat_dau,
+            ? as tuan_ket_thuc,
+            ? as tuan_so,
+            ? as nam,
+            t.ma_buu_cuc as buu_cuc,
+            COALESCE(d.nhom_dich_vu, t.ten_dich_vu) as nhom_dich_vu,
+            SUM(t.doanh_thu) as tong_doanh_thu,
+            SUM(t.san_luong) as tong_san_luong,
+            0 as so_kh_phat_sinh,
+            0 as so_kh_moi,
+            0 as so_kh_tai_ban
+        FROM (
+            SELECT ma_buu_cuc, ten_dich_vu, doanh_thu, san_luong, tu_ngay, tu_thang, tu_nam FROM transactions_hcc
+            UNION ALL
+            SELECT ma_buu_cuc, ten_dich_vu, doanh_thu, san_luong, tu_ngay, tu_thang, tu_nam FROM transactions_tcbc
+            UNION ALL
+            SELECT ma_buu_cuc, ten_dich_vu, doanh_thu, san_luong, tu_ngay, tu_thang, tu_nam FROM transactions_ppbl
+            UNION ALL
+            SELECT ma_buu_cuc, ten_dich_vu, doanh_thu, san_luong, tu_ngay, tu_thang, tu_nam FROM transactions_phbc
+        ) t
+        LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu OR t.ten_dich_vu = d.ten_dich_vu
+        WHERE t.tu_nam = ? AND printf('%04d-%02d-%02d', t.tu_nam, t.tu_thang, t.tu_ngay) BETWEEN ? AND ?
+        GROUP BY t.ma_buu_cuc, COALESCE(d.nhom_dich_vu, t.ten_dich_vu)
+        ON CONFLICT(tuan_bat_dau, buu_cuc, nhom_dich_vu) DO UPDATE SET
+            tong_doanh_thu = tong_doanh_thu + excluded.tong_doanh_thu,
+            tong_san_luong = tong_san_luong + excluded.tong_san_luong
+        """
+        cursor.execute(query_sub, (start_str, end_str, w_num, nam, nam, start_str, end_str))
+        total_sub_inserted += cursor.rowcount
         
     conn.commit()
-    print(f"[Aggregator] Bước 2: Hoàn tất phân bổ weekly cho HCC/TCBC/PPBL. Đã ghi nhận tổng cộng {total_inserted} records.")
-    return total_inserted
+    print(f"[Aggregator] Bước 2: Hoàn tất gộp weekly cho 4 dịch vụ phụ (HCC/TCBC/PPBL/PHBC) - Đã ghi nhận thêm {total_sub_inserted} records.")
+    return total_inserted + total_sub_inserted
 
 def rebuild_plans_weekly(conn, nam: int):
     """

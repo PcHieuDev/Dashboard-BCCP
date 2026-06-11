@@ -63,6 +63,8 @@ def calculate_new_customers(db_path: str, nam: int, thang: int) -> int:
     Trả về số lượng khách hàng mới tìm được.
     """
     conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA busy_timeout=30000;")
     init_db(conn)
     cursor = conn.cursor()
     
