@@ -10,8 +10,8 @@
 - Phục vụ cho hơn 20 người dùng từ các phòng ban nghiệp vụ và deploy lên server nội bộ để truy cập qua mạng LAN hoặc đường hầm Cloudflare (`dashboard.bdna.io.vn`).
 
 ### 2. Các công việc chính đã hoàn thành (Completed Milestones)
-- **Phase 17 (11/06/2026): Nạp Kế hoạch 2026 mới, Bổ sung Bưu cục, Import dữ liệu tháng 6, Fix Bug DB Lock & Rebuild summaries sạch sẽ**:
-  - **Kế hoạch mới:** Xóa toàn bộ kế hoạch cũ (`plans` và `plans_weekly`), nạp kế hoạch mới năm 2026 từ file [import_ke_hoach_TT_TMDT_QT_HCC_2026.xlsx](file:///E:/Projects/Dashboard-BCCP/data/du-lieu-new/import_ke_hoach_TT_TMDT_QT_HCC_2026.xlsx) (20,820 chỉ tiêu kế hoạch tháng phân bổ) và phân bổ lại kế hoạch tuần.
+- **Phase 17 (11/06/2026): Nạp Kế hoạch 2026 mới, Bổ sung Bưu cục, Import dữ liệu tháng 6, Gộp kế hoạch vào nhóm chính, Fix Bug DB Lock & Rebuild summaries sạch sẽ**:
+  - **Kế hoạch mới & Gộp nhóm:** Xóa toàn bộ kế hoạch cũ (`plans` và `plans_weekly`), nạp kế hoạch mới năm 2026 từ file [import_ke_hoach_TT_TMDT_QT_HCC_2026.xlsx](file:///E:/Projects/Dashboard-BCCP/data/du-lieu-new/import_ke_hoach_TT_TMDT_QT_HCC_2026.xlsx) (20,820 chỉ tiêu kế hoạch tháng phân bổ) và phân bổ lại kế hoạch tuần. Theo yêu cầu của Sếp, đã chạy script gộp kế hoạch các nhóm dịch vụ con (TMĐT, Truyền thống, Quốc tế, Chuyển phát HCC) vào nhóm chính (BCCP, HCC) để quản lý kế hoạch chung ở cấp cao nhất.
   - **Bổ sung bưu cục:** Nạp bổ sung danh sách bưu cục từ file [bo_sung_buu_cuc.xlsx](file:///E:/Projects/Dashboard-BCCP/data/du-lieu-new/bo_sung_buu_cuc.xlsx) vào bảng `dim_buucuc` (3 bưu cục mới).
   - **Import dữ liệu BCCP tháng 6:** Nạp thành công dữ liệu thô BCCP từ 4 tệp Excel tháng 6 (`06-07.06.xls`, `08.06.xls`, `09.06.xls`, `10.06.xls`) trong thư mục `2026\T06`.
   - **Rebuild CSDL & Backup:** Chạy lại toàn bộ tiến trình rebuild summaries để đồng bộ hóa số liệu tổng hợp tuần/tháng/khách hàng mới trên CSDL mới. Tạo bản sao lưu mới nhất tại `backups/` và dọn dẹp (xóa sạch) toàn bộ các bản sao lưu cũ khác (chỉ giữ bản mới nhất), di dời tệp `dashboard_corrupted.db` ra khỏi OneDrive về thư mục `scratch`.

@@ -12,9 +12,10 @@
 
 > ## Nội dung thực hiện
 > 
-> ### 1. Nạp Kế hoạch 2026 mới toàn diện
+> ### 1. Nạp Kế hoạch 2026 mới & Gộp nhóm chính
 > - Xóa sạch toàn bộ kế hoạch cũ trong bảng `plans` và `plans_weekly`.
 > - Nạp kế hoạch năm 2026 mới từ file [import_ke_hoach_TT_TMDT_QT_HCC_2026.xlsx](file:///E:/Projects/Dashboard-BCCP/data/du-lieu-new/import_ke_hoach_TT_TMDT_QT_HCC_2026.xlsx) (20,820 chỉ tiêu kế hoạch tháng phân bổ) và phân bổ lại kế hoạch tuần.
+> - Gộp kế hoạch các nhóm dịch vụ con (TMĐT, Truyền thống, Quốc tế, Chuyển phát HCC) vào nhóm chính (BCCP, HCC) để theo dõi mục tiêu doanh thu cấp cao nhất.
 > 
 > ### 2. Bổ sung danh sách Bưu cục
 > - Nạp bổ sung danh sách bưu cục từ file [bo_sung_buu_cuc.xlsx](file:///E:/Projects/Dashboard-BCCP/data/du-lieu-new/bo_sung_buu_cuc.xlsx) vào bảng `dim_buucuc` (3 bưu cục mới).
