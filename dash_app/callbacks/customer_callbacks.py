@@ -24,6 +24,21 @@ from callbacks.utils import resolve_filters_and_query, resolve_filters_and_query
 from components.data_table import render_revenue_datatable
 from callbacks.export_helpers import generate_customer_excel, generate_excel_report
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 def register_customer_callbacks(app):
     """
     Đăng ký callbacks cho trang Chi tiết Khách hàng (CMS) và Doanh thu xoay chiều.
@@ -54,7 +69,7 @@ def register_customer_callbacks(app):
             df = pd.read_sql_query(query, conn, params=params)
             options = [{"label": f"{r['ma_dich_vu']} - {r['ten_dich_vu']}", "value": r['ma_dich_vu']} for _, r in df.iterrows()]
         except Exception as e:
-            print(f"Error loading SPDV options: {e}")
+            logger.error(f"Error loading SPDV options: {e}")
             options = []
         finally:
             conn.close()

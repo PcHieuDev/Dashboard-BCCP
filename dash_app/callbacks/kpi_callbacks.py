@@ -28,6 +28,21 @@ from callbacks.utils import (
 )
 from analytics.retention_metrics import get_retention_stats
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 def _get_phbc_revenue(db_path, year, month):
     """Query doanh thu PHBC từ bảng transactions_phbc. Trả về 0 nếu bảng chưa tồn tại."""
     try:
@@ -71,7 +86,7 @@ def get_bccp_plan(db_path, year, month, cum=None, bdx=None, buu_cuc=None):
         row = cursor.fetchone()
         return row[0] if row and row[0] is not None else 0.0
     except Exception as e:
-        print(f"Error querying BCCP plan: {e}")
+        logger.error(f"Error querying BCCP plan: {e}")
         return 0.0
     finally:
         conn.close()
@@ -136,7 +151,7 @@ def get_new_customers_metrics(db_path, year, month, cum=None, bdx=None, buu_cuc=
         
         return curr_count, curr_rev, prev_count, prev_rev
     except Exception as e:
-        print(f"Error getting new customer metrics: {e}")
+        logger.error(f"Error getting new customer metrics: {e}")
         return 0, 0.0, 0, 0.0
     finally:
         conn.close()
@@ -246,7 +261,7 @@ def register_kpi_callbacks(app):
                     group_by_primary='nhom_dv', compare_prev=False, nam=prev_year
                 )
             except Exception as e:
-                print(f"Error querying prev period KPI: {e}")
+                logger.error(f"Error querying prev period KPI: {e}")
             finally:
                 conn_tmp.close()
 
@@ -270,7 +285,7 @@ def register_kpi_callbacks(app):
                     group_by_primary='nhom_dv', compare_prev=False, nam=yoy_year
                 )
             except Exception as e:
-                print(f"Error querying YoY period KPI: {e}")
+                logger.error(f"Error querying YoY period KPI: {e}")
             finally:
                 conn_tmp.close()
 
@@ -287,7 +302,7 @@ def register_kpi_callbacks(app):
                 group_by_primary='ngay', group_by_secondary='nhom_dv', compare_prev=False
             )
         except Exception as e:
-            print(f"Error querying trend KPI: {e}")
+            logger.error(f"Error querying trend KPI: {e}")
             df_trend = pd.DataFrame()
         finally:
             conn_tmp.close()
@@ -430,7 +445,7 @@ def register_kpi_callbacks(app):
             ret_stats_prev = get_retention_stats(str(DB_PATH), y_prev, m_prev, cum, bdx)
             prev_retention_rate = ret_stats_prev['retention_rate_sl']
         except Exception as e:
-            print(f"Error calculating retention rate: {e}")
+            logger.error(f"Error calculating retention rate: {e}")
             retention_rate = 0.0
             prev_retention_rate = 0.0
 
@@ -489,7 +504,7 @@ def register_kpi_callbacks(app):
                 group_by_primary='loai_kh', compare_prev=False
             )
         except Exception as e:
-            print(f"Error querying customer breakdown: {e}")
+            logger.error(f"Error querying customer breakdown: {e}")
             df_kh_breakdown = pd.DataFrame()
         finally:
             conn_tmp.close()
@@ -602,7 +617,7 @@ def register_kpi_callbacks(app):
                 group_by_primary='cum', compare_prev=False
             )
         except Exception as e:
-            print(f"Error querying cluster KPI: {e}")
+            logger.error(f"Error querying cluster KPI: {e}")
             df_cluster = pd.DataFrame()
         finally:
             conn_tmp.close()
@@ -744,7 +759,7 @@ def register_kpi_callbacks(app):
                 df_prev_cms_tot = pd.DataFrame(columns=['cms', 'cuoc_tt_tong'])
                 
         except Exception as e:
-            print(f"Error querying Top 10 CMS: {e}")
+            logger.error(f"Error querying Top 10 CMS: {e}")
             df_cur_cms_tot = pd.DataFrame()
             df_prev_cms_tot = pd.DataFrame(columns=['cms', 'cuoc_tt_tong'])
             df_main_dv = pd.DataFrame()

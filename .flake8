@@ -1,0 +1,9 @@
+[flake8]
+# Ignore formatting rules that are too strict for existing codebase
+# E501: line too long
+# E402: module level import not at top of file
+# W503: line break before binary operator
+# E722: do not use bare 'except'
+ignore = E501, E402, W503, E722
+exclude = .git, __pycache__, .venv, venv, build, dist, .vibecode, scratch
+max-line-length = 120

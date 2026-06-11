@@ -7,6 +7,21 @@ import sqlite3
 import sys
 from pathlib import Path
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 sys.stdout.reconfigure(encoding='utf-8')
 
 DB_DIR = Path(r"E:\OneDrive\z.Database-TTKD-Data")
@@ -14,7 +29,7 @@ DB_PATH = DB_DIR / "dashboard.db"
 
 def run_migration():
     if not DB_PATH.exists():
-        print(f"Error: {DB_PATH} không tồn tại.")
+        logger.error(f"Error: {DB_PATH} không tồn tại.")
         return
 
     conn = sqlite3.connect(str(DB_PATH))
@@ -80,7 +95,7 @@ def run_migration():
 
     conn.commit()
     conn.close()
-    print("Migrate dim_dichvu thành công!")
+    logger.info("Migrate dim_dichvu thành công!")
 
 if __name__ == "__main__":
     run_migration()

@@ -20,10 +20,25 @@ if str(project_root) not in sys.path:
 
 from config.settings import DB_PATH, MAPPING_PATH, MAPPING_GEOGRAPHY_PATH
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 def sync_spdv(conn):
     """Đồng bộ mapping sản phẩm dịch vụ từ CSV vào bảng dim_dichvu và dim_spdv."""
     if not MAPPING_PATH.exists():
-        print(f"⚠️  Không tìm thấy file mapping sản phẩm tại: {MAPPING_PATH}")
+        logger.error(f"⚠️  Không tìm thấy file mapping sản phẩm tại: {MAPPING_PATH}")
         return 0
 
     # Đọc CSV mapping (thử nhiều separator và encoding)
@@ -42,14 +57,14 @@ def sync_spdv(conn):
             break
             
     if df is None:
-        print(f"❌ Lỗi: Không thể đọc file mapping sản phẩm {MAPPING_PATH} hoặc thiếu cột bắt buộc.")
+        logger.error(f"❌ Lỗi: Không thể đọc file mapping sản phẩm {MAPPING_PATH} hoặc thiếu cột bắt buộc.")
         return 0
         
     expected_cols = ["nhom_chinh", "ma_spdv", "ten_spdv", "nhom_dich_vu"]
     for col in expected_cols:
         if col not in df.columns:
-            print(f"❌ Lỗi: Cột '{col}' không tồn tại trong file CSV mapping sản phẩm.")
-            print(f"   Các cột đang có: {list(df.columns)}")
+            logger.error(f"❌ Lỗi: Cột '{col}' không tồn tại trong file CSV mapping sản phẩm.")
+            logger.error(f"   Các cột đang có: {list(df.columns)}")
             return 0
 
     # Thêm cột ghi_chu nếu chưa có
@@ -66,9 +81,9 @@ def sync_spdv(conn):
         # Đọc dữ liệu hiện tại
         df_backup = pd.read_sql_query("SELECT * FROM dim_dichvu", conn)
         df_backup.to_csv(backup_file, index=False, encoding="utf-8-sig")
-        print(f"💾 Đã tạo file backup bảng dim_dichvu tại: {backup_file}")
+        logger.error(f"💾 Đã tạo file backup bảng dim_dichvu tại: {backup_file}")
     except Exception as e:
-        print(f"⚠️ Cảnh báo: Không thể backup bảng dim_dichvu: {e}")
+        logger.error(f"⚠️ Cảnh báo: Không thể backup bảng dim_dichvu: {e}")
 
     cursor = conn.cursor()
 
@@ -81,9 +96,9 @@ def sync_spdv(conn):
                OR (nhom_chinh = 'HCC' AND ma_dich_vu LIKE 'HCC%')
         """)
         conn.commit()
-        print("🧹 Đã làm sạch các dòng BCCP và mã HCC cũ trong bảng dim_dichvu.")
+        logger.error("🧹 Đã làm sạch các dòng BCCP và mã HCC cũ trong bảng dim_dichvu.")
     except Exception as e:
-        print(f"❌ Lỗi khi làm sạch dữ liệu cũ trong dim_dichvu: {e}")
+        logger.error(f"❌ Lỗi khi làm sạch dữ liệu cũ trong dim_dichvu: {e}")
         return 0
 
     # 3. Ghi vào cả dim_dichvu mới và dim_spdv cũ
@@ -113,13 +128,13 @@ def sync_spdv(conn):
         rows_synced += 1
 
     conn.commit()
-    print(f"✅ Đã đồng bộ thành công {rows_synced} sản phẩm vào bảng dim_dichvu và dim_spdv.")
+    logger.error(f"✅ Đã đồng bộ thành công {rows_synced} sản phẩm vào bảng dim_dichvu và dim_spdv.")
     return rows_synced
 
 def sync_buucuc(conn):
     """Đồng bộ mapping bưu cục từ CSV vào bảng dim_buucuc."""
     if not MAPPING_GEOGRAPHY_PATH.exists():
-        print(f"⚠️  Không tìm thấy file mapping bưu cục tại: {MAPPING_GEOGRAPHY_PATH}")
+        logger.error(f"⚠️  Không tìm thấy file mapping bưu cục tại: {MAPPING_GEOGRAPHY_PATH}")
         return 0
 
     # Đọc CSV mapping (thử nhiều separator và encoding)
@@ -138,15 +153,15 @@ def sync_buucuc(conn):
             break
             
     if df is None:
-        print(f"❌ Lỗi: Không thể đọc file mapping bưu cục {MAPPING_GEOGRAPHY_PATH} hoặc thiếu cột bắt buộc.")
+        logger.error(f"❌ Lỗi: Không thể đọc file mapping bưu cục {MAPPING_GEOGRAPHY_PATH} hoặc thiếu cột bắt buộc.")
         return 0
         
     # Kiểm tra cột bắt buộc
     required_cols = ['ma_bc', 'ten_buu_cuc', 'ma_bdx', 'ten_bdx', 'ten_cum']
     for col in required_cols:
         if col not in df.columns:
-            print(f"❌ Lỗi: Cột '{col}' không tồn tại trong file CSV mapping bưu cục.")
-            print(f"   Các cột đang có: {list(df.columns)}")
+            logger.error(f"❌ Lỗi: Cột '{col}' không tồn tại trong file CSV mapping bưu cục.")
+            logger.error(f"   Các cột đang có: {list(df.columns)}")
             return 0
 
     cursor = conn.cursor()
@@ -170,7 +185,7 @@ def sync_buucuc(conn):
         rows_synced += 1
 
     conn.commit()
-    print(f"✅ Đã đồng bộ thành công {rows_synced} bưu cục vào bảng dim_buucuc.")
+    logger.error(f"✅ Đã đồng bộ thành công {rows_synced} bưu cục vào bảng dim_buucuc.")
     return rows_synced
 
 def clear_caches():
@@ -182,7 +197,7 @@ def clear_caches():
         clear_query_cache()
         clear_db_cache()
         clear_global_metrics_cache()
-        print("🧹 Đã làm sạch bộ nhớ cache của Dashboard.")
+        logger.error("🧹 Đã làm sạch bộ nhớ cache của Dashboard.")
     except Exception:
         # Nếu đang chạy độc lập ngoài app thì bỏ qua cache clear
         pass
@@ -194,9 +209,9 @@ def main():
     except Exception:
         pass
 
-    print("🔄 Bắt đầu đồng bộ danh mục từ tệp CSV...")
+    logger.error("🔄 Bắt đầu đồng bộ danh mục từ tệp CSV...")
     if not DB_PATH.exists():
-        print(f"❌ Lỗi: Cơ sở dữ liệu không tồn tại tại {DB_PATH}")
+        logger.error(f"❌ Lỗi: Cơ sở dữ liệu không tồn tại tại {DB_PATH}")
         sys.exit(1)
         
     conn = sqlite3.connect(str(DB_PATH))
@@ -204,9 +219,9 @@ def main():
         sync_spdv(conn)
         sync_buucuc(conn)
         clear_caches()
-        print("\n🎉 Tất cả danh mục đã được cập nhật thành công!")
+        logger.error("\n🎉 Tất cả danh mục đã được cập nhật thành công!")
     except Exception as e:
-        print(f"❌ Lỗi xảy ra trong quá trình đồng bộ: {e}")
+        logger.error(f"❌ Lỗi xảy ra trong quá trình đồng bộ: {e}")
     finally:
         conn.close()
 

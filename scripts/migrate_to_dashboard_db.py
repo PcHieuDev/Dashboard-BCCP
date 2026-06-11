@@ -9,6 +9,21 @@ import sqlite3
 import sys
 from pathlib import Path
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 # Cấu hình UTF-8 cho stdout trên Windows
 sys.stdout.reconfigure(encoding='utf-8')
 
@@ -19,19 +34,19 @@ NEW_DB = DB_DIR / "dashboard.db"
 
 def run_migration():
     if not OLD_DB.exists():
-        print(f"Error: {OLD_DB} không tồn tại.")
+        logger.error(f"Error: {OLD_DB} không tồn tại.")
         return
 
     # 1. Copy file DB (chỉ copy nếu NEW_DB chưa tồn tại để tránh đè data)
     if not NEW_DB.exists():
-        print(f"Copying {OLD_DB} to {NEW_DB}...")
+        logger.info(f"Copying {OLD_DB} to {NEW_DB}...")
         shutil.copy2(OLD_DB, NEW_DB)
-        print("Copy thành công.")
+        logger.info("Copy thành công.")
     else:
-        print(f"{NEW_DB} đã tồn tại. Sẽ tiếp tục tạo bảng mới (nếu chưa có).")
+        logger.info(f"{NEW_DB} đã tồn tại. Sẽ tiếp tục tạo bảng mới (nếu chưa có).")
 
     # 2. Tạo các bảng mới
-    print(f"Connecting to {NEW_DB}...")
+    logger.info(f"Connecting to {NEW_DB}...")
     conn = sqlite3.connect(str(NEW_DB))
     cursor = conn.cursor()
 
@@ -98,7 +113,7 @@ def run_migration():
 
     conn.commit()
     conn.close()
-    print("Tạo các bảng mới thành công: transactions_hcc, transactions_tcbc, transactions_ppbl, plans.")
+    logger.info("Tạo các bảng mới thành công: transactions_hcc, transactions_tcbc, transactions_ppbl, plans.")
 
 if __name__ == "__main__":
     run_migration()

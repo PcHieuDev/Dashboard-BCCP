@@ -20,6 +20,21 @@ if str(project_root) not in sys.path:
 from config.settings import DB_PATH
 from callbacks.utils import format_revenue
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 def get_prev_period_info(period_type, period_value, year):
     """Tìm kỳ trước và năm tương ứng"""
     import config.week_calendar as calendar_helper
@@ -277,7 +292,7 @@ def register_service_detail_callbacks(app):
             return table_element, fig_revenue, fig_volume
             
         except Exception as e:
-            print(f"Lỗi truy vấn chi tiết SPDV: {e}")
+            logger.error(f"Lỗi truy vấn chi tiết SPDV: {e}")
             import traceback
             traceback.print_exc()
             return html.Div(f"Lỗi truy vấn dữ liệu: {e}", style={"color": "red"}), go.Figure(), go.Figure()
@@ -385,7 +400,7 @@ def register_service_detail_callbacks(app):
             return dcc.send_data_frame(df_excel.to_excel, f"chi_tiet_spdv_{period_name}.xlsx", sheet_name="SPDV", index=False)
             
         except Exception as e:
-            print(f"Lỗi xuất Excel: {e}")
+            logger.error(f"Lỗi xuất Excel: {e}")
             return dash.no_update
         finally:
             conn.close()

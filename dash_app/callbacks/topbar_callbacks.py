@@ -22,6 +22,21 @@ if str(project_root) not in sys.path:
 from config.settings import DB_PATH
 from config.week_calendar import get_week_list
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 def get_user_cum():
     """Lấy tên cụm được gán của user hiện tại nếu có phân quyền."""
     if has_request_context() and current_user.is_authenticated:
@@ -183,7 +198,7 @@ def register_topbar_callbacks(app):
                 bc_value = "Tất cả"
                 
         except Exception as e:
-            print(f"Error in topbar geographic cascade: {e}")
+            logger.error(f"Error in topbar geographic cascade: {e}")
         finally:
             conn.close()
             
@@ -216,7 +231,7 @@ def register_topbar_callbacks(app):
                 df = pd.read_sql_query(query, conn)
                 options = [{"label": "Tất cả Cụm", "value": "Tất cả"}] + [{"label": c, "value": c} for c in df["ten_cum"].tolist()]
             except Exception as e:
-                print(f"Error loading cum options: {e}")
+                logger.error(f"Error loading cum options: {e}")
                 options = [{"label": "Tất cả Cụm", "value": "Tất cả"}]
             finally:
                 conn.close()

@@ -17,13 +17,28 @@ if str(project_root) not in sys.path:
 
 from config.settings import DB_PATH
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 def check_column_exists(cursor, table_name, column_name):
     cursor.execute(f"PRAGMA table_info({table_name})")
     columns = [row[1] for row in cursor.fetchall()]
     return column_name in columns
 
 def migrate():
-    print(f"Kết nối tới Database: {DB_PATH}")
+    logger.error(f"Kết nối tới Database: {DB_PATH}")
     conn = sqlite3.connect(str(DB_PATH))
     cursor = conn.cursor()
     
@@ -39,23 +54,23 @@ def migrate():
     
     try:
         for table in tables:
-            print(f"Kiểm tra bảng {table}...")
+            logger.error(f"Kiểm tra bảng {table}...")
             # Kiểm tra xem bảng có tồn tại hay không
             cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'")
             if not cursor.fetchone():
-                print(f"  [WARNING] Bảng {table} không tồn tại trong database, bỏ qua.")
+                logger.error(f"  [WARNING] Bảng {table} không tồn tại trong database, bỏ qua.")
                 continue
                 
             for col_name, col_type in columns_to_add:
                 if not check_column_exists(cursor, table, col_name):
-                    print(f"  Thêm cột {col_name} ({col_type}) vào bảng {table}...")
+                    logger.error(f"  Thêm cột {col_name} ({col_type}) vào bảng {table}...")
                     cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}")
                 else:
-                    print(f"  Cột {col_name} đã tồn tại trong bảng {table}, bỏ qua.")
+                    logger.error(f"  Cột {col_name} đã tồn tại trong bảng {table}, bỏ qua.")
         conn.commit()
-        print("[DONE] Di cư cơ sở dữ liệu hoàn tất thành công.")
+        logger.error("[DONE] Di cư cơ sở dữ liệu hoàn tất thành công.")
     except Exception as e:
-        print(f"[ERROR] Đã xảy ra lỗi khi di cư: {e}")
+        logger.error(f"[ERROR] Đã xảy ra lỗi khi di cư: {e}")
         conn.rollback()
     finally:
         conn.close()

@@ -19,6 +19,21 @@ if str(project_root) not in sys.path:
 from config.settings import DB_PATH, SERVICE_COLORS
 from callbacks.utils import format_revenue
 from analytics.global_metrics import (
+
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
     get_total_revenue_by_service,
     get_top10_by_comparison,
     get_12_periods_revenue,
@@ -74,7 +89,7 @@ def get_plans_current_period(db_path, period_type, period_value, year, cum=None,
             if r[0] in res:
                 res[r[0]] += r[1] or 0.0
     except Exception as e:
-        print(f"Lỗi lấy kế hoạch kỳ: {e}")
+        logger.error(f"Lỗi lấy kế hoạch kỳ: {e}")
     finally:
         conn.close()
     return res
@@ -131,7 +146,7 @@ def get_aggregated_revenue(db_path, cycle, year, period_val, cum=None, bdx=None,
             (SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 
             'Khác'
         )"""
-        print(f"DEBUG get_aggregated_revenue SQL: {sql} with params {params}", flush=True)
+        logger.error(f"DEBUG get_aggregated_revenue SQL: {sql} with params {params}", flush=True)
         cursor = conn.cursor()
         cursor.execute(sql, params)
         for row in cursor.fetchall():
@@ -140,7 +155,7 @@ def get_aggregated_revenue(db_path, cycle, year, period_val, cum=None, bdx=None,
             if nhom in res:
                 res[nhom] += val
     except Exception as e:
-        print(f"Lỗi tính doanh thu aggregated: {e}")
+        logger.error(f"Lỗi tính doanh thu aggregated: {e}")
     finally:
         conn.close()
     return res
@@ -332,7 +347,7 @@ def register_global_callbacks(app):
         ]
     )
     def update_global_dashboard(n_clicks, year, month, week, cycle, cum, bdx, buu_cuc):
-        print(f"DEBUG update_global_dashboard: cycle={cycle}, year={year}, month={month}, week={week}, cum={cum}, bdx={bdx}, buu_cuc={buu_cuc}", flush=True)
+        logger.error(f"DEBUG update_global_dashboard: cycle={cycle}, year={year}, month={month}, week={week}, cum={cum}, bdx={bdx}, buu_cuc={buu_cuc}", flush=True)
         if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week):
             # Return empty/fallback values if filter is incomplete
             empty_kpi = ["—", "—", {"color": "#94A3B8"}, "—", {"color": "#94A3B8"}, "—", {"color": "#94A3B8"}]
@@ -453,7 +468,7 @@ def register_global_callbacks(app):
             return kpi_outputs + [top10_prev_layout, top10_yoy_layout, top10_plan_layout, fig]
             
         except Exception as e:
-            print(f"Lỗi update global dashboard: {e}")
+            logger.error(f"Lỗi update global dashboard: {e}")
             import traceback
             traceback.print_exc()
             empty_kpi = ["—", "—", {"color": "#94A3B8"}, "—", {"color": "#94A3B8"}, "—", {"color": "#94A3B8"}]

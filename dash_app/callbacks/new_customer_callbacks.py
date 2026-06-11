@@ -26,6 +26,21 @@ if str(project_root) not in sys.path:
 from config.settings import DB_PATH
 from callbacks.utils import format_revenue
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 def get_4_months_range(year, month):
     """Lấy danh sách 4 cặp (thang, nam) gần nhất bao gồm cả tháng hiện tại"""
     res = []
@@ -175,7 +190,7 @@ def query_and_process_new_customers(year, month, week, cycle, cum_val, bdx_val, 
         return df_table_data, kpi_curr_count, kpi_4m_count, kpi_revenue
         
     except Exception as e:
-        print(f"Lỗi query KH mới: {e}")
+        logger.error(f"Lỗi query KH mới: {e}")
         import traceback
         traceback.print_exc()
         return pd.DataFrame(), 0, 0, 0.0

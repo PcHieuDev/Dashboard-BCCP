@@ -17,6 +17,21 @@ if str(project_root) not in sys.path:
 
 from config.settings import DB_PATH
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 class TTLDictCache:
     def __init__(self, ttl=300):
         self.ttl = ttl
@@ -63,7 +78,7 @@ def _execute_query_scalar(db_path, sql, params=None):
         row = cursor.fetchone()
         return row[0] if row and row[0] is not None else 0.0
     except Exception as e:
-        print(f"Lỗi truy vấn SQL scalar: {e}")
+        logger.error(f"Lỗi truy vấn SQL scalar: {e}")
         return 0.0
     finally:
         conn.close()
@@ -250,7 +265,7 @@ def get_ytd_plan(db_path, nam, thang_den, cum=None):
             if nhom in res:
                 res[nhom] = val
     except Exception as e:
-        print(f"Lỗi lấy kế hoạch lũy kế plans: {e}")
+        logger.error(f"Lỗi lấy kế hoạch lũy kế plans: {e}")
     finally:
         conn.close()
         
@@ -293,7 +308,7 @@ def get_revenue_by_cum(db_path, nam, thang=None):
         df_cums = pd.read_sql_query("SELECT DISTINCT ten_cum FROM dim_buucuc WHERE ten_cum IS NOT NULL ORDER BY ten_cum", conn)
         cums = df_cums["ten_cum"].tolist()
     except Exception as e:
-        print(f"Lỗi load danh mục Cụm: {e}")
+        logger.error(f"Lỗi load danh mục Cụm: {e}")
         cums = []
     finally:
         conn.close()
@@ -387,7 +402,7 @@ def get_revenue_by_cum(db_path, nam, thang=None):
                 cum_data[c]["PPBL"] += val
                 
     except Exception as e:
-        print(f"Lỗi phân rã doanh thu theo cụm: {e}")
+        logger.error(f"Lỗi phân rã doanh thu theo cụm: {e}")
     finally:
         conn.close()
         
