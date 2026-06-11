@@ -308,31 +308,12 @@ def import_excel_file(db_path, excel_path, import_batch=None, thang=None, mode='
         
     conn.close()
     
-    # Auto-refresh summary tables cho tháng vừa import (Yêu cầu từ TIP-db-004)
-    try:
-        thang_int = int(thang[1:]) if thang.startswith('T') else int(thang)
-        _auto_aggregate_after_import(db_path, 'RAW', [(nam_du_lieu, thang_int)])
-    except Exception as ex_ref:
-        logger.error(f"Lỗi tự động refresh: {ex_ref}")
+    # Auto-refresh summary tables cho tháng vừa import
     try:
         thang_int = int(thang[1:]) if thang.startswith('T') else int(thang)
         _auto_aggregate_after_import(db_path, 'BCCP', [(nam, thang_int)])
     except Exception as ex_ref:
-        logger.error(f"Lỗi tự động refresh: {ex_ref}")
-    try:
-        thang_int = int(thang[1:]) if thang.startswith('T') else int(thang)
-        from etl.aggregator import rebuild_monthly, rebuild_monthly_customer
-        # Tạo kết nối mới để rebuild
-        rebuild_conn = _get_db_connection(db_path)
-        try:
-            rebuild_monthly(rebuild_conn, nam, thang_int)
-            rebuild_monthly_customer(rebuild_conn, nam, thang_int)
-            print(f"[Summary] Đã cập nhật agg_monthly cho T{thang_int:02d}/{nam}")
-        finally:
-            rebuild_conn.close()
-    except Exception as e:
-        print(f"[Summary] Lỗi cập nhật summary: {e}")
-        logger.error(f"[Summary] Lỗi cập nhật summary: {e}")
+        logger.error(f"Lỗi tự động refresh sau import Template: {ex_ref}")
         
     return {
         'batch_id': batch_id,
@@ -564,11 +545,13 @@ def import_raw_excel_file(db_path, excel_path, import_batch=None, thang=None, mo
         if len(batch_buffer) >= BATCH_SIZE:
             cursor.executemany(insert_sql, batch_buffer)
             inserted += cursor.rowcount
+            conn.commit()
             batch_buffer = []
             
     if batch_buffer:
         cursor.executemany(insert_sql, batch_buffer)
         inserted += cursor.rowcount
+        conn.commit()
         
     # Kiểm tra thiếu mapping sản phẩm/bưu cục
     missing = check_missing_mappings(conn)
@@ -581,31 +564,12 @@ def import_raw_excel_file(db_path, excel_path, import_batch=None, thang=None, mo
     
     skipped = len(df_grouped) - inserted
     
-    # Auto-refresh summary tables cho tháng vừa import (Yêu cầu từ TIP-db-004)
-    try:
-        thang_int = int(thang[1:]) if thang.startswith('T') else int(thang)
-        _auto_aggregate_after_import(db_path, 'RAW', [(nam_du_lieu, thang_int)])
-    except Exception as ex_ref:
-        logger.error(f"Lỗi tự động refresh: {ex_ref}")
+    # Auto-refresh summary tables cho tháng vừa import
     try:
         thang_int = int(thang[1:]) if thang.startswith('T') else int(thang)
         _auto_aggregate_after_import(db_path, 'BCCP', [(nam_du_lieu, thang_int)])
     except Exception as ex_ref:
-        logger.error(f"Lỗi tự động refresh: {ex_ref}")
-    try:
-        thang_int = int(thang[1:]) if thang.startswith('T') else int(thang)
-        from etl.aggregator import rebuild_monthly, rebuild_monthly_customer
-        # Tạo kết nối mới để rebuild
-        rebuild_conn = _get_db_connection(db_path)
-        try:
-            rebuild_monthly(rebuild_conn, nam_du_lieu, thang_int)
-            rebuild_monthly_customer(rebuild_conn, nam_du_lieu, thang_int)
-            print(f"[Summary] Đã tự động cập nhật agg_monthly cho T{thang_int:02d}/{nam_du_lieu} từ RAW")
-        finally:
-            rebuild_conn.close()
-    except Exception as e:
-        print(f"[Summary] Lỗi cập nhật summary sau khi import RAW: {e}")
-        logger.error(f"[Summary] Lỗi cập nhật summary sau khi import RAW: {e}")
+        logger.error(f"Lỗi tự động refresh sau import RAW: {ex_ref}")
         
     return {
         'batch_id': batch_id,
