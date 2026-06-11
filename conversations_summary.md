@@ -6,7 +6,41 @@
 ---
 
 ## Cuộc trò chuyện `051bef8c-70c1-4b89-b999-26942544cca7`
-- **Thời gian chỉnh sửa cuối:** `11/06/2026 09:20:00`
+- **Thời gian chỉnh sửa cuối:** `11/06/2026 11:20:00`
+
+### 📋 Tóm tắt nội dung thi công — Phase 17: Nạp Kế hoạch 2026 mới, Bổ sung Bưu cục, Import dữ liệu tháng 6, Fix Bug DB Lock & Rebuild summaries sạch sẽ
+
+> ## Nội dung thực hiện
+> 
+> ### 1. Nạp Kế hoạch 2026 mới toàn diện
+> - Xóa sạch toàn bộ kế hoạch cũ trong bảng `plans` và `plans_weekly`.
+> - Nạp kế hoạch năm 2026 mới từ file [import_ke_hoach_TT_TMDT_QT_HCC_2026.xlsx](file:///E:/Projects/Dashboard-BCCP/data/du-lieu-new/import_ke_hoach_TT_TMDT_QT_HCC_2026.xlsx) (20,820 chỉ tiêu kế hoạch tháng phân bổ) và phân bổ lại kế hoạch tuần.
+> 
+> ### 2. Bổ sung danh sách Bưu cục
+> - Nạp bổ sung danh sách bưu cục từ file [bo_sung_buu_cuc.xlsx](file:///E:/Projects/Dashboard-BCCP/data/du-lieu-new/bo_sung_buu_cuc.xlsx) vào bảng `dim_buucuc` (3 bưu cục mới).
+> 
+> ### 3. Import bổ sung dữ liệu BCCP tháng 6
+> - Nạp thành công dữ liệu thô BCCP từ 4 tệp Excel tháng 6 (`06-07.06.xls`, `08.06.xls`, `09.06.xls`, `10.06.xls`) trong thư mục `2026\T06`.
+> 
+> ### 4. Rebuild summaries & Backup dọn dẹp an toàn
+> - Rebuild toàn bộ dữ liệu tổng hợp tháng/tuần/khách hàng mới trên CSDL sau nạp.
+> - Tạo bản sao lưu mới nhất tại: `E:\OneDrive\z.Database-TTKD-Data\backups\dashboard_backup_20260611_111822.db`.
+> - Xóa sạch toàn bộ các bản sao lưu cũ khác trong `backups/` (chỉ giữ bản mới nhất).
+> - Di dời file corrupted cũ khỏi OneDrive về thư mục `scratch` để giảm tải đồng bộ.
+> 
+> ### 5. Khắc phục lỗi SQLite locked trên chế độ không WAL (`delete`)
+> - Sửa lỗi `sqlite3.OperationalError: database is locked` do mở kết nối lồng nhau trong `check_missing_mappings` khi đang import thô.
+> - Giải pháp: Truyền trực tiếp đối tượng kết nối `conn` đang hoạt động vào hàm đối chiếu thay vì tự mở kết nối mới.
+> 
+> ### 6. Nâng cấp đối chiếu file mẫu Excel
+> - Tự động cập nhật danh sách bưu cục/dịch vụ mới nhất vào sheet `Ref_BuuCuc` trong các file mẫu Excel và copy đồng bộ sang thư mục chính `E:\Projects\Dashboard-BCCP\data\mau-file-import`.
+> 
+> ### 💬 Nội dung trao đổi chính của Sếp
+> - *Yêu cầu 1:* Kế hoạch mới ở `import_ke_hoach_TT_TMDT_QT_HCC_2026.xlsx`: xóa toàn bộ kế hoạch cũ, chia lại theo kế hoạch này.
+> - *Yêu cầu 2:* Bổ sung thêm `bo_sung_buu_cuc.xlsx` vào `dim_buucuc`.
+> - *Yêu cầu 3:* Import bổ sung dữ liệu BCCP các file 06-07.06.xls, 08.06.xls, 09.06.xls, 10.06.xls.
+> - *Yêu cầu 4:* Xong ba việc trên rồi chạy lại backup 1 lần nữa, xóa các file backup khác.
+> - *Yêu cầu 5:* Kiểm tra bưu cục và dịch vụ điền sai trong file Excel mẫu bằng công thức Excel đối chiếu tại cột L và M (dịch vụ khác), M và N (BCCP), F và G (kế hoạch) kèm sheet Ref.
 
 ### 📋 Tóm tắt nội dung thi công — Phase 16: Tối ưu hóa Import thô phân rã ngày & Nâng cấp File mẫu Excel thông minh
 

@@ -300,7 +300,7 @@ def import_excel_file(db_path, excel_path, import_batch=None, thang=None, mode='
     wb.close()
     
     # Kiểm tra thiếu mapping sản phẩm/bưu cục
-    missing = check_missing_mappings(db_path)
+    missing = check_missing_mappings(conn)
     if missing['missing_products']:
         warnings.append(f"Mã sản phẩm mới chưa phân nhóm: {', '.join(missing['missing_products'][:3])}")
     if missing['missing_post_offices']:
@@ -571,13 +571,15 @@ def import_raw_excel_file(db_path, excel_path, import_batch=None, thang=None, mo
         inserted += cursor.rowcount
         
     # Kiểm tra thiếu mapping sản phẩm/bưu cục
-    missing = check_missing_mappings(db_path)
+    missing = check_missing_mappings(conn)
     if missing['missing_products']:
         warnings.append(f"Mã sản phẩm mới chưa phân nhóm: {', '.join(missing['missing_products'][:3])}")
     if missing['missing_post_offices']:
         warnings.append(f"Mã bưu cục mới chưa phân cụm: {', '.join(missing['missing_post_offices'][:3])}")
 
     conn.close()
+    
+    skipped = len(df_grouped) - inserted
     
     # Auto-refresh summary tables cho tháng vừa import (Yêu cầu từ TIP-db-004)
     try:
@@ -587,7 +589,7 @@ def import_raw_excel_file(db_path, excel_path, import_batch=None, thang=None, mo
         logger.error(f"Lỗi tự động refresh: {ex_ref}")
     try:
         thang_int = int(thang[1:]) if thang.startswith('T') else int(thang)
-        _auto_aggregate_after_import(db_path, 'BCCP', [(nam, thang_int)])
+        _auto_aggregate_after_import(db_path, 'BCCP', [(nam_du_lieu, thang_int)])
     except Exception as ex_ref:
         logger.error(f"Lỗi tự động refresh: {ex_ref}")
     try:
@@ -615,12 +617,18 @@ def import_raw_excel_file(db_path, excel_path, import_batch=None, thang=None, mo
         'warnings': warnings
     }
 
-def check_missing_mappings(db_path):
+def check_missing_mappings(db_path_or_conn):
     """
     Kiểm tra xem có mã sản phẩm hoặc bưu cục nào trong transactions chưa được định nghĩa trong bảng dim.
     Trả về dict chứa danh sách các mã thiếu.
     """
-    conn = _get_db_connection(db_path)
+    if isinstance(db_path_or_conn, sqlite3.Connection):
+        conn = db_path_or_conn
+        should_close = False
+    else:
+        conn = _get_db_connection(db_path_or_conn)
+        should_close = True
+        
     cursor = conn.cursor()
     
     missing_sp = []
@@ -647,7 +655,8 @@ def check_missing_mappings(db_path):
     except sqlite3.Error as e:
         logger.error(f"Lỗi khi kiểm tra danh mục chưa phân loại: {e}")
     finally:
-        conn.close()
+        if should_close:
+            conn.close()
         
     return {
         'missing_products': missing_sp,

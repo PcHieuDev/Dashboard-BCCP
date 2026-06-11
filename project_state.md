@@ -10,6 +10,13 @@
 - Phục vụ cho hơn 20 người dùng từ các phòng ban nghiệp vụ và deploy lên server nội bộ để truy cập qua mạng LAN hoặc đường hầm Cloudflare (`dashboard.bdna.io.vn`).
 
 ### 2. Các công việc chính đã hoàn thành (Completed Milestones)
+- **Phase 17 (11/06/2026): Nạp Kế hoạch 2026 mới, Bổ sung Bưu cục, Import dữ liệu tháng 6, Fix Bug DB Lock & Rebuild summaries sạch sẽ**:
+  - **Kế hoạch mới:** Xóa toàn bộ kế hoạch cũ (`plans` và `plans_weekly`), nạp kế hoạch mới năm 2026 từ file [import_ke_hoach_TT_TMDT_QT_HCC_2026.xlsx](file:///E:/Projects/Dashboard-BCCP/data/du-lieu-new/import_ke_hoach_TT_TMDT_QT_HCC_2026.xlsx) (20,820 chỉ tiêu kế hoạch tháng phân bổ) và phân bổ lại kế hoạch tuần.
+  - **Bổ sung bưu cục:** Nạp bổ sung danh sách bưu cục từ file [bo_sung_buu_cuc.xlsx](file:///E:/Projects/Dashboard-BCCP/data/du-lieu-new/bo_sung_buu_cuc.xlsx) vào bảng `dim_buucuc` (3 bưu cục mới).
+  - **Import dữ liệu BCCP tháng 6:** Nạp thành công dữ liệu thô BCCP từ 4 tệp Excel tháng 6 (`06-07.06.xls`, `08.06.xls`, `09.06.xls`, `10.06.xls`) trong thư mục `2026\T06`.
+  - **Rebuild CSDL & Backup:** Chạy lại toàn bộ tiến trình rebuild summaries để đồng bộ hóa số liệu tổng hợp tuần/tháng/khách hàng mới trên CSDL mới. Tạo bản sao lưu mới nhất tại `backups/` và dọn dẹp (xóa sạch) toàn bộ các bản sao lưu cũ khác (chỉ giữ bản mới nhất), di dời tệp `dashboard_corrupted.db` ra khỏi OneDrive về thư mục `scratch`.
+  - **Nâng cấp đối chiếu file mẫu:** Chạy script tự động cập nhật danh sách bưu cục/dịch vụ mới nhất vào sheet Ref của các file Excel mẫu và copy toàn bộ các file mẫu đã cập nhật sang thư mục code chính `E:\Projects\Dashboard-BCCP\data\mau-file-import`.
+  - **Sửa lỗi Database Lock:** Sửa triệt để lỗi `sqlite3.OperationalError: database is locked` do mở kết nối lồng nhau trong `check_missing_mappings` khi chạy ở chế độ SQLite không WAL (`delete`).
 - **Phase 16 (11/06/2026): Tối ưu hóa ETL Import thô phân rã ngày, chế độ ghi đè sửa chữa, tối ưu hóa gộp số liệu SQLite UPSERT, sửa tràn bảng Lịch sử import, và nâng cấp file mẫu Excel đối chiếu thông minh**:
   - **Cấu trúc bảng thô dịch vụ phụ (`transactions_hcc/tcbc/ppbl/phbc`):** Đồng nhất 100% cấu trúc, thêm các trường khoảng ngày (`tu_ngay`, `tu_thang`, `tu_nam`...), cột `ten_dich_vu`, `san_luong`, `stt` (Số thứ tự dòng gốc) và hàm tự động kiểm tra nâng cấp di cư CSDL.
   - **Phân rã ngày từ import:** Hàm `import_service_excel` tự động phân rã dòng tuần/tháng thành từng ngày cụ thể; Doanh thu chia đều dạng REAL, Sản lượng phân bổ làm tròn tích lũy dạng INTEGER, giữ nguyên STT dòng.
