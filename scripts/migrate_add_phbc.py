@@ -6,6 +6,21 @@ project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 from config.settings import DB_PATH
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 def migrate():
     conn = sqlite3.connect(str(DB_PATH))
     try:
@@ -25,9 +40,9 @@ def migrate():
             ON transactions_phbc (thang_du_lieu, nam_du_lieu, ma_buu_cuc)
         """)
         conn.commit()
-        print("[DONE] Bảng transactions_phbc đã sẵn sàng.")
+        logger.error("[DONE] Bảng transactions_phbc đã sẵn sàng.")
     except Exception as e:
-        print(f"[ERROR] {e}")
+        logger.error(f"[ERROR] {e}")
         conn.rollback()
     finally:
         conn.close()

@@ -21,6 +21,21 @@ from config.settings import DB_PATH, SERVICE_COLORS
 from callbacks.utils import format_revenue
 from analytics.global_metrics import get_top10_by_comparison
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 def get_prev_period_info(period_type, period_value, year):
     """Tìm kỳ trước và năm tương ứng"""
     import config.week_calendar as calendar_helper
@@ -83,7 +98,7 @@ def get_plans_current_period_sub(db_path, service_key, period_type, period_value
         for r in cursor.fetchall():
             res[r[0]] = r[1] or 0.0
     except Exception as e:
-        print(f"Lỗi lấy kế hoạch con cho {service_key}: {e}")
+        logger.error(f"Lỗi lấy kế hoạch con cho {service_key}: {e}")
     finally:
         conn.close()
     return res
@@ -808,7 +823,7 @@ def register_service_callbacks(app):
                     return all_final_returns
                     
                 except Exception as e:
-                    print(f"Lỗi update service dashboard cho {service_key}: {e}")
+                    logger.error(f"Lỗi update service dashboard cho {service_key}: {e}")
                     import traceback
                     traceback.print_exc()
                     return default_returns

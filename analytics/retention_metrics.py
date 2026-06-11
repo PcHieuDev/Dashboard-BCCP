@@ -8,6 +8,21 @@ import pandas as pd
 import sys
 from pathlib import Path
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 # Đảm bảo in tiếng Việt ra console không bị lỗi trên Windows
 sys.stdout.reconfigure(encoding='utf-8')
 
@@ -72,7 +87,7 @@ def get_khhh_list(db_path: str, nam: int, thang: int, cum: str = None, bdx: str 
         cursor.execute(query_gd, params_gd)
         cms_gd = {row[0].strip() for row in cursor.fetchall() if row[0]}
     except Exception as e:
-        print(f"Lỗi truy vấn GD: {e}")
+        logger.error(f"Lỗi truy vấn GD: {e}")
         cms_gd = set()
         
     # 2. Lấy KH mới tháng này
@@ -96,7 +111,7 @@ def get_khhh_list(db_path: str, nam: int, thang: int, cum: str = None, bdx: str 
         cursor.execute(query_new, params_new)
         cms_new = {row[0].strip() for row in cursor.fetchall() if row[0]}
     except Exception as e:
-        print(f"Lỗi truy vấn KH mới: {e}")
+        logger.error(f"Lỗi truy vấn KH mới: {e}")
         cms_new = set()
         
     conn.close()

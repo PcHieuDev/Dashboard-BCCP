@@ -8,8 +8,23 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.settings import DB_PATH
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 def generate_tokens():
-    print(f"Connecting to DB: {DB_PATH}")
+    logger.info(f"Connecting to DB: {DB_PATH}")
     conn = sqlite3.connect(DB_PATH)
     
     # Tạo bảng
@@ -52,8 +67,8 @@ def generate_tokens():
     df_out['URL Truy Cập'] = 'http://localhost:8501/?token=' + df_out['Token']
     df_out.to_excel(output_path, index=False)
     
-    print(f"✅ Đã tạo thành công {len(tokens)} token phân quyền!")
-    print(f"✅ Đã xuất kết quả ra file: {output_path}")
+    logger.info(f"✅ Đã tạo thành công {len(tokens)} token phân quyền!")
+    logger.info(f"✅ Đã xuất kết quả ra file: {output_path}")
     
     conn.close()
 

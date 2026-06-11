@@ -16,14 +16,29 @@ if str(project_root) not in sys.path:
 
 from config.settings import DB_PATH
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 def verify():
     conn = sqlite3.connect(str(DB_PATH))
     c = conn.cursor()
     
-    print("=== ĐỐI CHIẾU SỐ LIỆU DOANH THU & SẢN LƯỢNG NĂM 2026 ===")
+    logger.error("=== ĐỐI CHIẾU SỐ LIỆU DOANH THU & SẢN LƯỢNG NĂM 2026 ===")
     
     # 1. Đối chiếu tổng hợp tháng (agg_monthly) với bảng thô
-    print("\n--- 1. BẢNG TỔNG HỢP THÁNG (agg_monthly) vs BẢNG THÔ ---")
+    logger.error("\n--- 1. BẢNG TỔNG HỢP THÁNG (agg_monthly) vs BẢNG THÔ ---")
     
     # Doanh thu / sản lượng trong transactions_hcc 2026
     raw_hcc_dt, raw_hcc_sl = c.execute("SELECT SUM(doanh_thu), SUM(san_luong) FROM transactions_hcc WHERE nam_du_lieu = 2026").fetchone()
@@ -47,13 +62,13 @@ def verify():
         agg_hcc_dt = agg_hcc_dt or 0.0
         agg_hcc_sl = agg_hcc_sl or 0
         
-    print(f"HCC Thô:   Doanh thu = {raw_hcc_dt:,.2f}, Sản lượng = {raw_hcc_sl:,}")
-    print(f"HCC Tháng: Doanh thu = {agg_hcc_dt:,.2f}, Sản lượng = {agg_hcc_sl:,}")
-    print(f"-> Chênh lệch Doanh thu = {agg_hcc_dt - raw_hcc_dt:.6f}")
-    print(f"-> Chênh lệch Sản lượng = {agg_hcc_sl - raw_hcc_sl}")
+    logger.error(f"HCC Thô:   Doanh thu = {raw_hcc_dt:,.2f}, Sản lượng = {raw_hcc_sl:,}")
+    logger.error(f"HCC Tháng: Doanh thu = {agg_hcc_dt:,.2f}, Sản lượng = {agg_hcc_sl:,}")
+    logger.error(f"-> Chênh lệch Doanh thu = {agg_hcc_dt - raw_hcc_dt:.6f}")
+    logger.error(f"-> Chênh lệch Sản lượng = {agg_hcc_sl - raw_hcc_sl}")
     
     # 2. Đối chiếu tổng hợp tuần (agg_weekly) với bảng thô
-    print("\n--- 2. BẢNG TỔNG HỢP TUẦN (agg_weekly) vs BẢNG THÔ ---")
+    logger.error("\n--- 2. BẢNG TỔNG HỢP TUẦN (agg_weekly) vs BẢNG THÔ ---")
     
     agg_week_hcc_dt, agg_week_hcc_sl = 0.0, 0
     if hcc_services:
@@ -67,10 +82,10 @@ def verify():
         agg_week_hcc_dt = agg_week_hcc_dt or 0.0
         agg_week_hcc_sl = agg_week_hcc_sl or 0
         
-    print(f"HCC Thô:  Doanh thu = {raw_hcc_dt:,.2f}, Sản lượng = {raw_hcc_sl:,}")
-    print(f"HCC Tuần: Doanh thu = {agg_week_hcc_dt:,.2f}, Sản lượng = {agg_week_hcc_sl:,}")
-    print(f"-> Chênh lệch Doanh thu = {agg_week_hcc_dt - raw_hcc_dt:,.6f}")
-    print(f"-> Chênh lệch Sản lượng = {agg_week_hcc_sl - raw_hcc_sl}")
+    logger.error(f"HCC Thô:  Doanh thu = {raw_hcc_dt:,.2f}, Sản lượng = {raw_hcc_sl:,}")
+    logger.error(f"HCC Tuần: Doanh thu = {agg_week_hcc_dt:,.2f}, Sản lượng = {agg_week_hcc_sl:,}")
+    logger.error(f"-> Chênh lệch Doanh thu = {agg_week_hcc_dt - raw_hcc_dt:,.6f}")
+    logger.error(f"-> Chênh lệch Sản lượng = {agg_week_hcc_sl - raw_hcc_sl}")
     
     conn.close()
 

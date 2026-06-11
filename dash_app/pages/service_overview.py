@@ -9,6 +9,21 @@ import dash_bootstrap_components as dbc
 import sqlite3
 from config.settings import DB_PATH
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 def get_sub_services(service_key):
     """Lấy danh sách các nhóm dịch vụ con của nhóm dịch vụ chính từ danh mục"""
     conn = sqlite3.connect(str(DB_PATH))
@@ -25,7 +40,7 @@ def get_sub_services(service_key):
             lst.sort(key=lambda x: order.get(x, 99))
         return lst
     except Exception as e:
-        print(f"Lỗi truy vấn nhóm con cho {service_key}: {e}")
+        logger.error(f"Lỗi truy vấn nhóm con cho {service_key}: {e}")
         return []
     finally:
         conn.close()

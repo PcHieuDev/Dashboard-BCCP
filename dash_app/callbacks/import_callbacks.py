@@ -26,6 +26,21 @@ from etl.importer import import_any_excel_file
 from callbacks.utils import clear_query_cache
 from db.connection import clear_db_cache
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 def _get_db_connection(db_path):
     conn = sqlite3.connect(str(db_path))
     # Da tat che do vua doc vua ghi (WAL) theo yeu cau cua Sep de tranh loi lock tren OneDrive
@@ -208,7 +223,7 @@ def _create_pending_import_log(db_path, filename, service_type, mode):
         """, (batch_id, filename, 'PENDING', 'PENDING', f"Đang xếp hàng chờ xử lý ({'Import sửa chữa' if mode == 'overwrite' else 'Import thường'})..."))
         conn.commit()
     except Exception as e:
-        print(f"Lỗi tạo pending log: {e}")
+        logger.error(f"Lỗi tạo pending log: {e}")
     finally:
         conn.close()
     return batch_id
@@ -227,7 +242,7 @@ def _update_import_log_status(db_path, batch_id, status, note, inserted=0, skipp
         """, (status, note, inserted, skipped, batch_id))
         conn.commit()
     except Exception as e:
-        print(f"Lỗi cập nhật log: {e}")
+        logger.error(f"Lỗi cập nhật log: {e}")
     finally:
         conn.close()
 
@@ -257,7 +272,7 @@ def _execute_import_task(db_path, tmp_path, service_type, mode, batch_id):
                     num_new_cust = calculate_new_customers(db_path, nam, thang)
                     res['new_customers_count'] = num_new_cust
         except Exception as ex:
-            print(f"Lỗi tính toán KH bán mới trong queue: {ex}")
+            logger.error(f"Lỗi tính toán KH bán mới trong queue: {ex}")
         return res
     elif service_type == "PHBC":
         return import_phbc_excel(db_path, tmp_path, import_batch=batch_id, mode=mode)
@@ -289,7 +304,7 @@ def import_worker():
             from etl.backup import backup_database
             backup_database(str(db_path))
         except Exception as e_backup:
-            print(f"[Backup] Lỗi khi tạo bản sao lưu trước khi import: {e_backup}")
+            logger.error(f"[Backup] Lỗi khi tạo bản sao lưu trước khi import: {e_backup}")
             
         try:
             res = _execute_import_task(db_path, tmp_path, service_type, mode, task_id)

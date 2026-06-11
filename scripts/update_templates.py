@@ -2,8 +2,23 @@
 import openpyxl
 import os
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 def update_dich_vu_khac_template(filepath):
-    print(f"Updating {filepath}...")
+    logger.info(f"Updating {filepath}...")
     wb = openpyxl.load_workbook(filepath)
     
     # 1. Sheet DuLieu
@@ -28,10 +43,10 @@ def update_dich_vu_khac_template(filepath):
     
     wb.save(filepath)
     wb.close()
-    print("Done updating other services template.")
+    logger.info("Done updating other services template.")
 
 def update_ke_hoach_template(filepath):
-    print(f"Updating {filepath}...")
+    logger.info(f"Updating {filepath}...")
     wb = openpyxl.load_workbook(filepath)
     
     # 1. Sheet DuLieu_KeHoach
@@ -122,7 +137,7 @@ def update_ke_hoach_template(filepath):
     
     wb.save(filepath)
     wb.close()
-    print("Done updating plan template.")
+    logger.info("Done updating plan template.")
 
 if __name__ == "__main__":
     dir_path = "data/mau-file-import"

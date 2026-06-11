@@ -9,8 +9,23 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import sqlite3
 from config.settings import DB_PATH
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 def migrate():
-    print(f"Connecting to DB: {DB_PATH}")
+    logger.info(f"Connecting to DB: {DB_PATH}")
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
@@ -18,15 +33,15 @@ def migrate():
     cols = [row[1] for row in cursor.execute("PRAGMA table_info(transactions)").fetchall()]
     
     if 'nam_du_lieu' not in cols:
-        print("Adding column nam_du_lieu...")
+        logger.info("Adding column nam_du_lieu...")
         cursor.execute("ALTER TABLE transactions ADD COLUMN nam_du_lieu INTEGER")
         conn.commit()
-        print("Column added.")
+        logger.info("Column added.")
     else:
-        print("Column nam_du_lieu already exists.")
+        logger.info("Column nam_du_lieu already exists.")
     
     # Backfill: trích năm từ ngay_chap_nhan (format YYYY-MM-DD)
-    print("Backfilling nam_du_lieu from ngay_chap_nhan...")
+    logger.info("Backfilling nam_du_lieu from ngay_chap_nhan...")
     cursor.execute("""
         UPDATE transactions 
         SET nam_du_lieu = CAST(SUBSTR(ngay_chap_nhan, 1, 4) AS INTEGER)
@@ -34,16 +49,16 @@ def migrate():
     """)
     updated = cursor.rowcount
     conn.commit()
-    print(f"Updated {updated} rows.")
+    logger.info(f"Updated {updated} rows.")
     
     # Verify
     rows = cursor.execute("SELECT nam_du_lieu, COUNT(*) FROM transactions GROUP BY nam_du_lieu").fetchall()
-    print("\nVerification:")
+    logger.info("\nVerification:")
     for year, count in rows:
-        print(f"  Year {year}: {count:,} rows")
+        logger.info(f"  Year {year}: {count:,} rows")
     
     conn.close()
-    print("\nMigration complete!")
+    logger.info("\nMigration complete!")
 
 if __name__ == "__main__":
     migrate()

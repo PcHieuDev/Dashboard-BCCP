@@ -17,38 +17,53 @@ if str(project_root) not in sys.path:
 from config.settings import DB_PATH
 from etl.importer import import_service_excel
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 def test():
     db_file = str(DB_PATH)
     excel_file = r"E:\Projects\Dashboard-BCCP\data\mau-file-import\mau_import_dich_vu_khac.xlsx"
     
-    print(f"Database: {db_file}")
-    print(f"Excel file: {excel_file}")
+    logger.error(f"Database: {db_file}")
+    logger.error(f"Excel file: {excel_file}")
     
     conn = sqlite3.connect(db_file)
     c = conn.cursor()
     
     # 1. Đếm số dòng trước khi import
     cnt_before = c.execute("SELECT COUNT(*) FROM transactions_hcc").fetchone()[0]
-    print(f"Số dòng trong transactions_hcc trước khi import: {cnt_before}")
+    logger.error(f"Số dòng trong transactions_hcc trước khi import: {cnt_before}")
     
     # Xóa các dòng có import_batch liên quan đến file mẫu này để tránh trùng lặp nếu test lại
     c.execute("DELETE FROM transactions_hcc WHERE import_batch LIKE '%mau_import_dich_vu_khac%'")
     conn.commit()
     
     cnt_cleaned = c.execute("SELECT COUNT(*) FROM transactions_hcc").fetchone()[0]
-    print(f"Số dòng sau khi làm sạch: {cnt_cleaned}")
+    logger.error(f"Số dòng sau khi làm sạch: {cnt_cleaned}")
     
     # 2. Thực hiện import với tháng T05 (Năm mặc định 2026)
-    print("Bắt đầu chạy import_service_excel...")
+    logger.error("Bắt đầu chạy import_service_excel...")
     res = import_service_excel(db_file, excel_file, "HCC", thang="T05")
-    print(f"Kết quả import: {res}")
+    logger.error(f"Kết quả import: {res}")
     
     # 3. Đếm số dòng sau khi import
     cnt_after = c.execute("SELECT COUNT(*) FROM transactions_hcc").fetchone()[0]
-    print(f"Số dòng trong transactions_hcc sau khi import: {cnt_after}")
+    logger.error(f"Số dòng trong transactions_hcc sau khi import: {cnt_after}")
     
     # 4. Hiển thị 3 dòng mới nhất kèm các cột ngày vừa import
-    print("\nHiển thị 3 dòng dữ liệu vừa được import:")
+    logger.error("\nHiển thị 3 dòng dữ liệu vừa được import:")
     rows = c.execute("""
         SELECT id, thang_du_lieu, nam_du_lieu, ma_buu_cuc, ten_dich_vu, san_luong, doanh_thu,
                tu_ngay, tu_thang, tu_nam, den_ngay, den_thang, den_nam
@@ -57,7 +72,7 @@ def test():
     """).fetchall()
     
     for r in rows:
-        print(r)
+        logger.error(r)
         
     conn.close()
 

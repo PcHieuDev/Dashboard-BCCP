@@ -17,6 +17,21 @@ if str(project_root) not in sys.path:
 
 from config.settings import DB_PATH
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 class User(UserMixin):
     """Class User định nghĩa thông tin người dùng được quản lý bởi Flask-Login."""
     def __init__(self, user_id, username, role, assigned_cum=None):
@@ -52,7 +67,7 @@ def get_user_by_id(user_id):
         if row:
             return User(user_id=row[0], username=row[1], role=row[2], assigned_cum=row[3])
     except Exception as e:
-        print(f"Lỗi khi tải user theo ID {user_id}: {e}")
+        logger.error(f"Lỗi khi tải user theo ID {user_id}: {e}")
     finally:
         conn.close()
     return None
@@ -70,7 +85,7 @@ def get_user_by_username(username):
         if row:
             return User(user_id=row[0], username=row[1], role=row[2], assigned_cum=row[3])
     except Exception as e:
-        print(f"Lỗi khi tải user theo username {username}: {e}")
+        logger.error(f"Lỗi khi tải user theo username {username}: {e}")
     finally:
         conn.close()
     return None
@@ -93,7 +108,7 @@ def check_user_credentials(username, password):
             if check_password_hash(pwd_hash, password):
                 return User(user_id=user_id, username=uname, role=role, assigned_cum=assigned_cum)
     except Exception as e:
-        print(f"Lỗi khi xác thực đăng nhập user {username}: {e}")
+        logger.error(f"Lỗi khi xác thực đăng nhập user {username}: {e}")
     finally:
         conn.close()
     return None

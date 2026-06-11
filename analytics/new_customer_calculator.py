@@ -19,6 +19,21 @@ if str(project_root) not in sys.path:
 
 from config.settings import DB_PATH
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 def init_db(conn: sqlite3.Connection):
     """
     Khởi tạo bảng new_customers nếu chưa tồn tại.
@@ -45,9 +60,9 @@ def init_db(conn: sqlite3.Connection):
         columns = [row[1] for row in cursor.fetchall()]
         if 'ngay_phat_sinh' not in columns:
             cursor.execute("ALTER TABLE new_customers ADD COLUMN ngay_phat_sinh DATE;")
-            print("[NewCustomer] Đã ALTER TABLE new_customers thêm cột ngay_phat_sinh.")
+            logger.error("[NewCustomer] Đã ALTER TABLE new_customers thêm cột ngay_phat_sinh.")
     except Exception as e:
-        print(f"[NewCustomer] Lỗi kiểm tra/ALTER ngay_phat_sinh: {e}")
+        logger.error(f"[NewCustomer] Lỗi kiểm tra/ALTER ngay_phat_sinh: {e}")
     conn.commit()
 
 def calculate_new_customers(db_path: str, nam: int, thang: int) -> int:
@@ -97,7 +112,7 @@ def calculate_new_customers(db_path: str, nam: int, thang: int) -> int:
         cursor.execute("DELETE FROM new_customers WHERE nam = ? AND thang = ?;", (nam, thang))
         conn.commit()
         conn.close()
-        print(f"[{thang_str}/{nam}] Không có giao dịch phát sinh.")
+        logger.error(f"[{thang_str}/{nam}] Không có giao dịch phát sinh.")
         return 0
         
     # 3. Lấy CMS trong 3 tháng lookback có doanh thu dương (ĐK MỚI)
@@ -123,7 +138,7 @@ def calculate_new_customers(db_path: str, nam: int, thang: int) -> int:
         cursor.execute("DELETE FROM new_customers WHERE nam = ? AND thang = ?;", (nam, thang))
         conn.commit()
         conn.close()
-        print(f"[{thang_str}/{nam}] Không tìm thấy khách hàng bán mới nào.")
+        logger.error(f"[{thang_str}/{nam}] Không tìm thấy khách hàng bán mới nào.")
         return 0
         
     # 5. Load dim_buucuc vào bộ nhớ để lookup nhanh
@@ -233,14 +248,14 @@ def calculate_new_customers(db_path: str, nam: int, thang: int) -> int:
     conn.commit()
     conn.close()
     
-    print(f"[{thang_str}/{nam}] Hoàn thành. Đã tìm thấy và lưu trữ {len(insert_data)} KH bán mới.")
+    logger.error(f"[{thang_str}/{nam}] Hoàn thành. Đã tìm thấy và lưu trữ {len(insert_data)} KH bán mới.")
     return len(insert_data)
 
 def populate_historical_new_customers(db_path: str):
     """
     Tính toán dữ liệu lịch sử khách hàng mới từ T10/2025 đến T06/2026.
     """
-    print("--- BẮT ĐẦU TÍNH TOÁN DỮ LIỆU LỊCH SỬ KHÁCH HÀNG MỚI (T10/2025 - T06/2026) ---")
+    logger.error("--- BẮT ĐẦU TÍNH TOÁN DỮ LIỆU LỊCH SỬ KHÁCH HÀNG MỚI (T10/2025 - T06/2026) ---")
     
     # Danh sách các tháng lịch sử cần tính theo thứ tự thời gian
     months = [
@@ -257,18 +272,18 @@ def populate_historical_new_customers(db_path: str):
     
     total_added = 0
     for y, m in months:
-        print(f"Đang tính cho tháng T{m:02d}/{y}...")
+        logger.error(f"Đang tính cho tháng T{m:02d}/{y}...")
         try:
             count = calculate_new_customers(db_path, y, m)
             total_added += count
         except Exception as e:
-            print(f"Lỗi khi tính toán cho tháng T{m:02d}/{y}: {str(e)}")
+            logger.error(f"Lỗi khi tính toán cho tháng T{m:02d}/{y}: {str(e)}")
             
-    print(f"--- HOÀN THÀNH. Tổng số dòng khách hàng mới đã thêm: {total_added} ---")
+    logger.error(f"--- HOÀN THÀNH. Tổng số dòng khách hàng mới đã thêm: {total_added} ---")
 
 if __name__ == "__main__":
     db_file = str(DB_PATH)
-    print(f"Đường dẫn DB: {db_file}")
+    logger.error(f"Đường dẫn DB: {db_file}")
     
     # 1. Chạy tính toán lịch sử
     populate_historical_new_customers(db_file)

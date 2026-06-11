@@ -146,7 +146,7 @@ def load_filter_options():
             options["buu_cuc"] = [{"label": f"{r.iloc[0]} - {r.iloc[1]}", "value": r.iloc[0]} for _, r in df_bc.iterrows()]
         
     except Exception as e:
-        print(f"Lỗi khi tải danh mục bộ lọc từ DB: {e}")
+        logger.error(f"Lỗi khi tải danh mục bộ lọc từ DB: {e}")
     finally:
         conn.close()
     return options
@@ -343,7 +343,7 @@ def handle_login(n_clicks, username, password):
     
     if user:
         login_user(user)
-        print(f"Đăng nhập thành công: User {username}")
+        logger.error(f"Đăng nhập thành công: User {username}")
         return "", "/"
     else:
         return "Tên đăng nhập hoặc mật khẩu không đúng!", dash.no_update
@@ -356,7 +356,7 @@ def handle_login(n_clicks, username, password):
 def handle_logout(n_clicks):
     if n_clicks:
         logout_user()
-        print("Đã đăng xuất tài khoản.")
+        logger.error("Đã đăng xuất tài khoản.")
         return "/"
     return dash.no_update
 
@@ -382,16 +382,31 @@ import threading
 import time
 from etl.backup import run_backup_by_schedule
 
+import logging
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys
+    from pathlib import Path
+    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
+
+
 def start_auto_backup_thread():
     def backup_worker():
-        print("[Auto-Backup] Khởi động background thread tự động backup CSDL...")
+        logger.error("[Auto-Backup] Khởi động background thread tự động backup CSDL...")
         # Đợi 10 giây đầu để ứng dụng khởi chạy hoàn tất
         time.sleep(10)
         while True:
             try:
                 run_backup_by_schedule(str(DB_PATH))
             except Exception as e:
-                print(f"[Auto-Backup] Lỗi trong background thread backup: {e}")
+                logger.error(f"[Auto-Backup] Lỗi trong background thread backup: {e}")
             # Ngủ 1 tiếng (3600 giây) rồi kiểm tra lại
             time.sleep(3600)
             
