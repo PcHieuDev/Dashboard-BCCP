@@ -45,10 +45,10 @@ def init_db(conn: sqlite3.Connection):
             cms TEXT NOT NULL,
             thang INTEGER NOT NULL,
             nam INTEGER NOT NULL,
-            buu_cuc TEXT,
+            ma_buu_cuc TEXT,
             ma_bdx TEXT,
             ten_cum TEXT,
-            nhom_dv TEXT,
+            nhom_dich_vu TEXT,
             tong_doanh_thu REAL DEFAULT 0,
             ngay_tao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(cms, thang, nam)
@@ -142,7 +142,7 @@ def calculate_new_customers(db_path: str, nam: int, thang: int) -> int:
         return 0
         
     # 5. Load dim_buucuc vào bộ nhớ để lookup nhanh
-    cursor.execute("SELECT ma_bc, ma_bdx, ten_cum FROM dim_buucuc;")
+    cursor.execute("SELECT ma_buu_cuc, ma_bdx, ten_cum FROM dim_buucuc;")
     dim_buucuc_dict = {row[0]: (row[1], row[2]) for row in cursor.fetchall() if row[0]}
     
     new_cms_list = list(new_cms)
@@ -176,7 +176,7 @@ def calculate_new_customers(db_path: str, nam: int, thang: int) -> int:
                 SELECT t.cms, d.nhom_dich_vu,
                        ROW_NUMBER() OVER (PARTITION BY t.cms ORDER BY t.ngay_chap_nhan ASC, t.id ASC) as rn
                 FROM transactions t
-                JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
+                JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
                 WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ? AND t.cms IN ({placeholders})
             )
             SELECT cms, nhom_dich_vu FROM cms_first_tx WHERE rn = 1

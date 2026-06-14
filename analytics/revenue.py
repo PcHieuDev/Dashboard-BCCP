@@ -60,8 +60,8 @@ def query_revenue(
         SELECT 
             t.cms,
             t.ma_hop_dong,
-            t.buu_cuc,
-            t.san_pham_dv,
+            t.ma_buu_cuc,
+            t.ten_dich_vu,
             t.ngay_chap_nhan,
             t.thang_du_lieu,
             t.san_luong,
@@ -75,8 +75,8 @@ def query_revenue(
             b.ten_bdx,
             b.ten_cum
         FROM transactions t
-        LEFT JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
-        LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+        LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
+        LEFT JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc
         WHERE (d.nhom_chinh = 'BCCP' OR d.nhom_chinh IS NULL)
         """
     ]
@@ -106,7 +106,7 @@ def query_revenue(
     # Lọc theo dịch vụ chi tiết (mã SPDV)
     if dich_vu:
         placeholders = ",".join(["?"] * len(dich_vu))
-        query_parts.append(f"AND t.san_pham_dv IN ({placeholders})")
+        query_parts.append(f"AND t.ten_dich_vu IN ({placeholders})")
         params.extend(dich_vu)
         
     # Lọc theo Cụm
@@ -180,11 +180,11 @@ def query_revenue(
     # Map giá trị hiển thị cho cột group_by
     group_col_mapping = {
         'ngay': 'ngay_chap_nhan',
-        'buu_cuc': 'buu_cuc',
+        'buu_cuc': 'ma_buu_cuc',
         'bdx': 'ten_bdx',
         'cum': 'ten_cum',
         'nhom_dv': 'nhom_dich_vu',
-        'dich_vu': 'san_pham_dv',
+        'dich_vu': 'ten_dich_vu',
         'loai_kh': 'loai_kh',
         'hop_dong': 'hop_dong',
         'cms': 'cms'
@@ -489,8 +489,8 @@ def query_customer_detail_pivot(
         SELECT 
             t.cms,
             t.ma_hop_dong,
-            t.buu_cuc,
-            t.san_pham_dv,
+            t.ma_buu_cuc,
+            t.ten_dich_vu,
             t.ngay_chap_nhan,
             t.thang_du_lieu,
             t.san_luong,
@@ -502,8 +502,8 @@ def query_customer_detail_pivot(
             b.ten_bdx,
             b.ten_cum
         FROM transactions t
-        LEFT JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
-        LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+        LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
+        LEFT JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc
         WHERE (d.nhom_chinh = 'BCCP' OR d.nhom_chinh IS NULL)
         """
     ]
@@ -531,7 +531,7 @@ def query_customer_detail_pivot(
     # Lọc theo dịch vụ chi tiết (mã SPDV)
     if dich_vu:
         placeholders = ",".join(["?"] * len(dich_vu))
-        query_parts.append(f"AND t.san_pham_dv IN ({placeholders})")
+        query_parts.append(f"AND t.ten_dich_vu IN ({placeholders})")
         params.extend(dich_vu)
         
     # Lọc theo Cụm

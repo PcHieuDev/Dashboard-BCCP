@@ -40,12 +40,12 @@ def create_summary_tables(conn):
     CREATE TABLE IF NOT EXISTS agg_monthly (
         nam           INTEGER NOT NULL,
         thang         INTEGER NOT NULL,
-        buu_cuc       TEXT    NOT NULL,
+        ma_buu_cuc    TEXT    NOT NULL,
         nhom_dich_vu  TEXT,
         tong_doanh_thu    REAL DEFAULT 0,
         tong_san_luong    INTEGER DEFAULT 0,
         so_kh_phat_sinh   INTEGER DEFAULT 0,
-        PRIMARY KEY (nam, thang, buu_cuc, nhom_dich_vu)
+        PRIMARY KEY (nam, thang, ma_buu_cuc, nhom_dich_vu)
     );
     """)
     
@@ -53,14 +53,14 @@ def create_summary_tables(conn):
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS agg_monthly_customer (
         cms           TEXT    NOT NULL,
-        buu_cuc       TEXT    NOT NULL,
+        ma_buu_cuc    TEXT    NOT NULL,
         nam           INTEGER NOT NULL,
         thang         INTEGER NOT NULL,
         nhom_dich_vu  TEXT,
         tong_doanh_thu    REAL DEFAULT 0,
         tong_san_luong    INTEGER DEFAULT 0,
         so_giao_dich      INTEGER DEFAULT 0,
-        PRIMARY KEY (cms, buu_cuc, nam, thang, nhom_dich_vu)
+        PRIMARY KEY (cms, ma_buu_cuc, nam, thang, nhom_dich_vu)
     );
     """)
     
@@ -96,28 +96,28 @@ def rebuild_monthly(conn, nam: int, thang: int):
     # Tính toán và Insert dữ liệu mới
     # Gộp bằng UNION ALL trước khi GROUP BY để có đầy đủ các nhóm dịch vụ con
     query = """
-    INSERT INTO agg_monthly (nam, thang, buu_cuc, nhom_dich_vu, tong_doanh_thu, tong_san_luong, so_kh_phat_sinh)
-    SELECT nam, thang, buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu), SUM(tong_san_luong), SUM(so_kh_phat_sinh)
+    INSERT INTO agg_monthly (nam, thang, ma_buu_cuc, nhom_dich_vu, tong_doanh_thu, tong_san_luong, so_kh_phat_sinh)
+    SELECT nam, thang, ma_buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu), SUM(tong_san_luong), SUM(so_kh_phat_sinh)
     FROM (
         SELECT 
             t.nam_du_lieu as nam,
             ? as thang,
-            t.buu_cuc,
+            t.ma_buu_cuc,
             COALESCE(d.nhom_dich_vu, 'Khác') as nhom_dich_vu,
             SUM(t.cuoc_tt_tong) as tong_doanh_thu,
             SUM(t.san_luong) as tong_san_luong,
             COUNT(DISTINCT CASE WHEN t.cms IS NOT NULL AND t.cms != '' AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none' THEN t.cms END) as so_kh_phat_sinh
         FROM transactions t
-        LEFT JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
+        LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
         WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ?
-        GROUP BY t.buu_cuc, COALESCE(d.nhom_dich_vu, 'Khác')
+        GROUP BY t.ma_buu_cuc, COALESCE(d.nhom_dich_vu, 'Khác')
         
         UNION ALL
         
         SELECT 
             t.tu_nam as nam,
             ? as thang,
-            t.ma_buu_cuc as buu_cuc,
+            t.ma_buu_cuc,
             COALESCE(d.nhom_dich_vu, t.ten_dich_vu) as nhom_dich_vu,
             SUM(t.doanh_thu) as tong_doanh_thu,
             SUM(t.san_luong) as tong_san_luong,
@@ -132,7 +132,7 @@ def rebuild_monthly(conn, nam: int, thang: int):
         SELECT 
             t.tu_nam as nam,
             ? as thang,
-            t.ma_buu_cuc as buu_cuc,
+            t.ma_buu_cuc,
             COALESCE(d.nhom_dich_vu, t.ten_dich_vu) as nhom_dich_vu,
             SUM(t.doanh_thu) as tong_doanh_thu,
             SUM(t.san_luong) as tong_san_luong,
@@ -147,7 +147,7 @@ def rebuild_monthly(conn, nam: int, thang: int):
         SELECT 
             t.tu_nam as nam,
             ? as thang,
-            t.ma_buu_cuc as buu_cuc,
+            t.ma_buu_cuc,
             COALESCE(d.nhom_dich_vu, t.ten_dich_vu) as nhom_dich_vu,
             SUM(t.doanh_thu) as tong_doanh_thu,
             SUM(t.san_luong) as tong_san_luong,
@@ -162,7 +162,7 @@ def rebuild_monthly(conn, nam: int, thang: int):
         SELECT 
             t.tu_nam as nam,
             ? as thang,
-            t.ma_buu_cuc as buu_cuc,
+            t.ma_buu_cuc,
             COALESCE(d.nhom_dich_vu, t.ten_dich_vu) as nhom_dich_vu,
             SUM(t.doanh_thu) as tong_doanh_thu,
             SUM(t.san_luong) as tong_san_luong,
@@ -172,7 +172,7 @@ def rebuild_monthly(conn, nam: int, thang: int):
         WHERE t.tu_nam = ? AND t.tu_thang = ?
         GROUP BY t.ma_buu_cuc, COALESCE(d.nhom_dich_vu, t.ten_dich_vu)
     )
-    GROUP BY nam, thang, buu_cuc, nhom_dich_vu
+    GROUP BY nam, thang, ma_buu_cuc, nhom_dich_vu
     """
     
     params = (
@@ -202,10 +202,10 @@ def rebuild_monthly_customer(conn, nam: int, thang: int):
     # Tính toán và Insert dữ liệu mới
     # Chỉ tính các cms hợp lệ
     query = """
-    INSERT INTO agg_monthly_customer (cms, buu_cuc, nam, thang, nhom_dich_vu, tong_doanh_thu, tong_san_luong, so_giao_dich)
+    INSERT INTO agg_monthly_customer (cms, ma_buu_cuc, nam, thang, nhom_dich_vu, tong_doanh_thu, tong_san_luong, so_giao_dich)
     SELECT 
         t.cms,
-        t.buu_cuc,
+        t.ma_buu_cuc,
         t.nam_du_lieu as nam,
         ? as thang,
         COALESCE(d.nhom_dich_vu, 'Khác') as nhom_dich_vu,
@@ -213,11 +213,11 @@ def rebuild_monthly_customer(conn, nam: int, thang: int):
         SUM(t.san_luong) as tong_san_luong,
         COUNT(*) as so_giao_dich
     FROM transactions t
-    LEFT JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
+    LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
     WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ?
       AND t.cms IS NOT NULL AND t.cms != '' 
       AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none'
-    GROUP BY t.cms, t.buu_cuc, t.nam_du_lieu, COALESCE(d.nhom_dich_vu, 'Khác')
+    GROUP BY t.cms, t.ma_buu_cuc, t.nam_du_lieu, COALESCE(d.nhom_dich_vu, 'Khác')
     """
     cursor.execute(query, (thang, nam, thang_str))
     conn.commit()
@@ -270,7 +270,7 @@ def rebuild_weekly(conn, nam: int):
         # Query tổng hợp doanh thu của tuần này từ transactions (dùng nhom_dich_vu con)
         query = """
         INSERT INTO agg_weekly (
-            tuan_bat_dau, tuan_ket_thuc, tuan_so, nam, buu_cuc, nhom_dich_vu, 
+            tuan_bat_dau, tuan_ket_thuc, tuan_so, nam, ma_buu_cuc, nhom_dich_vu, 
             tong_doanh_thu, tong_san_luong, so_kh_phat_sinh, so_kh_moi, so_kh_tai_ban
         )
         SELECT 
@@ -278,7 +278,7 @@ def rebuild_weekly(conn, nam: int):
             ? as tuan_ket_thuc,
             ? as tuan_so,
             ? as nam,
-            t.buu_cuc,
+            t.ma_buu_cuc,
             COALESCE(d.nhom_dich_vu, 'Khác') as nhom_dich_vu,
             SUM(t.cuoc_tt_tong) as tong_doanh_thu,
             SUM(t.san_luong) as tong_san_luong,
@@ -286,9 +286,9 @@ def rebuild_weekly(conn, nam: int):
             0 as so_kh_moi,
             0 as so_kh_tai_ban
         FROM transactions t
-        LEFT JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
+        LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
         WHERE t.ngay_chap_nhan BETWEEN ? AND ?
-        GROUP BY t.buu_cuc, COALESCE(d.nhom_dich_vu, 'Khác')
+        GROUP BY t.ma_buu_cuc, COALESCE(d.nhom_dich_vu, 'Khác')
         """
         cursor.execute(query, (start_str, end_str, w_num, nam, start_str, end_str))
         total_inserted += cursor.rowcount
@@ -304,7 +304,7 @@ def rebuild_weekly(conn, nam: int):
         
         query_sub = """
         INSERT INTO agg_weekly (
-            tuan_bat_dau, tuan_ket_thuc, tuan_so, nam, buu_cuc, nhom_dich_vu, 
+            tuan_bat_dau, tuan_ket_thuc, tuan_so, nam, ma_buu_cuc, nhom_dich_vu, 
             tong_doanh_thu, tong_san_luong, so_kh_phat_sinh, so_kh_moi, so_kh_tai_ban
         )
         SELECT 
@@ -312,7 +312,7 @@ def rebuild_weekly(conn, nam: int):
             ? as tuan_ket_thuc,
             ? as tuan_so,
             ? as nam,
-            t.ma_buu_cuc as buu_cuc,
+            t.ma_buu_cuc,
             COALESCE(d.nhom_dich_vu, t.ten_dich_vu) as nhom_dich_vu,
             SUM(t.doanh_thu) as tong_doanh_thu,
             SUM(t.san_luong) as tong_san_luong,
@@ -331,7 +331,7 @@ def rebuild_weekly(conn, nam: int):
         LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu OR t.ten_dich_vu = d.ten_dich_vu
         WHERE t.tu_nam = ? AND printf('%04d-%02d-%02d', t.tu_nam, t.tu_thang, t.tu_ngay) BETWEEN ? AND ?
         GROUP BY t.ma_buu_cuc, COALESCE(d.nhom_dich_vu, t.ten_dich_vu)
-        ON CONFLICT(tuan_bat_dau, buu_cuc, nhom_dich_vu) DO UPDATE SET
+        ON CONFLICT(tuan_bat_dau, ma_buu_cuc, nhom_dich_vu) DO UPDATE SET
             tong_doanh_thu = tong_doanh_thu + excluded.tong_doanh_thu,
             tong_san_luong = tong_san_luong + excluded.tong_san_luong
         """

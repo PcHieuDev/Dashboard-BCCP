@@ -137,7 +137,7 @@ def sync_buucuc(conn):
             try:
                 df_temp = pd.read_csv(MAPPING_GEOGRAPHY_PATH, sep=sep, encoding=enc, dtype=str)
                 df_temp.columns = [c.strip().lower() for c in df_temp.columns]
-                if "ma_bc" in df_temp.columns:
+                if "ma_buu_cuc" in df_temp.columns:
                     df = df_temp
                     break
             except Exception:
@@ -150,7 +150,7 @@ def sync_buucuc(conn):
         return 0
         
     # Kiểm tra cột bắt buộc
-    required_cols = ['ma_bc', 'ten_buu_cuc', 'ma_bdx', 'ten_bdx', 'ten_cum']
+    required_cols = ['ma_buu_cuc', 'ten_buu_cuc', 'ma_bdx', 'ten_bdx', 'ten_cum']
     for col in required_cols:
         if col not in df.columns:
             logger.error(f"❌ Lỗi: Cột '{col}' không tồn tại trong file CSV mapping bưu cục.")
@@ -160,15 +160,15 @@ def sync_buucuc(conn):
     cursor = conn.cursor()
     rows_synced = 0
     for _, row in df.iterrows():
-        ma_bc = str(row.get('ma_bc', '')).strip()
-        if not ma_bc or pd.isna(row.get('ma_bc')):
+        ma_buu_cuc = str(row.get('ma_buu_cuc', '')).strip()
+        if not ma_buu_cuc or pd.isna(row.get('ma_buu_cuc')):
             continue
             
         cursor.execute(
-            """INSERT OR REPLACE INTO dim_buucuc (ma_bc, ten_buu_cuc, ma_bdx, ten_bdx, ten_cum)
+            """INSERT OR REPLACE INTO dim_buucuc (ma_buu_cuc, ten_buu_cuc, ma_bdx, ten_bdx, ten_cum)
                VALUES (?, ?, ?, ?, ?)""",
             (
-                ma_bc,
+                ma_buu_cuc,
                 str(row.get('ten_buu_cuc', '')).strip(),
                 str(row.get('ma_bdx', '')).strip(),
                 str(row.get('ten_bdx', '')).strip(),

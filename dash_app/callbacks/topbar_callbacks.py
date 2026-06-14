@@ -172,19 +172,19 @@ def register_topbar_callbacks(app):
                     bdx_value = "Tất cả"
                 
                 # Lấy tất cả Bưu cục thuộc Cụm (loại bỏ mã đại diện cụm và đại diện xã)
-                query_bc = "SELECT ma_bc, ten_buu_cuc FROM dim_buucuc WHERE ma_bc IS NOT NULL AND ma_bc != ma_bdx AND ma_bc NOT LIKE 'CUM_%'"
+                query_bc = "SELECT ma_buu_cuc, ten_buu_cuc FROM dim_buucuc WHERE ma_buu_cuc IS NOT NULL AND ma_buu_cuc != ma_bdx AND ma_buu_cuc NOT LIKE 'CUM_%'"
                 params_bc = []
                 if cum_val and cum_val != "Tất cả":
                     query_bc += " AND ten_cum = ?"
                     params_bc.append(cum_val)
-                query_bc += " ORDER BY ma_bc"
+                query_bc += " ORDER BY ma_buu_cuc"
                 df_bc = pd.read_sql_query(query_bc, conn, params=params_bc)
-                bc_opts = [{"label": "Tất cả Bưu cục", "value": "Tất cả"}] + [{"label": f"{r['ma_bc']} - {r['ten_buu_cuc']}", "value": r['ma_bc']} for _, r in df_bc.iterrows()]
+                bc_opts = [{"label": "Tất cả Bưu cục", "value": "Tất cả"}] + [{"label": f"{r['ma_buu_cuc']} - {r['ten_buu_cuc']}", "value": r['ma_buu_cuc']} for _, r in df_bc.iterrows()]
                 bc_value = "Tất cả"
                 
             # TH2: Đổi Xã/Phường -> chỉ cascade xuống Bưu cục
             elif triggered_id == "sidebar-bdx":
-                query_bc = "SELECT ma_bc, ten_buu_cuc FROM dim_buucuc WHERE ma_bc IS NOT NULL AND ma_bc != ma_bdx AND ma_bc NOT LIKE 'CUM_%'"
+                query_bc = "SELECT ma_buu_cuc, ten_buu_cuc FROM dim_buucuc WHERE ma_buu_cuc IS NOT NULL AND ma_buu_cuc != ma_bdx AND ma_buu_cuc NOT LIKE 'CUM_%'"
                 params_bc = []
                 if cum_val and cum_val != "Tất cả":
                     query_bc += " AND ten_cum = ?"
@@ -192,9 +192,9 @@ def register_topbar_callbacks(app):
                 if bdx_val and bdx_val != "Tất cả":
                     query_bc += " AND ten_bdx = ?"
                     params_bc.append(bdx_val)
-                query_bc += " ORDER BY ma_bc"
+                query_bc += " ORDER BY ma_buu_cuc"
                 df_bc = pd.read_sql_query(query_bc, conn, params=params_bc)
-                bc_opts = [{"label": "Tất cả Bưu cục", "value": "Tất cả"}] + [{"label": f"{r['ma_bc']} - {r['ten_buu_cuc']}", "value": r['ma_bc']} for _, r in df_bc.iterrows()]
+                bc_opts = [{"label": "Tất cả Bưu cục", "value": "Tất cả"}] + [{"label": f"{r['ma_buu_cuc']} - {r['ten_buu_cuc']}", "value": r['ma_buu_cuc']} for _, r in df_bc.iterrows()]
                 bc_value = "Tất cả"
                 
         except Exception as e:

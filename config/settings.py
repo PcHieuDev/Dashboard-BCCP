@@ -37,8 +37,8 @@ COLUMN_NAMES = [
     'stt',              # A - STT
     'cms',              # B - Mã khách hàng
     'ma_hop_dong',      # C - Mã hợp đồng
-    'buu_cuc',          # D - Bưu cục (mã 6 chữ số)
-    'san_pham_dv',      # E - Sản phẩm dịch vụ
+    'ma_buu_cuc',       # D - Mã bưu cục (6 chữ số)
+    'ten_dich_vu',      # E - Tên/mã sản phẩm dịch vụ
     'ngay_chap_nhan',   # F - Ngày chấp nhận (dd/mm/yyyy)
     'san_luong',        # G - Sản lượng
     'khoi_luong_thuc',  # H - Khối lượng thực

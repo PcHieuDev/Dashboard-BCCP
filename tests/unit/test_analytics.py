@@ -20,5 +20,5 @@ def test_mock_db_connection(mock_db):
     """
     df = pd.read_sql_query("SELECT * FROM dim_buucuc", mock_db)
     assert not df.empty
-    assert df.iloc[0]['ma_bc'] == '123456'
+    assert df.iloc[0]['ma_buu_cuc'] == '123456'
     assert df.iloc[0]['ten_cum'] == 'Cụm Test'

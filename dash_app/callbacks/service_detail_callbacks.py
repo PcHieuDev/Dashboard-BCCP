@@ -94,7 +94,7 @@ def register_service_detail_callbacks(app):
             geo_clause += " AND b.ten_bdx = ? "
             geo_params.append(bdx_val)
         if buu_cuc_val and buu_cuc_val != "Tất cả":
-            geo_clause += " AND t.buu_cuc = ? "
+            geo_clause += " AND t.ma_buu_cuc = ? "
             geo_params.append(buu_cuc_val)
             
         # Điều kiện thời gian
@@ -151,8 +151,8 @@ def register_service_detail_callbacks(app):
             sql_curr = f"""
                 SELECT d.ma_dich_vu, d.ten_dich_vu, d.nhom_dich_vu, SUM(t.cuoc_tt_tong) as dt_curr, SUM(t.san_luong) as sl_curr
                 FROM transactions t
-                INNER JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
-                LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+                INNER JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
+                LEFT JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc
                 WHERE d.nhom_chinh = 'BCCP' {geo_clause} AND {curr_time_clause}
                 GROUP BY d.ma_dich_vu, d.ten_dich_vu, d.nhom_dich_vu
             """
@@ -162,8 +162,8 @@ def register_service_detail_callbacks(app):
             sql_prev = f"""
                 SELECT d.ma_dich_vu, SUM(t.cuoc_tt_tong) as dt_prev, SUM(t.san_luong) as sl_prev
                 FROM transactions t
-                INNER JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
-                LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+                INNER JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
+                LEFT JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc
                 WHERE d.nhom_chinh = 'BCCP' {geo_clause} AND {prev_time_clause}
                 GROUP BY d.ma_dich_vu
             """
@@ -329,7 +329,7 @@ def register_service_detail_callbacks(app):
             geo_clause += " AND b.ten_bdx = ? "
             geo_params.append(bdx_val)
         if buu_cuc_val and buu_cuc_val != "Tất cả":
-            geo_clause += " AND t.buu_cuc = ? "
+            geo_clause += " AND t.ma_buu_cuc = ? "
             geo_params.append(buu_cuc_val)
             
         curr_time_clause = ""
