@@ -179,21 +179,33 @@ def create_detail_table_sub(df, sub_services, compare_type, title_label="⭐️ 
     df_sorted = df.sort_values(by=['ten_cum', 'ten_bdx'], ascending=True)
     df_final = pd.concat([prov_row, df_sorted], ignore_index=True)
     
+    # Xác định cột và tên hiển thị doanh thu kỳ so sánh
+    if compare_type == 'prev':
+        cmp_col = 'dt_prev'
+        cmp_col_name = "DT Kỳ trước"
+    elif compare_type == 'yoy':
+        cmp_col = 'dt_yoy'
+        cmp_col_name = "DT Cùng kỳ"
+    else:  # plan
+        cmp_col = 'plan_dt'
+        cmp_col_name = "Kế hoạch"
+
     # Định dạng tiền
     df_display = df_final.copy()
-    for col in sub_services + ["tong_dt"]:
+    for col in sub_services + ["tong_dt", cmp_col]:
         if col in df_display.columns:
-            df_display[col] = df_display[col].map(lambda x: f"{x:,.0f} đ" if x > 0 else "0 đ")
-        
+            df_display[col] = df_display[col].map(lambda x: f"{x:,.0f} đ" if pd.notna(x) and x > 0 else "0 đ")
+
     columns = [
         {"name": "Cụm", "id": "ten_cum"},
         {"name": "Xã / Bưu cục", "id": "ten_bdx"}
     ]
     for sub in sub_services:
         columns.append({"name": sub, "id": sub})
-        
+
     columns.extend([
         {"name": "Tổng Doanh Thu", "id": "tong_dt"},
+        {"name": cmp_col_name, "id": cmp_col},
         {"name": ratio_col_name, "id": "ratio_display"}
     ])
     
@@ -225,6 +237,19 @@ def create_detail_table_sub(df, sub_services, compare_type, title_label="⭐️ 
             {
                 "if": {"column_id": "tong_dt"},
                 "fontWeight": "bold"
+            },
+            {
+                "if": {"column_id": ["dt_prev", "dt_yoy", "plan_dt"]},
+                "color": "#64748B",
+                "fontStyle": "italic"
+            }
+        ],
+        style_header_conditional=[
+            {
+                "if": {"column_id": ["dt_prev", "dt_yoy", "plan_dt"]},
+                "backgroundColor": "#F1F5F9",
+                "color": "#475569",
+                "fontStyle": "italic"
             }
         ]
     )
