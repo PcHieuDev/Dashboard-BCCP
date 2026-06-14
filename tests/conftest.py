@@ -16,7 +16,7 @@ def mock_db():
     # Tạo schema cơ bản để test
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS dim_buucuc (
-            ma_bc TEXT PRIMARY KEY,
+            ma_buu_cuc TEXT PRIMARY KEY,
             ten_buu_cuc TEXT,
             ma_bdx TEXT,
             ten_bdx TEXT,
@@ -24,21 +24,21 @@ def mock_db():
         );
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ma_bc TEXT,
+            ma_buu_cuc TEXT,
             tong_dt REAL,
             nam_du_lieu INTEGER
         );
         CREATE TABLE IF NOT EXISTS agg_monthly (
             nam INTEGER,
             thang INTEGER,
-            ma_bc TEXT,
+            ma_buu_cuc TEXT,
             tong_dt REAL
         );
     """)
     
     # Chèn dữ liệu mẫu
-    conn.execute("INSERT INTO dim_buucuc (ma_bc, ten_buu_cuc, ma_bdx, ten_bdx, ten_cum) VALUES ('123456', 'BC Test', '1234', 'Xã Test', 'Cụm Test')")
-    conn.execute("INSERT INTO transactions (ma_bc, tong_dt, nam_du_lieu) VALUES ('123456', 1000.0, 2026)")
+    conn.execute("INSERT INTO dim_buucuc (ma_buu_cuc, ten_buu_cuc, ma_bdx, ten_bdx, ten_cum) VALUES ('123456', 'BC Test', '1234', 'Xã Test', 'Cụm Test')")
+    conn.execute("INSERT INTO transactions (ma_buu_cuc, tong_dt, nam_du_lieu) VALUES ('123456', 1000.0, 2026)")
     conn.commit()
     
     yield conn

@@ -48,8 +48,8 @@ def query_hcc_revenue(
         SELECT 
             t.cms,
             t.ma_hop_dong,
-            t.buu_cuc,
-            t.san_pham_dv,
+            t.ma_buu_cuc,
+            t.ten_dich_vu,
             t.ngay_chap_nhan,
             t.thang_du_lieu,
             t.san_luong,
@@ -63,8 +63,8 @@ def query_hcc_revenue(
             b.ten_bdx,
             b.ten_cum
         FROM transactions t
-        INNER JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
-        LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+        INNER JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
+        LEFT JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc
         WHERE 1=1 AND d.nhom_chinh = 'HCC'
         """
     ]
@@ -89,7 +89,7 @@ def query_hcc_revenue(
         
     if dich_vu:
         placeholders = ",".join(["?"] * len(dich_vu))
-        query_parts.append(f"AND t.san_pham_dv IN ({placeholders})")
+        query_parts.append(f"AND t.ten_dich_vu IN ({placeholders})")
         params.extend(dich_vu)
         
     if cum and cum != "Tất cả":
@@ -101,7 +101,7 @@ def query_hcc_revenue(
         params.append(bdx)
         
     if buu_cuc and buu_cuc != "Tất cả":
-        query_parts.append("AND t.buu_cuc = ?")
+        query_parts.append("AND t.ma_buu_cuc = ?")
         params.append(buu_cuc)
         
     if hop_dong == "Có HĐ":
@@ -154,11 +154,11 @@ def query_hcc_revenue(
     
     group_col_mapping = {
         'ngay': 'ngay_chap_nhan',
-        'buu_cuc': 'buu_cuc',
+        'buu_cuc': 'ma_buu_cuc',
         'bdx': 'ten_bdx',
         'cum': 'ten_cum',
         'nhom_dv': 'nhom_dich_vu',
-        'dich_vu': 'san_pham_dv',
+        'dich_vu': 'ten_dich_vu',
         'loai_kh': 'loai_kh',
         'hop_dong': 'hop_dong',
         'cms': 'cms'

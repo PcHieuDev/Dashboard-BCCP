@@ -94,13 +94,13 @@ def get_total_revenue_by_service(db_path, nam, thang=None, cum=None):
     sql_bccp = """
         SELECT SUM(t.cuoc_tt_tong) 
         FROM transactions t
-        INNER JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
+        INNER JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
     """
     # 2. HCC Doanh thu: transactions (nhom_chinh = 'HCC') + transactions_hcc
     sql_hcc_cp = """
         SELECT SUM(t.cuoc_tt_tong) 
         FROM transactions t
-        INNER JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
+        INNER JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
     """
     sql_hcc_new = "SELECT SUM(t.doanh_thu) FROM transactions_hcc t"
     
@@ -184,12 +184,12 @@ def get_ytd_revenue(db_path, nam, thang_den, cum=None):
     sql_bccp = """
         SELECT SUM(t.cuoc_tt_tong) 
         FROM transactions t
-        INNER JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
+        INNER JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
     """
     sql_hcc_cp = """
         SELECT SUM(t.cuoc_tt_tong) 
         FROM transactions t
-        INNER JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
+        INNER JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
     """
     sql_hcc_new = "SELECT SUM(t.doanh_thu) FROM transactions_hcc t"
     sql_tcbc = "SELECT SUM(t.doanh_thu) FROM transactions_tcbc t"
@@ -320,8 +320,8 @@ def get_revenue_by_cum(db_path, nam, thang=None):
     sql_trans = """
         SELECT b.ten_cum, d.nhom_chinh, SUM(t.cuoc_tt_tong) as dt
         FROM transactions t
-        INNER JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
-        INNER JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc
+        INNER JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
+        INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc
         WHERE t.nam_du_lieu = :nam
     """
     params = {"nam": nam}
@@ -517,7 +517,7 @@ def get_top10_by_comparison(conn, period_type, period_value, year, compare_type,
         plan_tbl = 'plans_weekly'
         plan_col = 'tuan_so'
 
-    grp_col = "b.ma_bc" if bdx and bdx != 'Tất cả' else "b.ma_bdx"
+    grp_col = "b.ma_buu_cuc" if bdx and bdx != 'Tất cả' else "b.ma_bdx"
 
     # ── Helper: lấy actual gộp theo ma_bdx (hoặc ma_bc) ──────────────────────
     def _actual_by_xa(period_val, yr, nhom_filter=None):
@@ -606,14 +606,14 @@ def get_top10_by_comparison(conn, period_type, period_value, year, compare_type,
     # ── Join địa lý: lấy ten_bdx, ten_cum theo ma_bdx (hoặc ma_bc) ───────────
     if bdx and bdx != 'Tất cả':
         df_geo = pd.read_sql_query(
-            "SELECT ma_bc as ma_bdx, ten_buu_cuc as display_name, ten_bdx as real_ten_bdx, ten_cum FROM dim_buucuc "
-            "WHERE ma_bdx IS NOT NULL AND ma_bc != ma_bdx AND ma_bc NOT LIKE 'CUM_%'",
+            "SELECT ma_buu_cuc as ma_bdx, ten_buu_cuc as display_name, ten_bdx as real_ten_bdx, ten_cum FROM dim_buucuc "
+            "WHERE ma_bdx IS NOT NULL AND ma_buu_cuc != ma_bdx AND ma_buu_cuc NOT LIKE 'CUM_%'",
             conn
         )
     else:
         df_geo = pd.read_sql_query(
             "SELECT DISTINCT ma_bdx, ten_bdx as display_name, ten_bdx as real_ten_bdx, ten_cum FROM dim_buucuc "
-            "WHERE ma_bdx IS NOT NULL AND ma_bc = ma_bdx AND ma_bdx NOT LIKE 'CUM_%'",
+            "WHERE ma_bdx IS NOT NULL AND ma_buu_cuc = ma_bdx AND ma_bdx NOT LIKE 'CUM_%'",
             conn
         )
     df_final = df.merge(df_geo, on='ma_bdx', how='inner')
@@ -794,11 +794,11 @@ def get_period_detail_by_xa(conn, period_type, period_value, year, cum=None, bdx
     df_plan = pd.read_sql_query(plan_sql, conn, params=(year, period_value))
     
     # Load danh mục địa lý dim_buucuc
-    df_geo_all = pd.read_sql_query("SELECT ma_buu_cuc as ma_bc, ma_bdx, ten_bdx, ten_cum, ten_buu_cuc FROM dim_buucuc", conn)
-    bc_to_xa = df_geo_all.set_index('ma_bc')['ma_bdx'].dropna().to_dict()
-    bc_to_ten_xa = df_geo_all.set_index('ma_bc')['ten_bdx'].dropna().to_dict()
-    bc_to_cum = df_geo_all.set_index('ma_bc')['ten_cum'].dropna().to_dict()
-    bc_to_ten_bc = df_geo_all.set_index('ma_bc')['ten_buu_cuc'].dropna().to_dict()
+    df_geo_all = pd.read_sql_query("SELECT ma_buu_cuc, ma_bdx, ten_bdx, ten_cum, ten_buu_cuc FROM dim_buucuc", conn)
+    bc_to_xa = df_geo_all.set_index('ma_buu_cuc')['ma_bdx'].dropna().to_dict()
+    bc_to_ten_xa = df_geo_all.set_index('ma_buu_cuc')['ten_bdx'].dropna().to_dict()
+    bc_to_cum = df_geo_all.set_index('ma_buu_cuc')['ten_cum'].dropna().to_dict()
+    bc_to_ten_bc = df_geo_all.set_index('ma_buu_cuc')['ten_buu_cuc'].dropna().to_dict()
     
     df_xa_geo = df_geo_all[['ma_bdx', 'ten_bdx', 'ten_cum']].dropna().drop_duplicates(subset=['ma_bdx'])
     xa_to_ten = df_xa_geo.set_index('ma_bdx')['ten_bdx'].to_dict()
@@ -883,10 +883,10 @@ def get_period_detail_by_xa(conn, period_type, period_value, year, cum=None, bdx
         df_buucuc_real = df_geo_all[
             (df_geo_all['ten_bdx'] == bdx) & 
             (df_geo_all['ten_cum'] == cum) & 
-            (df_geo_all['ma_bc'].str.len() == 6) & 
-            (~df_geo_all['ma_bc'].str.startswith('CUM_'))
+            (df_geo_all['ma_buu_cuc'].str.len() == 6) & 
+            (~df_geo_all['ma_buu_cuc'].str.startswith('CUM_'))
         ]
-        real_ma_bc_list = set(df_buucuc_real['ma_bc'])
+        real_ma_bc_list = set(df_buucuc_real['ma_buu_cuc'])
 
         # Merge trực tiếp theo buu_cuc
         df_merge = df_curr
@@ -988,11 +988,11 @@ def get_ytd_detail_by_xa(conn, period_type, period_value, year, cum=None, bdx=No
     df_plan = pd.read_sql_query(plan_sql, conn, params=(year,))
     
     # Load danh mục địa lý dim_buucuc
-    df_geo_all = pd.read_sql_query("SELECT ma_buu_cuc as ma_bc, ma_bdx, ten_bdx, ten_cum, ten_buu_cuc FROM dim_buucuc", conn)
-    bc_to_xa = df_geo_all.set_index('ma_bc')['ma_bdx'].dropna().to_dict()
-    bc_to_ten_xa = df_geo_all.set_index('ma_bc')['ten_bdx'].dropna().to_dict()
-    bc_to_cum = df_geo_all.set_index('ma_bc')['ten_cum'].dropna().to_dict()
-    bc_to_ten_bc = df_geo_all.set_index('ma_bc')['ten_buu_cuc'].dropna().to_dict()
+    df_geo_all = pd.read_sql_query("SELECT ma_buu_cuc, ma_bdx, ten_bdx, ten_cum, ten_buu_cuc FROM dim_buucuc", conn)
+    bc_to_xa = df_geo_all.set_index('ma_buu_cuc')['ma_bdx'].dropna().to_dict()
+    bc_to_ten_xa = df_geo_all.set_index('ma_buu_cuc')['ten_bdx'].dropna().to_dict()
+    bc_to_cum = df_geo_all.set_index('ma_buu_cuc')['ten_cum'].dropna().to_dict()
+    bc_to_ten_bc = df_geo_all.set_index('ma_buu_cuc')['ten_buu_cuc'].dropna().to_dict()
     
     df_xa_geo = df_geo_all[['ma_bdx', 'ten_bdx', 'ten_cum']].dropna().drop_duplicates(subset=['ma_bdx'])
     xa_to_ten = df_xa_geo.set_index('ma_bdx')['ten_bdx'].to_dict()
@@ -1077,10 +1077,10 @@ def get_ytd_detail_by_xa(conn, period_type, period_value, year, cum=None, bdx=No
         df_buucuc_real = df_geo_all[
             (df_geo_all['ten_bdx'] == bdx) & 
             (df_geo_all['ten_cum'] == cum) & 
-            (df_geo_all['ma_bc'].str.len() == 6) & 
-            (~df_geo_all['ma_bc'].str.startswith('CUM_'))
+            (df_geo_all['ma_buu_cuc'].str.len() == 6) & 
+            (~df_geo_all['ma_buu_cuc'].str.startswith('CUM_'))
         ]
-        real_ma_bc_list = set(df_buucuc_real['ma_bc'])
+        real_ma_bc_list = set(df_buucuc_real['ma_buu_cuc'])
 
         # Merge trực tiếp theo buu_cuc
         df_merge = df_curr

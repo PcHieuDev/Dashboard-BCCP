@@ -65,7 +65,7 @@ def get_bccp_plan(db_path, year, month, cum=None, bdx=None, buu_cuc=None):
     sql = """
         SELECT SUM(p.ke_hoach_doanh_thu)
         FROM plans p
-        INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_bc
+        INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_buu_cuc
         WHERE p.nam = :nam AND p.thang = :thang AND p.nhom_chinh = 'BCCP'
     """
     params = {"nam": year, "thang": month}
@@ -110,7 +110,7 @@ def get_new_customers_metrics(db_path, year, month, cum=None, bdx=None, buu_cuc=
         sql += " AND ma_bdx = :bdx"
         params["bdx"] = bdx
     if buu_cuc and buu_cuc != "Tất cả":
-        sql += " AND buu_cuc = :buu_cuc"
+        sql += " AND ma_buu_cuc = :buu_cuc"
         params["buu_cuc"] = buu_cuc
         
     # Tính tháng trước
@@ -133,7 +133,7 @@ def get_new_customers_metrics(db_path, year, month, cum=None, bdx=None, buu_cuc=
         sql_prev += " AND ma_bdx = :bdx"
         params_prev["bdx"] = bdx
     if buu_cuc and buu_cuc != "Tất cả":
-        sql_prev += " AND buu_cuc = :buu_cuc"
+        sql_prev += " AND ma_buu_cuc = :buu_cuc"
         params_prev["buu_cuc"] = buu_cuc
 
     conn = sqlite3.connect(str(db_path))
@@ -309,9 +309,9 @@ def register_kpi_callbacks(app):
 
         # Helper lấy doanh thu theo nhóm dịch vụ
         def get_revenue_by_nhom(df, nhom_name):
-            if df.empty or 'nhom_dv' not in df.columns:
+            if df.empty or 'nhom_dich_vu' not in df.columns:
                 return 0.0
-            filtered = df[df['nhom_dv'] == nhom_name]
+            filtered = df[df['nhom_dich_vu'] == nhom_name]
             return filtered['cuoc_tt_tong'].sum() if not filtered.empty else 0.0
             
         # Helper lấy số khách hàng phát sinh
@@ -531,10 +531,10 @@ def register_kpi_callbacks(app):
 
         # ── Vẽ biểu đồ 1: Cơ cấu dịch vụ (Pie Chart - Không Donut) ──────────────────
         fig_pie_dv = go.Figure()
-        if not df_cur.empty and 'nhom_dv' in df_cur.columns:
+        if not df_cur.empty and 'nhom_dich_vu' in df_cur.columns:
             pie_colors = ['#2196F3', '#4CAF50', '#FF9800', '#9C27B0']
             fig_pie_dv.add_trace(go.Pie(
-                labels=df_cur['nhom_dv'],
+                labels=df_cur['nhom_dich_vu'],
                 values=df_cur['cuoc_tt_tong'],
                 hole=0,
                 marker=dict(colors=pie_colors),
@@ -651,7 +651,7 @@ def register_kpi_callbacks(app):
         try:
             where_clauses = [
                 "cms IS NOT NULL", "cms != ''", "cms != 'NONE'", "cms NOT LIKE 'VANGLAI_%'",
-                "san_pham_dv IN (SELECT ma_dich_vu FROM dim_dichvu WHERE nhom_chinh = 'BCCP' OR nhom_chinh IS NULL)"
+                "ten_dich_vu IN (SELECT ma_dich_vu FROM dim_dichvu WHERE nhom_chinh = 'BCCP' OR nhom_chinh IS NULL)"
             ]
             params_cur = []
             
@@ -669,20 +669,20 @@ def register_kpi_callbacks(app):
                 
             if nhom_dv:
                 ph_dv = ",".join(["?"] * len(nhom_dv))
-                where_clauses.append(f"san_pham_dv IN (SELECT ma_dich_vu FROM dim_dichvu WHERE nhom_dich_vu IN ({ph_dv}))")
+                where_clauses.append(f"ten_dich_vu IN (SELECT ma_dich_vu FROM dim_dichvu WHERE nhom_dich_vu IN ({ph_dv}))")
                 params_cur.extend(nhom_dv)
             if spdv:
                 ph_spdv = ",".join(["?"] * len(spdv))
-                where_clauses.append(f"san_pham_dv IN ({ph_spdv})")
+                where_clauses.append(f"ten_dich_vu IN ({ph_spdv})")
                 params_cur.extend(spdv)
             if cum_f and cum_f != "Tất cả":
-                where_clauses.append("buu_cuc IN (SELECT ma_bc FROM dim_buucuc WHERE ten_cum = ?)")
+                where_clauses.append("ma_buu_cuc IN (SELECT ma_buu_cuc FROM dim_buucuc WHERE ten_cum = ?)")
                 params_cur.append(cum_f)
             if bdx_f and bdx_f != "Tất cả":
-                where_clauses.append("buu_cuc IN (SELECT ma_bc FROM dim_buucuc WHERE ten_bdx = ?)")
+                where_clauses.append("ma_buu_cuc IN (SELECT ma_buu_cuc FROM dim_buucuc WHERE ten_bdx = ?)")
                 params_cur.append(bdx_f)
             if bc_f and bc_f != "Tất cả":
-                where_clauses.append("buu_cuc = ?")
+                where_clauses.append("ma_buu_cuc = ?")
                 params_cur.append(bc_f)
             if hd_f == "Có HĐ":
                 where_clauses.append("ma_hop_dong IS NOT NULL AND ma_hop_dong != ''")
@@ -703,7 +703,7 @@ def register_kpi_callbacks(app):
                 SELECT t.cms, t.cuoc_tt_tong, 
                        (SELECT d.nhom_dich_vu 
                         FROM transactions t2 
-                        LEFT JOIN dim_dichvu d ON t2.san_pham_dv = d.ma_dich_vu 
+                        LEFT JOIN dim_dichvu d ON t2.ten_dich_vu = d.ma_dich_vu 
                         WHERE t2.cms = t.cms AND {where_str}
                         GROUP BY d.nhom_dich_vu 
                         ORDER BY SUM(t2.cuoc_tt_tong) DESC LIMIT 1) as nhom_dv_chinh
@@ -715,7 +715,7 @@ def register_kpi_callbacks(app):
             if prev_from and prev_to and not df_cur_cms_tot.empty:
                 where_prev = [
                     "cms IS NOT NULL", "cms != ''", "cms != 'NONE'", "cms NOT LIKE 'VANGLAI_%'",
-                    "san_pham_dv IN (SELECT ma_dich_vu FROM dim_dichvu WHERE nhom_chinh = 'BCCP' OR nhom_chinh IS NULL)"
+                    "ten_dich_vu IN (SELECT ma_dich_vu FROM dim_dichvu WHERE nhom_chinh = 'BCCP' OR nhom_chinh IS NULL)"
                 ]
                 params_prev = []
                 if date_column == 'thang_du_lieu':
@@ -729,19 +729,19 @@ def register_kpi_callbacks(app):
                     params_prev.extend([prev_from.isoformat(), prev_to.isoformat()])
                     
                 if nhom_dv:
-                    where_prev.append(f"san_pham_dv IN (SELECT ma_dich_vu FROM dim_dichvu WHERE nhom_dich_vu IN ({ph_dv}))")
+                    where_prev.append(f"ten_dich_vu IN (SELECT ma_dich_vu FROM dim_dichvu WHERE nhom_dich_vu IN ({ph_dv}))")
                     params_prev.extend(nhom_dv)
                 if spdv:
-                    where_prev.append(f"san_pham_dv IN ({ph_spdv})")
+                    where_prev.append(f"ten_dich_vu IN ({ph_spdv})")
                     params_prev.extend(spdv)
                 if cum_f and cum_f != "Tất cả":
-                    where_prev.append("buu_cuc IN (SELECT ma_bc FROM dim_buucuc WHERE ten_cum = ?)")
+                    where_prev.append("ma_buu_cuc IN (SELECT ma_buu_cuc FROM dim_buucuc WHERE ten_cum = ?)")
                     params_prev.append(cum_f)
                 if bdx_f and bdx_f != "Tất cả":
-                    where_prev.append("buu_cuc IN (SELECT ma_bc FROM dim_buucuc WHERE ten_bdx = ?)")
+                    where_prev.append("ma_buu_cuc IN (SELECT ma_buu_cuc FROM dim_buucuc WHERE ten_bdx = ?)")
                     params_prev.append(bdx_f)
                 if bc_f and bc_f != "Tất cả":
-                    where_prev.append("buu_cuc = ?")
+                    where_prev.append("ma_buu_cuc = ?")
                     params_prev.append(bc_f)
                 if hd_f == "Có HĐ":
                     where_prev.append("ma_hop_dong IS NOT NULL AND ma_hop_dong != ''")

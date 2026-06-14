@@ -85,7 +85,7 @@ def main():
         logger.error(f"Dang sinh lai file ma_tham_chieu.xlsx tai: {MA_REF_PATH}...")
         
         # Đọc dữ liệu Danh mục bưu cục
-        df_buucuc = pd.read_sql_query("SELECT ma_bc as [Mã bưu cục], ten_buu_cuc as [Tên bưu cục], ten_bdx as [Xã / Phường], ten_cum as [Cụm], ma_bdx as [Mã xã / Phường] FROM dim_buucuc ORDER BY ma_bc", conn)
+        df_buucuc = pd.read_sql_query("SELECT ma_buu_cuc as [Mã bưu cục], ten_buu_cuc as [Tên bưu cục], ten_bdx as [Xã / Phường], ten_cum as [Cụm], ma_bdx as [Mã xã / Phường] FROM dim_buucuc ORDER BY ma_buu_cuc", conn)
         
         # Đọc dữ liệu Sản phẩm (BCCP)
         df_spdv = pd.read_sql_query("SELECT ma_spdv as [Mã sản phẩm], ten_spdv as [Tên sản phẩm], nhom_dich_vu as [Nhóm dịch vụ con] FROM dim_spdv ORDER BY ma_spdv", conn)

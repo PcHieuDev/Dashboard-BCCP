@@ -108,7 +108,7 @@ def rebuild_monthly(conn, nam: int, thang: int):
             SUM(t.san_luong) as tong_san_luong,
             COUNT(DISTINCT CASE WHEN t.cms IS NOT NULL AND t.cms != '' AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none' THEN t.cms END) as so_kh_phat_sinh
         FROM transactions t
-        LEFT JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
+        LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
         WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ?
         GROUP BY t.ma_buu_cuc, COALESCE(d.nhom_dich_vu, 'Khác')
         
@@ -213,7 +213,7 @@ def rebuild_monthly_customer(conn, nam: int, thang: int):
         SUM(t.san_luong) as tong_san_luong,
         COUNT(*) as so_giao_dich
     FROM transactions t
-    LEFT JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
+    LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
     WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ?
       AND t.cms IS NOT NULL AND t.cms != '' 
       AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none'
@@ -286,7 +286,7 @@ def rebuild_weekly(conn, nam: int):
             0 as so_kh_moi,
             0 as so_kh_tai_ban
         FROM transactions t
-        LEFT JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
+        LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
         WHERE t.ngay_chap_nhan BETWEEN ? AND ?
         GROUP BY t.ma_buu_cuc, COALESCE(d.nhom_dich_vu, 'Khác')
         """

@@ -61,7 +61,7 @@ def get_plans_current_period_sub(db_path, service_key, period_type, period_value
             sql = """
                 SELECT COALESCE(d.nhom_dich_vu, p.nhom_dich_vu), SUM(p.ke_hoach_doanh_thu) 
                 FROM plans p
-                INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_bc
+                INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_buu_cuc
                 LEFT JOIN dim_dichvu d ON p.nhom_dich_vu = d.ma_dich_vu 
                                        OR p.nhom_dich_vu = d.ten_dich_vu 
                                        OR p.nhom_dich_vu = d.nhom_dich_vu
@@ -71,7 +71,7 @@ def get_plans_current_period_sub(db_path, service_key, period_type, period_value
             sql = """
                 SELECT COALESCE(d.nhom_dich_vu, p.nhom_dich_vu), SUM(p.ke_hoach_doanh_thu) 
                 FROM plans_weekly p
-                INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_bc
+                INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_buu_cuc
                 LEFT JOIN dim_dichvu d ON p.nhom_dich_vu = d.ma_dich_vu 
                                        OR p.nhom_dich_vu = d.ten_dich_vu 
                                        OR p.nhom_dich_vu = d.nhom_dich_vu
@@ -240,29 +240,29 @@ def query_sub_service_data(conn, service_key, period_type, period_val, year, sub
     # 2. Query doanh thu dịch vụ kỳ hiện tại
     if period_type == 'Tháng':
         sql = """
-            SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
+            SELECT ma_buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
             FROM agg_monthly
             WHERE nam = ? AND thang = ? AND nhom_dich_vu IN (
                 SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
             )
-            GROUP BY buu_cuc, nhom_dich_vu
+            GROUP BY ma_buu_cuc, nhom_dich_vu
         """
     else:
         sql = """
-            SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
+            SELECT ma_buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
             FROM agg_weekly
             WHERE nam = ? AND tuan_so = ? AND nhom_dich_vu IN (
                 SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
             )
-            GROUP BY buu_cuc, nhom_dich_vu
+            GROUP BY ma_buu_cuc, nhom_dich_vu
         """
         
     df_raw = pd.read_sql_query(sql, conn, params=(year, period_val, service_key))
     
     if not df_raw.empty:
-        df_pivot = df_raw.pivot(index='buu_cuc', columns='nhom_dich_vu', values='dt').fillna(0.0).reset_index()
+        df_pivot = df_raw.pivot(index='ma_buu_cuc', columns='nhom_dich_vu', values='dt').fillna(0.0).reset_index()
     else:
-        df_pivot = pd.DataFrame(columns=['buu_cuc'] + sub_services)
+        df_pivot = pd.DataFrame(columns=['ma_buu_cuc'] + sub_services)
         
     for sub in sub_services:
         if sub not in df_pivot.columns:
@@ -272,50 +272,50 @@ def query_sub_service_data(conn, service_key, period_type, period_val, year, sub
     # 3. Query tổng doanh thu kỳ trước
     if period_type == 'Tháng':
         prev_sql = """
-            SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev 
+            SELECT ma_buu_cuc, SUM(tong_doanh_thu) as dt_prev 
             FROM agg_monthly 
             WHERE nam = ? AND thang = ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
-            GROUP BY buu_cuc
+            GROUP BY ma_buu_cuc
         """
     else:
         prev_sql = """
-            SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev 
+            SELECT ma_buu_cuc, SUM(tong_doanh_thu) as dt_prev 
             FROM agg_weekly 
             WHERE nam = ? AND tuan_so = ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
-            GROUP BY buu_cuc
+            GROUP BY ma_buu_cuc
         """
     df_prev = pd.read_sql_query(prev_sql, conn, params=(prev_yr, prev_val, service_key))
     
     # 4. Query tổng doanh thu cùng kỳ năm trước
     if period_type == 'Tháng':
         yoy_sql = """
-            SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy 
+            SELECT ma_buu_cuc, SUM(tong_doanh_thu) as dt_yoy 
             FROM agg_monthly 
             WHERE nam = ? AND thang = ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
-            GROUP BY buu_cuc
+            GROUP BY ma_buu_cuc
         """
     else:
         yoy_sql = """
-            SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy 
+            SELECT ma_buu_cuc, SUM(tong_doanh_thu) as dt_yoy 
             FROM agg_weekly 
             WHERE nam = ? AND tuan_so = ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
-            GROUP BY buu_cuc
+            GROUP BY ma_buu_cuc
         """
     df_yoy = pd.read_sql_query(yoy_sql, conn, params=(year - 1, period_val, service_key))
     
     # 5. Query kế hoạch
     if period_type == 'Tháng':
-        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans WHERE nam = ? AND thang = ? AND nhom_chinh = ? GROUP BY ma_buu_cuc"
+        plan_sql = "SELECT ma_buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans WHERE nam = ? AND thang = ? AND nhom_chinh = ? GROUP BY ma_buu_cuc"
     else:
-        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans_weekly WHERE nam = ? AND tuan_so = ? AND nhom_chinh = ? GROUP BY ma_buu_cuc"
+        plan_sql = "SELECT ma_buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans_weekly WHERE nam = ? AND tuan_so = ? AND nhom_chinh = ? GROUP BY ma_buu_cuc"
     df_plan = pd.read_sql_query(plan_sql, conn, params=(year, period_val, service_key))
     
     # Load danh mục địa lý dim_buucuc
-    df_geo_all = pd.read_sql_query("SELECT ma_bc, ma_bdx, ten_bdx, ten_cum, ten_buu_cuc FROM dim_buucuc", conn)
-    bc_to_xa = df_geo_all.set_index('ma_bc')['ma_bdx'].dropna().to_dict()
-    bc_to_ten_xa = df_geo_all.set_index('ma_bc')['ten_bdx'].dropna().to_dict()
-    bc_to_cum = df_geo_all.set_index('ma_bc')['ten_cum'].dropna().to_dict()
-    bc_to_ten_bc = df_geo_all.set_index('ma_bc')['ten_buu_cuc'].dropna().to_dict()
+    df_geo_all = pd.read_sql_query("SELECT ma_buu_cuc, ma_bdx, ten_bdx, ten_cum, ten_buu_cuc FROM dim_buucuc", conn)
+    bc_to_xa = df_geo_all.set_index('ma_buu_cuc')['ma_bdx'].dropna().to_dict()
+    bc_to_ten_xa = df_geo_all.set_index('ma_buu_cuc')['ten_bdx'].dropna().to_dict()
+    bc_to_cum = df_geo_all.set_index('ma_buu_cuc')['ten_cum'].dropna().to_dict()
+    bc_to_ten_bc = df_geo_all.set_index('ma_buu_cuc')['ten_buu_cuc'].dropna().to_dict()
     
     df_xa_geo = df_geo_all[['ma_bdx', 'ten_bdx', 'ten_cum']].dropna().drop_duplicates(subset=['ma_bdx'])
     xa_to_ten = df_xa_geo.set_index('ma_bdx')['ten_bdx'].to_dict()
@@ -359,10 +359,10 @@ def query_sub_service_data(conn, service_key, period_type, period_val, year, sub
         return df
 
     # Gán địa lý
-    df_pivot = assign_geo_info(df_pivot, 'buu_cuc')
-    df_prev = assign_geo_info(df_prev, 'buu_cuc')
-    df_yoy = assign_geo_info(df_yoy, 'buu_cuc')
-    df_plan = assign_geo_info(df_plan, 'buu_cuc')
+    df_pivot = assign_geo_info(df_pivot, 'ma_buu_cuc')
+    df_prev = assign_geo_info(df_prev, 'ma_buu_cuc')
+    df_yoy = assign_geo_info(df_yoy, 'ma_buu_cuc')
+    df_plan = assign_geo_info(df_plan, 'ma_buu_cuc')
 
     if bdx == 'Tất cả' or not bdx:
         # Cấp Cụm: So sánh các Xã
@@ -400,10 +400,10 @@ def query_sub_service_data(conn, service_key, period_type, period_val, year, sub
         df_buucuc_real = df_geo_all[
             (df_geo_all['ten_bdx'] == bdx) & 
             (df_geo_all['ten_cum'] == cum) & 
-            (df_geo_all['ma_bc'].str.len() == 6) & 
-            (~df_geo_all['ma_bc'].str.startswith('CUM_'))
+            (df_geo_all['ma_buu_cuc'].str.len() == 6) & 
+            (~df_geo_all['ma_buu_cuc'].str.startswith('CUM_'))
         ]
-        real_ma_bc_list = set(df_buucuc_real['ma_bc'])
+        real_ma_bc_list = set(df_buucuc_real['ma_buu_cuc'])
 
         # Merge trực tiếp theo buu_cuc
         df_merge = df_pivot
@@ -434,29 +434,29 @@ def query_sub_service_data_ytd(conn, service_key, period_type, period_val, year,
     # 1. Query doanh thu YTD hiện tại
     if period_type == 'Tháng':
         sql = """
-            SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
+            SELECT ma_buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
             FROM agg_monthly
             WHERE nam = ? AND thang BETWEEN 1 AND ? AND nhom_dich_vu IN (
                 SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
             )
-            GROUP BY buu_cuc, nhom_dich_vu
+            GROUP BY ma_buu_cuc, nhom_dich_vu
         """
     else:
         sql = """
-            SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
+            SELECT ma_buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
             FROM agg_weekly
             WHERE nam = ? AND tuan_so BETWEEN 1 AND ? AND nhom_dich_vu IN (
                 SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
             )
-            GROUP BY buu_cuc, nhom_dich_vu
+            GROUP BY ma_buu_cuc, nhom_dich_vu
         """
         
     df_raw = pd.read_sql_query(sql, conn, params=(year, period_val, service_key))
     
     if not df_raw.empty:
-        df_pivot = df_raw.pivot(index='buu_cuc', columns='nhom_dich_vu', values='dt').fillna(0.0).reset_index()
+        df_pivot = df_raw.pivot(index='ma_buu_cuc', columns='nhom_dich_vu', values='dt').fillna(0.0).reset_index()
     else:
-        df_pivot = pd.DataFrame(columns=['buu_cuc'] + sub_services)
+        df_pivot = pd.DataFrame(columns=['ma_buu_cuc'] + sub_services)
         
     for sub in sub_services:
         if sub not in df_pivot.columns:
@@ -471,10 +471,10 @@ def query_sub_service_data_ytd(conn, service_key, period_type, period_val, year,
             prev_val = 12
             prev_yr = year - 1
         prev_sql = """
-            SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev 
+            SELECT ma_buu_cuc, SUM(tong_doanh_thu) as dt_prev 
             FROM agg_monthly 
             WHERE nam = ? AND thang BETWEEN 1 AND ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
-            GROUP BY buu_cuc
+            GROUP BY ma_buu_cuc
         """
     else:
         prev_val = period_val - 1
@@ -484,43 +484,43 @@ def query_sub_service_data_ytd(conn, service_key, period_type, period_val, year,
             weeks = calendar_helper.get_week_list(prev_yr)
             prev_val = weeks[-1][0] if weeks else 52
         prev_sql = """
-            SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev 
+            SELECT ma_buu_cuc, SUM(tong_doanh_thu) as dt_prev 
             FROM agg_weekly 
             WHERE nam = ? AND tuan_so BETWEEN 1 AND ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
-            GROUP BY buu_cuc
+            GROUP BY ma_buu_cuc
         """
     df_prev = pd.read_sql_query(prev_sql, conn, params=(prev_yr, prev_val, service_key))
     
     # 3. Query tổng doanh thu cùng kỳ YTD
     if period_type == 'Tháng':
         yoy_sql = """
-            SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy 
+            SELECT ma_buu_cuc, SUM(tong_doanh_thu) as dt_yoy 
             FROM agg_monthly 
             WHERE nam = ? AND thang BETWEEN 1 AND ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
-            GROUP BY buu_cuc
+            GROUP BY ma_buu_cuc
         """
     else:
         yoy_sql = """
-            SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy 
+            SELECT ma_buu_cuc, SUM(tong_doanh_thu) as dt_yoy 
             FROM agg_weekly 
             WHERE nam = ? AND tuan_so BETWEEN 1 AND ? AND nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
-            GROUP BY buu_cuc
+            GROUP BY ma_buu_cuc
         """
     df_yoy = pd.read_sql_query(yoy_sql, conn, params=(year - 1, period_val, service_key))
     
     # 4. Query kế hoạch cả năm
     if period_type == 'Tháng':
-        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans WHERE nam = ? AND nhom_chinh = ? GROUP BY ma_buu_cuc"
+        plan_sql = "SELECT ma_buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans WHERE nam = ? AND nhom_chinh = ? GROUP BY ma_buu_cuc"
     else:
-        plan_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans_weekly WHERE nam = ? AND nhom_chinh = ? GROUP BY ma_buu_cuc"
+        plan_sql = "SELECT ma_buu_cuc, SUM(ke_hoach_doanh_thu) as plan_dt FROM plans_weekly WHERE nam = ? AND nhom_chinh = ? GROUP BY ma_buu_cuc"
     df_plan = pd.read_sql_query(plan_sql, conn, params=(year, service_key))
     
     # Load danh mục địa lý dim_buucuc
-    df_geo_all = pd.read_sql_query("SELECT ma_bc, ma_bdx, ten_bdx, ten_cum, ten_buu_cuc FROM dim_buucuc", conn)
-    bc_to_xa = df_geo_all.set_index('ma_bc')['ma_bdx'].dropna().to_dict()
-    bc_to_ten_xa = df_geo_all.set_index('ma_bc')['ten_bdx'].dropna().to_dict()
-    bc_to_cum = df_geo_all.set_index('ma_bc')['ten_cum'].dropna().to_dict()
-    bc_to_ten_bc = df_geo_all.set_index('ma_bc')['ten_buu_cuc'].dropna().to_dict()
+    df_geo_all = pd.read_sql_query("SELECT ma_buu_cuc, ma_bdx, ten_bdx, ten_cum, ten_buu_cuc FROM dim_buucuc", conn)
+    bc_to_xa = df_geo_all.set_index('ma_buu_cuc')['ma_bdx'].dropna().to_dict()
+    bc_to_ten_xa = df_geo_all.set_index('ma_buu_cuc')['ten_bdx'].dropna().to_dict()
+    bc_to_cum = df_geo_all.set_index('ma_buu_cuc')['ten_cum'].dropna().to_dict()
+    bc_to_ten_bc = df_geo_all.set_index('ma_buu_cuc')['ten_buu_cuc'].dropna().to_dict()
     
     df_xa_geo = df_geo_all[['ma_bdx', 'ten_bdx', 'ten_cum']].dropna().drop_duplicates(subset=['ma_bdx'])
     xa_to_ten = df_xa_geo.set_index('ma_bdx')['ten_bdx'].to_dict()
@@ -564,10 +564,10 @@ def query_sub_service_data_ytd(conn, service_key, period_type, period_val, year,
         return df
 
     # Gán địa lý
-    df_pivot = assign_geo_info(df_pivot, 'buu_cuc')
-    df_prev = assign_geo_info(df_prev, 'buu_cuc')
-    df_yoy = assign_geo_info(df_yoy, 'buu_cuc')
-    df_plan = assign_geo_info(df_plan, 'buu_cuc')
+    df_pivot = assign_geo_info(df_pivot, 'ma_buu_cuc')
+    df_prev = assign_geo_info(df_prev, 'ma_buu_cuc')
+    df_yoy = assign_geo_info(df_yoy, 'ma_buu_cuc')
+    df_plan = assign_geo_info(df_plan, 'ma_buu_cuc')
 
     if bdx == 'Tất cả' or not bdx:
         # Cấp Cụm: So sánh các Xã
@@ -605,10 +605,10 @@ def query_sub_service_data_ytd(conn, service_key, period_type, period_val, year,
         df_buucuc_real = df_geo_all[
             (df_geo_all['ten_bdx'] == bdx) & 
             (df_geo_all['ten_cum'] == cum) & 
-            (df_geo_all['ma_bc'].str.len() == 6) & 
-            (~df_geo_all['ma_bc'].str.startswith('CUM_'))
+            (df_geo_all['ma_buu_cuc'].str.len() == 6) & 
+            (~df_geo_all['ma_buu_cuc'].str.startswith('CUM_'))
         ]
-        real_ma_bc_list = set(df_buucuc_real['ma_bc'])
+        real_ma_bc_list = set(df_buucuc_real['ma_buu_cuc'])
 
         # Merge trực tiếp theo buu_cuc
         df_merge = df_pivot
@@ -875,7 +875,7 @@ def register_service_callbacks(app):
                     title_label = "⭐️ TOÀN TỈNH"
                     if buu_cuc and buu_cuc != "Tất cả":
                         cursor = conn.cursor()
-                        cursor.execute("SELECT ten_buu_cuc FROM dim_buucuc WHERE ma_bc = ?", (buu_cuc,))
+                        cursor.execute("SELECT ten_buu_cuc FROM dim_buucuc WHERE ma_buu_cuc = ?", (buu_cuc,))
                         row = cursor.fetchone()
                         if row:
                             title_label = f"⭐️ BC: {row[0].upper()}"
@@ -938,7 +938,7 @@ def register_service_callbacks(app):
                     title_label = "⭐️ TOÀN TỈNH"
                     if buu_cuc and buu_cuc != "Tất cả":
                         cursor = conn.cursor()
-                        cursor.execute("SELECT ten_buu_cuc FROM dim_buucuc WHERE ma_bc = ?", (buu_cuc,))
+                        cursor.execute("SELECT ten_buu_cuc FROM dim_buucuc WHERE ma_buu_cuc = ?", (buu_cuc,))
                         row = cursor.fetchone()
                         if row:
                             title_label = f"⭐️ BC: {row[0].upper()}"
@@ -967,7 +967,7 @@ def query_sub_revenue_total(conn, service_key, period_type, period_val, year, cu
         sql = """
             SELECT a.nhom_dich_vu, SUM(a.tong_doanh_thu) 
             FROM agg_monthly a
-            INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc
+            INNER JOIN dim_buucuc b ON a.ma_buu_cuc = b.ma_buu_cuc
             WHERE a.nam = ? AND a.thang = ? AND a.nhom_dich_vu IN (
                 SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
             )
@@ -982,7 +982,7 @@ def query_sub_revenue_total(conn, service_key, period_type, period_val, year, cu
             sql = f"""
                 SELECT a.nhom_dich_vu, SUM(CASE {cases_str} ELSE 0 END) 
                 FROM agg_weekly a
-                INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc
+                INNER JOIN dim_buucuc b ON a.ma_buu_cuc = b.ma_buu_cuc
                 WHERE a.nam = ? AND a.tuan_so IN ({','.join(str(w[0]) for w in w_ratios)}) AND a.nhom_dich_vu IN (
                     SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
                 )
@@ -992,7 +992,7 @@ def query_sub_revenue_total(conn, service_key, period_type, period_val, year, cu
             sql = """
                 SELECT a.nhom_dich_vu, SUM(a.tong_doanh_thu) 
                 FROM agg_weekly a
-                INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc
+                INNER JOIN dim_buucuc b ON a.ma_buu_cuc = b.ma_buu_cuc
                 WHERE a.nam = ? AND a.tuan_so = ? AND a.nhom_dich_vu IN (
                     SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?
                 )
@@ -1007,7 +1007,7 @@ def query_sub_revenue_total(conn, service_key, period_type, period_val, year, cu
         clauses.append("b.ten_bdx = ?")
         params.append(bdx)
     if buu_cuc and buu_cuc != "Tất cả":
-        clauses.append("a.buu_cuc = ?")
+        clauses.append("a.ma_buu_cuc = ?")
         params.append(buu_cuc)
         
     if clauses:
@@ -1054,14 +1054,14 @@ def get_12_periods_revenue_sub(conn, service_key, period_type, current_period, c
             query = """
                 SELECT a.nhom_dich_vu, SUM(a.tong_doanh_thu) as dt
                 FROM agg_monthly a
-                INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc
+                INNER JOIN dim_buucuc b ON a.ma_buu_cuc = b.ma_buu_cuc
                 WHERE a.nam = ? AND a.thang = ? AND a.nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
             """
         else: # Tuần
             query = """
                 SELECT a.nhom_dich_vu, SUM(a.tong_doanh_thu) as dt
                 FROM agg_weekly a
-                INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc
+                INNER JOIN dim_buucuc b ON a.ma_buu_cuc = b.ma_buu_cuc
                 WHERE a.nam = ? AND a.tuan_so = ? AND a.nhom_dich_vu IN (SELECT DISTINCT nhom_dich_vu FROM dim_dichvu WHERE nhom_chinh = ?)
             """
         
@@ -1074,7 +1074,7 @@ def get_12_periods_revenue_sub(conn, service_key, period_type, current_period, c
             clauses.append("b.ten_bdx = ?")
             params.append(bdx)
         if buu_cuc and buu_cuc != "Tất cả":
-            clauses.append("a.buu_cuc = ?")
+            clauses.append("a.ma_buu_cuc = ?")
             params.append(buu_cuc)
             
         if clauses:

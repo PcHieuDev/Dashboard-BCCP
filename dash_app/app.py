@@ -141,7 +141,7 @@ def load_filter_options():
             options["bdx"] = df_bdx.iloc[:, 0].tolist()
         
         # Load Bưu cục chấp nhận
-        df_bc = pd.read_sql_query("SELECT ma_bc, ten_buu_cuc FROM dim_buucuc ORDER BY ma_bc", conn)
+        df_bc = pd.read_sql_query("SELECT ma_buu_cuc, ten_buu_cuc FROM dim_buucuc ORDER BY ma_buu_cuc", conn)
         if not df_bc.empty:
             options["buu_cuc"] = [{"label": f"{r.iloc[0]} - {r.iloc[1]}", "value": r.iloc[0]} for _, r in df_bc.iterrows()]
         

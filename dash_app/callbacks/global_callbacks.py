@@ -69,7 +69,7 @@ def get_plans_current_period(db_path, period_type, period_value, year, cum=None,
         params = [year, period_value]
         
         if (cum and cum != "Tất cả" and cum != "Tất cả Cụm") or (bdx and bdx != "Tất cả") or (buu_cuc and buu_cuc != "Tất cả"):
-            sql += f" INNER JOIN dim_buucuc b ON {table}.ma_buu_cuc = b.ma_bc"
+            sql += f" INNER JOIN dim_buucuc b ON {table}.ma_buu_cuc = b.ma_buu_cuc"
             
         if cum and cum != "Tất cả" and cum != "Tất cả Cụm":
             where.append("b.ten_cum = ?")
@@ -129,7 +129,7 @@ def get_aggregated_revenue(db_path, cycle, year, period_val, cum=None, bdx=None,
             params = [year, period_val]
             
         if (cum and cum != "Tất cả" and cum != "Tất cả Cụm") or (bdx and bdx != "Tất cả") or (buu_cuc and buu_cuc != "Tất cả"):
-            sql += " INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc"
+            sql += " INNER JOIN dim_buucuc b ON a.ma_buu_cuc = b.ma_buu_cuc"
             
         if cum and cum != "Tất cả" and cum != "Tất cả Cụm":
             where.append("b.ten_cum = ?")
@@ -138,7 +138,7 @@ def get_aggregated_revenue(db_path, cycle, year, period_val, cum=None, bdx=None,
             where.append("b.ten_bdx = ?")
             params.append(bdx)
         if buu_cuc and buu_cuc != "Tất cả":
-            where.append("a.buu_cuc = ?")
+            where.append("a.ma_buu_cuc = ?")
             params.append(buu_cuc)
             
         sql += " WHERE " + " AND ".join(where)
@@ -504,7 +504,7 @@ def register_global_callbacks(app):
             title_label = "⭐️ TOÀN TỈNH"
             if buu_cuc and buu_cuc != "Tất cả":
                 cursor = conn.cursor()
-                cursor.execute("SELECT ten_buu_cuc FROM dim_buucuc WHERE ma_bc = ?", (buu_cuc,))
+                cursor.execute("SELECT ten_buu_cuc FROM dim_buucuc WHERE ma_buu_cuc = ?", (buu_cuc,))
                 row = cursor.fetchone()
                 if row:
                     title_label = f"⭐️ BC: {row[0].upper()}"
@@ -550,7 +550,7 @@ def register_global_callbacks(app):
             title_label = "⭐️ TOÀN TỈNH"
             if buu_cuc and buu_cuc != "Tất cả":
                 cursor = conn.cursor()
-                cursor.execute("SELECT ten_buu_cuc FROM dim_buucuc WHERE ma_bc = ?", (buu_cuc,))
+                cursor.execute("SELECT ten_buu_cuc FROM dim_buucuc WHERE ma_buu_cuc = ?", (buu_cuc,))
                 row = cursor.fetchone()
                 if row:
                     title_label = f"⭐️ BC: {row[0].upper()}"

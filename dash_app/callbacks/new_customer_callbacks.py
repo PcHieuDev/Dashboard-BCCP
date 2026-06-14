@@ -93,14 +93,14 @@ def query_and_process_new_customers(year, month, week, cycle, cum_val, bdx_val, 
             geo_where.append("ma_bdx = (SELECT DISTINCT ma_bdx FROM dim_buucuc WHERE ten_bdx = ? LIMIT 1)")
             geo_params.append(bdx_val)
         if bc_val and bc_val != "Tất cả":
-            geo_where.append("buu_cuc = ?")
+            geo_where.append("ma_buu_cuc = ?")
             geo_params.append(bc_val)
             
         geo_where_str = " AND " + " AND ".join(geo_where) if geo_where else ""
         
         # 1. Tính toán KH 4 tháng gần nhất
         q_4m = f"""
-            SELECT DISTINCT cms, thang, nam, buu_cuc, ma_bdx, ten_cum, nhom_dv, tong_doanh_thu, ngay_phat_sinh 
+            SELECT DISTINCT cms, thang, nam, ma_buu_cuc, ma_bdx, ten_cum, nhom_dich_vu, tong_doanh_thu, ngay_phat_sinh 
             FROM new_customers 
             WHERE ({placeholders_4m}) {geo_where_str}
         """
@@ -168,24 +168,24 @@ def query_and_process_new_customers(year, month, week, cycle, cum_val, bdx_val, 
                     kpi_revenue = df_week_tx['dt'].sum()
                     
                     # Merge thông tin địa lý và nhóm dịch vụ con từ df_4m
-                    df_geo_map = df_4m[['cms', 'ten_cum', 'ma_bdx', 'nhom_dv']].drop_duplicates(subset=['cms'])
+                    df_geo_map = df_4m[['cms', 'ten_cum', 'ma_bdx', 'nhom_dich_vu']].drop_duplicates(subset=['cms'])
                     df_table_data = pd.merge(df_week_tx, df_geo_map, on='cms', how='inner')
                     df_table_data = df_table_data.rename(columns={'dt': 'tong_doanh_thu'})
                     
         # 3. Hoàn thiện bảng dữ liệu chi tiết xã
         # Bổ sung Tên Xã từ dim_buucuc
         if not df_table_data.empty:
-            df_buucuc = pd.read_sql_query("SELECT ma_bc as buu_cuc, ten_bdx FROM dim_buucuc", conn)
-            df_table_data = pd.merge(df_table_data, df_buucuc, on='buu_cuc', how='left')
-            # Cột mong đợi: ten_cum | ten_bdx | buu_cuc | cms | ngay_phat_sinh | nhom_dv | tong_doanh_thu
-            # Điền fallback nếu thiếu nhom_dv
-            if 'nhom_dv' not in df_table_data.columns:
-                df_table_data['nhom_dv'] = 'BCCP'
-            df_table_data = df_table_data[['ten_cum', 'ten_bdx', 'buu_cuc', 'cms', 'ngay_phat_sinh', 'nhom_dv', 'tong_doanh_thu']]
+            df_buucuc = pd.read_sql_query("SELECT ma_buu_cuc as ma_buu_cuc, ten_bdx FROM dim_buucuc", conn)
+            df_table_data = pd.merge(df_table_data, df_buucuc, on='ma_buu_cuc', how='left')
+            # Cột mong đợi: ten_cum | ten_bdx | ma_buu_cuc | cms | ngay_phat_sinh | nhom_dich_vu | tong_doanh_thu
+            # Điền fallback nếu thiếu nhom_dich_vu
+            if 'nhom_dich_vu' not in df_table_data.columns:
+                df_table_data['nhom_dich_vu'] = 'BCCP'
+            df_table_data = df_table_data[['ten_cum', 'ten_bdx', 'ma_buu_cuc', 'cms', 'ngay_phat_sinh', 'nhom_dich_vu', 'tong_doanh_thu']]
             # Sắp xếp giảm dần theo doanh thu
             df_table_data = df_table_data.sort_values(by='tong_doanh_thu', ascending=False)
         else:
-            df_table_data = pd.DataFrame(columns=['ten_cum', 'ten_bdx', 'buu_cuc', 'cms', 'ngay_phat_sinh', 'nhom_dv', 'tong_doanh_thu'])
+            df_table_data = pd.DataFrame(columns=['ten_cum', 'ten_bdx', 'ma_buu_cuc', 'cms', 'ngay_phat_sinh', 'nhom_dich_vu', 'tong_doanh_thu'])
             
         return df_table_data, kpi_curr_count, kpi_4m_count, kpi_revenue
         
@@ -244,10 +244,10 @@ def register_new_customer_callbacks(app):
             columns = [
                 {"name": "Cụm địa lý", "id": "ten_cum"},
                 {"name": "Phường / Xã", "id": "ten_bdx"},
-                {"name": "Mã Bưu Cục", "id": "buu_cuc"},
+                {"name": "Mã Bưu Cục", "id": "ma_buu_cuc"},
                 {"name": "Mã CMS", "id": "cms"},
                 {"name": "Ngày phát sinh", "id": "ngay_phat_sinh"},
-                {"name": "Nhóm DV chính", "id": "nhom_dv"},
+                {"name": "Nhóm DV chính", "id": "nhom_dich_vu"},
                 {"name": "Doanh Thu", "id": "tong_doanh_thu"}
             ]
             
@@ -342,10 +342,10 @@ def register_new_customer_callbacks(app):
             row_num += 1
             ws.cell(row=row_num, column=1, value=r['ten_cum'])
             ws.cell(row=row_num, column=2, value=r['ten_bdx'])
-            ws.cell(row=row_num, column=3, value=r['buu_cuc'])
+            ws.cell(row=row_num, column=3, value=r['ma_buu_cuc'])
             ws.cell(row=row_num, column=4, value=r['cms'])
             ws.cell(row=row_num, column=5, value=r['ngay_phat_sinh'])
-            ws.cell(row=row_num, column=6, value=r['nhom_dv'])
+            ws.cell(row=row_num, column=6, value=r['nhom_dich_vu'])
             
             cell_rev = ws.cell(row=row_num, column=7, value=r['tong_doanh_thu'])
             cell_rev.number_format = '#,##0" đ"'

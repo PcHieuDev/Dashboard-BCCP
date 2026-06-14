@@ -122,7 +122,7 @@ def register_customer_callbacks(app):
         columns = [
             {"name": "Cụm", "id": "ten_cum"},
             {"name": "Xã / Phường", "id": "ten_bdx"},
-            {"name": "Bưu cục chấp nhận", "id": "buu_cuc"},
+            {"name": "Bưu cục chấp nhận", "id": "ma_buu_cuc"},
             {"name": "Mã CMS", "id": "cms"},
             {"name": "Sản lượng", "id": "san_luong", "type": "numeric", "format": Format(group=Group.yes)},
             {"name": "Doanh thu không VAT", "id": "cuoc_tt_tong", "type": "numeric", "format": Format(group=Group.yes)}
@@ -204,7 +204,7 @@ def register_customer_callbacks(app):
         col_rename = {
             'ten_cum': 'Cụm',
             'ten_bdx': 'Xã / Phường',
-            'buu_cuc': 'Bưu cục chấp nhận',
+            'ma_buu_cuc': 'Bưu cục chấp nhận',
             'cms': 'Mã CMS',
             'san_luong': 'Sản lượng',
             'cuoc_tt_tong': 'Doanh thu không VAT'
