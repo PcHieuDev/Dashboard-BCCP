@@ -357,14 +357,13 @@ def rebuild_plans_weekly(conn, nam: int):
     allocations = allocate_weekly_plan(nam)
     
     # Đọc tất cả kế hoạch tháng của năm đó
+    # NOTE: Không JOIN dim_dichvu vì nhom_dich_vu trong plans đã là giá trị chuẩn
+    # (ví dụ: 'Truyền thống', 'TMĐT', 'Quốc tế'). JOIN OR nhiều cột gây nhân bản SUM.
     cursor.execute("""
-    SELECT p.thang, p.ma_buu_cuc, p.nhom_chinh, COALESCE(d.nhom_dich_vu, p.nhom_dich_vu) as nhom_dich_vu, SUM(p.ke_hoach_doanh_thu) as kh_thang
+    SELECT p.thang, p.ma_buu_cuc, p.nhom_chinh, p.nhom_dich_vu, SUM(p.ke_hoach_doanh_thu) as kh_thang
     FROM plans p
-    LEFT JOIN dim_dichvu d ON p.nhom_dich_vu = d.ma_dich_vu 
-                           OR p.nhom_dich_vu = d.ten_dich_vu 
-                           OR p.nhom_dich_vu = d.nhom_dich_vu
     WHERE p.nam = ?
-    GROUP BY p.thang, p.ma_buu_cuc, p.nhom_chinh, COALESCE(d.nhom_dich_vu, p.nhom_dich_vu)
+    GROUP BY p.thang, p.ma_buu_cuc, p.nhom_chinh, p.nhom_dich_vu
     """, (nam,))
     
     plans_data = cursor.fetchall()
