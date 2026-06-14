@@ -59,22 +59,16 @@ def get_plans_current_period_sub(db_path, service_key, period_type, period_value
         cursor = conn.cursor()
         if period_type == 'Tháng':
             sql = """
-                SELECT COALESCE(d.nhom_dich_vu, p.nhom_dich_vu), SUM(p.ke_hoach_doanh_thu) 
+                SELECT p.nhom_dich_vu, SUM(p.ke_hoach_doanh_thu) 
                 FROM plans p
                 INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_buu_cuc
-                LEFT JOIN dim_dichvu d ON p.nhom_dich_vu = d.ma_dich_vu 
-                                       OR p.nhom_dich_vu = d.ten_dich_vu 
-                                       OR p.nhom_dich_vu = d.nhom_dich_vu
                 WHERE p.nam = ? AND p.thang = ? AND p.nhom_chinh = ? AND p.nhom_dich_vu IS NOT NULL
             """
         else:
             sql = """
-                SELECT COALESCE(d.nhom_dich_vu, p.nhom_dich_vu), SUM(p.ke_hoach_doanh_thu) 
+                SELECT p.nhom_dich_vu, SUM(p.ke_hoach_doanh_thu) 
                 FROM plans_weekly p
                 INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_buu_cuc
-                LEFT JOIN dim_dichvu d ON p.nhom_dich_vu = d.ma_dich_vu 
-                                       OR p.nhom_dich_vu = d.ten_dich_vu 
-                                       OR p.nhom_dich_vu = d.nhom_dich_vu
                 WHERE p.nam = ? AND p.tuan_so = ? AND p.nhom_chinh = ? AND p.nhom_dich_vu IS NOT NULL
             """
         
@@ -92,7 +86,7 @@ def get_plans_current_period_sub(db_path, service_key, period_type, period_value
             
         if clauses:
             sql += " AND " + " AND ".join(clauses)
-        sql += " GROUP BY COALESCE(d.nhom_dich_vu, p.nhom_dich_vu)"
+        sql += " GROUP BY p.nhom_dich_vu"
         
         cursor.execute(sql, tuple(params))
         for r in cursor.fetchall():
