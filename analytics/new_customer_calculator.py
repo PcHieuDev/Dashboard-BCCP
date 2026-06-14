@@ -142,7 +142,7 @@ def calculate_new_customers(db_path: str, nam: int, thang: int) -> int:
         return 0
         
     # 5. Load dim_buucuc vào bộ nhớ để lookup nhanh
-    cursor.execute("SELECT ma_bc, ma_bdx, ten_cum FROM dim_buucuc;")
+    cursor.execute("SELECT ma_buu_cuc, ma_bdx, ten_cum FROM dim_buucuc;")
     dim_buucuc_dict = {row[0]: (row[1], row[2]) for row in cursor.fetchall() if row[0]}
     
     new_cms_list = list(new_cms)

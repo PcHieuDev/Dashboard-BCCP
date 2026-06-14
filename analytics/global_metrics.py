@@ -128,11 +128,11 @@ def get_total_revenue_by_service(db_path, nam, thang=None, cum=None):
         params["thang"] = thang_str
         
     if cum and cum != "Tất cả":
-        sql_bccp += " INNER JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc"
-        sql_hcc_cp += " INNER JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc"
-        sql_hcc_new += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_bc"
-        sql_tcbc += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_bc"
-        sql_ppbl += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_bc"
+        sql_bccp += " INNER JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc"
+        sql_hcc_cp += " INNER JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc"
+        sql_hcc_new += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc"
+        sql_tcbc += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc"
+        sql_ppbl += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc"
         
         where_t.append("b.ten_cum = :cum")
         where_hcc_cp.append("b.ten_cum = :cum")
@@ -204,11 +204,11 @@ def get_ytd_revenue(db_path, nam, thang_den, cum=None):
     params = {"nam": nam}
     
     if cum and cum != "Tất cả":
-        sql_bccp += " INNER JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc"
-        sql_hcc_cp += " INNER JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc"
-        sql_hcc_new += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_bc"
-        sql_tcbc += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_bc"
-        sql_ppbl += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_bc"
+        sql_bccp += " INNER JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc"
+        sql_hcc_cp += " INNER JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc"
+        sql_hcc_new += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc"
+        sql_tcbc += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc"
+        sql_ppbl += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc"
         
         where_t.append("b.ten_cum = :cum")
         where_hcc_cp.append("b.ten_cum = :cum")
@@ -246,7 +246,7 @@ def get_ytd_plan(db_path, nam, thang_den, cum=None):
     params = {"nam": nam, "thang_den": thang_den}
     
     if cum and cum != "Tất cả":
-        sql += " INNER JOIN dim_buucuc b ON plans.ma_buu_cuc = b.ma_bc"
+        sql += " INNER JOIN dim_buucuc b ON plans.ma_buu_cuc = b.ma_buu_cuc"
         where.append("b.ten_cum = :cum")
         params["cum"] = cum
         
@@ -321,7 +321,7 @@ def get_revenue_by_cum(db_path, nam, thang=None):
         SELECT b.ten_cum, d.nhom_chinh, SUM(t.cuoc_tt_tong) as dt
         FROM transactions t
         INNER JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu
-        INNER JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+        INNER JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc
         WHERE t.nam_du_lieu = :nam
     """
     params = {"nam": nam}
@@ -345,7 +345,7 @@ def get_revenue_by_cum(db_path, nam, thang=None):
         sql_hcc = """
             SELECT b.ten_cum, SUM(t.doanh_thu) as dt
             FROM transactions_hcc t
-            INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_bc
+            INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc
             WHERE t.nam_du_lieu = :nam
         """
         params_hcc = {"nam": nam}
@@ -365,7 +365,7 @@ def get_revenue_by_cum(db_path, nam, thang=None):
         sql_tcbc = """
             SELECT b.ten_cum, SUM(t.doanh_thu) as dt
             FROM transactions_tcbc t
-            INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_bc
+            INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc
             WHERE t.nam_du_lieu = :nam
         """
         params_tc = {"nam": nam}
@@ -385,7 +385,7 @@ def get_revenue_by_cum(db_path, nam, thang=None):
         sql_ppbl = """
             SELECT b.ten_cum, SUM(t.doanh_thu) as dt
             FROM transactions_ppbl t
-            INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_bc
+            INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc
             WHERE t.nam_du_lieu = :nam
         """
         params_pp = {"nam": nam}
@@ -528,7 +528,7 @@ def get_top10_by_comparison(conn, period_type, period_value, year, compare_type,
         sql = f"""
             SELECT {grp_col} as ma_bdx, SUM(a.tong_doanh_thu) AS dt
             FROM {agg_tbl} a
-            INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc
+            INNER JOIN dim_buucuc b ON a.ma_buu_cuc = b.ma_buu_cuc
             WHERE a.nam = ? AND a.{prd_col} = ?{where_nhom}
               AND b.ma_bdx IS NOT NULL
               AND b.ma_bdx NOT LIKE 'CUM_%'
@@ -554,7 +554,7 @@ def get_top10_by_comparison(conn, period_type, period_value, year, compare_type,
             sql_plan_bccp = f"""
                 SELECT {grp_col} as ma_bdx, SUM(p.ke_hoach_doanh_thu) AS plan_bccp
                 FROM {plan_tbl} p
-                INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_bc
+                INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_buu_cuc
                 WHERE p.nam = ? AND p.{plan_col} = ? AND p.nhom_chinh = 'BCCP'
                   AND b.ma_bdx IS NOT NULL
                 GROUP BY {grp_col}
@@ -580,7 +580,7 @@ def get_top10_by_comparison(conn, period_type, period_value, year, compare_type,
             sql_plan = f"""
                 SELECT {grp_col} as ma_bdx, SUM(p.ke_hoach_doanh_thu) AS plan_val
                 FROM {plan_tbl} p
-                INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_bc
+                INNER JOIN dim_buucuc b ON p.ma_buu_cuc = b.ma_buu_cuc
                 WHERE p.nam = ? AND p.{plan_col} = ? AND p.nhom_chinh = ?
                 AND b.ma_bdx IS NOT NULL
                 GROUP BY {grp_col}
@@ -672,7 +672,7 @@ def get_12_periods_revenue(conn, period_type, current_period, current_year, cum=
                     SELECT COALESCE((SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 'Khác') as nhom_dich_vu,
                            a.tong_doanh_thu
                     FROM agg_monthly a
-                    INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc
+                    INNER JOIN dim_buucuc b ON a.ma_buu_cuc = b.ma_buu_cuc
                     WHERE a.nam = ? AND a.thang = ?
             """
         else: # Tuần
@@ -682,7 +682,7 @@ def get_12_periods_revenue(conn, period_type, current_period, current_year, cum=
                     SELECT COALESCE((SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 'Khác') as nhom_dich_vu,
                            a.tong_doanh_thu
                     FROM agg_weekly a
-                    INNER JOIN dim_buucuc b ON a.buu_cuc = b.ma_bc
+                    INNER JOIN dim_buucuc b ON a.ma_buu_cuc = b.ma_buu_cuc
                     WHERE a.nam = ? AND a.tuan_so = ?
             """
             
@@ -739,7 +739,7 @@ def get_period_detail_by_xa(conn, period_type, period_value, year, cum=None, bdx
         curr_sql = """
             SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
             FROM (
-                SELECT a.buu_cuc,
+                SELECT a.ma_buu_cuc as buu_cuc,
                        COALESCE((SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 'Khác') as nhom_dich_vu,
                        a.tong_doanh_thu
                 FROM agg_monthly a
@@ -751,7 +751,7 @@ def get_period_detail_by_xa(conn, period_type, period_value, year, cum=None, bdx
         curr_sql = """
             SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
             FROM (
-                SELECT a.buu_cuc,
+                SELECT a.ma_buu_cuc as buu_cuc,
                        COALESCE((SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 'Khác') as nhom_dich_vu,
                        a.tong_doanh_thu
                 FROM agg_weekly a
@@ -774,16 +774,16 @@ def get_period_detail_by_xa(conn, period_type, period_value, year, cum=None, bdx
     
     # 3. Doanh thu tổng kỳ trước theo xã
     if period_type == 'Tháng':
-        prev_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev FROM agg_monthly WHERE nam = ? AND thang = ? GROUP BY buu_cuc"
+        prev_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(tong_doanh_thu) as dt_prev FROM agg_monthly WHERE nam = ? AND thang = ? GROUP BY ma_buu_cuc"
     else:
-        prev_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev FROM agg_weekly WHERE nam = ? AND tuan_so = ? GROUP BY buu_cuc"
+        prev_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(tong_doanh_thu) as dt_prev FROM agg_weekly WHERE nam = ? AND tuan_so = ? GROUP BY ma_buu_cuc"
     df_prev = pd.read_sql_query(prev_sql, conn, params=(prev_year, prev_value))
     
     # 4. Doanh thu tổng cùng kỳ năm trước theo xã
     if period_type == 'Tháng':
-        yoy_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy FROM agg_monthly WHERE nam = ? AND thang = ? GROUP BY buu_cuc"
+        yoy_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(tong_doanh_thu) as dt_yoy FROM agg_monthly WHERE nam = ? AND thang = ? GROUP BY ma_buu_cuc"
     else:
-        yoy_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy FROM agg_weekly WHERE nam = ? AND tuan_so = ? GROUP BY buu_cuc"
+        yoy_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(tong_doanh_thu) as dt_yoy FROM agg_weekly WHERE nam = ? AND tuan_so = ? GROUP BY ma_buu_cuc"
     df_yoy = pd.read_sql_query(yoy_sql, conn, params=(year - 1, period_value))
     
     # 5. Kế hoạch kỳ hiện tại theo xã
@@ -794,7 +794,7 @@ def get_period_detail_by_xa(conn, period_type, period_value, year, cum=None, bdx
     df_plan = pd.read_sql_query(plan_sql, conn, params=(year, period_value))
     
     # Load danh mục địa lý dim_buucuc
-    df_geo_all = pd.read_sql_query("SELECT ma_bc, ma_bdx, ten_bdx, ten_cum, ten_buu_cuc FROM dim_buucuc", conn)
+    df_geo_all = pd.read_sql_query("SELECT ma_buu_cuc as ma_bc, ma_bdx, ten_bdx, ten_cum, ten_buu_cuc FROM dim_buucuc", conn)
     bc_to_xa = df_geo_all.set_index('ma_bc')['ma_bdx'].dropna().to_dict()
     bc_to_ten_xa = df_geo_all.set_index('ma_bc')['ten_bdx'].dropna().to_dict()
     bc_to_cum = df_geo_all.set_index('ma_bc')['ten_cum'].dropna().to_dict()
@@ -921,7 +921,7 @@ def get_ytd_detail_by_xa(conn, period_type, period_value, year, cum=None, bdx=No
         curr_sql = """
             SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
             FROM (
-                SELECT a.buu_cuc,
+                SELECT a.ma_buu_cuc as buu_cuc,
                        COALESCE((SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 'Khác') as nhom_dich_vu,
                        a.tong_doanh_thu
                 FROM agg_monthly a
@@ -933,7 +933,7 @@ def get_ytd_detail_by_xa(conn, period_type, period_value, year, cum=None, bdx=No
         curr_sql = """
             SELECT buu_cuc, nhom_dich_vu, SUM(tong_doanh_thu) as dt
             FROM (
-                SELECT a.buu_cuc,
+                SELECT a.ma_buu_cuc as buu_cuc,
                        COALESCE((SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 'Khác') as nhom_dich_vu,
                        a.tong_doanh_thu
                 FROM agg_weekly a
@@ -961,7 +961,7 @@ def get_ytd_detail_by_xa(conn, period_type, period_value, year, cum=None, bdx=No
         if prev_val == 0:
             prev_val = 12
             prev_yr = year - 1
-        prev_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev FROM agg_monthly WHERE nam = ? AND thang BETWEEN 1 AND ? GROUP BY buu_cuc"
+        prev_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(tong_doanh_thu) as dt_prev FROM agg_monthly WHERE nam = ? AND thang BETWEEN 1 AND ? GROUP BY ma_buu_cuc"
     else: # Tuần
         prev_val = period_value - 1
         prev_yr = year
@@ -969,15 +969,15 @@ def get_ytd_detail_by_xa(conn, period_type, period_value, year, cum=None, bdx=No
             prev_yr = year - 1
             weeks = calendar_helper.get_week_list(prev_yr)
             prev_val = weeks[-1][0] if weeks else 52
-        prev_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_prev FROM agg_weekly WHERE nam = ? AND tuan_so BETWEEN 1 AND ? GROUP BY buu_cuc"
+        prev_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(tong_doanh_thu) as dt_prev FROM agg_weekly WHERE nam = ? AND tuan_so BETWEEN 1 AND ? GROUP BY ma_buu_cuc"
         
     df_prev = pd.read_sql_query(prev_sql, conn, params=(prev_yr, prev_val))
     
     # 3. Doanh thu lũy kế cùng kỳ năm trước YTD
     if period_type == 'Tháng':
-        yoy_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy FROM agg_monthly WHERE nam = ? AND thang BETWEEN 1 AND ? GROUP BY buu_cuc"
+        yoy_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(tong_doanh_thu) as dt_yoy FROM agg_monthly WHERE nam = ? AND thang BETWEEN 1 AND ? GROUP BY ma_buu_cuc"
     else:
-        yoy_sql = "SELECT buu_cuc, SUM(tong_doanh_thu) as dt_yoy FROM agg_weekly WHERE nam = ? AND tuan_so BETWEEN 1 AND ? GROUP BY buu_cuc"
+        yoy_sql = "SELECT ma_buu_cuc as buu_cuc, SUM(tong_doanh_thu) as dt_yoy FROM agg_weekly WHERE nam = ? AND tuan_so BETWEEN 1 AND ? GROUP BY ma_buu_cuc"
     df_yoy = pd.read_sql_query(yoy_sql, conn, params=(year - 1, period_value))
     
     # 4. Kế hoạch lũy kế YTD (kế hoạch CẢ NĂM theo yêu cầu của Sếp)
@@ -988,7 +988,7 @@ def get_ytd_detail_by_xa(conn, period_type, period_value, year, cum=None, bdx=No
     df_plan = pd.read_sql_query(plan_sql, conn, params=(year,))
     
     # Load danh mục địa lý dim_buucuc
-    df_geo_all = pd.read_sql_query("SELECT ma_bc, ma_bdx, ten_bdx, ten_cum, ten_buu_cuc FROM dim_buucuc", conn)
+    df_geo_all = pd.read_sql_query("SELECT ma_buu_cuc as ma_bc, ma_bdx, ten_bdx, ten_cum, ten_buu_cuc FROM dim_buucuc", conn)
     bc_to_xa = df_geo_all.set_index('ma_bc')['ma_bdx'].dropna().to_dict()
     bc_to_ten_xa = df_geo_all.set_index('ma_bc')['ten_bdx'].dropna().to_dict()
     bc_to_cum = df_geo_all.set_index('ma_bc')['ten_cum'].dropna().to_dict()

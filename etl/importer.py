@@ -612,8 +612,8 @@ def check_missing_mappings(db_path_or_conn):
         cursor.execute("""
             SELECT DISTINCT t.buu_cuc 
             FROM transactions t 
-            LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc 
-            WHERE b.ma_bc IS NULL AND t.buu_cuc IS NOT NULL AND t.buu_cuc != ''
+            LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc 
+            WHERE b.ma_buu_cuc IS NULL AND t.buu_cuc IS NOT NULL AND t.buu_cuc != ''
         """)
         missing_bc = [r[0] for r in cursor.fetchall()]
     except sqlite3.Error as e:

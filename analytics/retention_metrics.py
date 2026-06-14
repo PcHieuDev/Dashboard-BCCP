@@ -69,7 +69,7 @@ def get_khhh_list(db_path: str, nam: int, thang: int, cum: str = None, bdx: str 
     query_gd = """
         SELECT DISTINCT t.cms 
         FROM transactions t
-        LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+        LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc
         WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ?
         AND t.cms IS NOT NULL AND t.cms != '' 
         AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none'
@@ -94,7 +94,7 @@ def get_khhh_list(db_path: str, nam: int, thang: int, cum: str = None, bdx: str 
     query_new = """
         SELECT DISTINCT nc.cms 
         FROM new_customers nc
-        LEFT JOIN dim_buucuc b ON nc.buu_cuc = b.ma_bc
+        LEFT JOIN dim_buucuc b ON nc.buu_cuc = b.ma_buu_cuc
         WHERE nc.nam = ? AND nc.thang = ?
         AND nc.cms IS NOT NULL AND nc.cms != ''
     """
@@ -144,7 +144,7 @@ def get_retention_stats(db_path: str, nam: int, thang: int, cum: str = None, bdx
     query_cur = """
         SELECT t.cms, SUM(t.cuoc_tt_tong) 
         FROM transactions t
-        LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+        LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc
         WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ?
           AND t.cms IS NOT NULL AND t.cms != '' 
           AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none'
@@ -166,7 +166,7 @@ def get_retention_stats(db_path: str, nam: int, thang: int, cum: str = None, bdx
     query_prev = """
         SELECT t.cms, SUM(t.cuoc_tt_tong) 
         FROM transactions t
-        LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+        LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc
         WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ?
           AND t.cms IS NOT NULL AND t.cms != '' 
           AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none'
@@ -230,7 +230,7 @@ def get_khhh_changes(db_path: str, nam: int, thang: int, cum: str = None, bdx: s
     query_cur = """
         SELECT t.cms, SUM(t.cuoc_tt_tong) 
         FROM transactions t
-        LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+        LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc
         WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ?
           AND t.cms IS NOT NULL AND t.cms != '' 
           AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none'
@@ -251,7 +251,7 @@ def get_khhh_changes(db_path: str, nam: int, thang: int, cum: str = None, bdx: s
     query_prev = """
         SELECT t.cms, SUM(t.cuoc_tt_tong) 
         FROM transactions t
-        LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+        LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc
         WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ?
           AND t.cms IS NOT NULL AND t.cms != '' 
           AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none'
@@ -356,7 +356,7 @@ def get_churn_alerts(db_path: str, year: int, month: int, cum: str = None, bdx: 
     query_prev = """
         SELECT t.cms, SUM(t.cuoc_tt_tong) as dt_prev, MAX(t.ngay_chap_nhan) as last_date, MAX(b.ten_bdx) as bdx
         FROM transactions t
-        LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+        LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc
         WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ?
         AND t.cms IS NOT NULL AND t.cms != ''
         AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none'
@@ -379,7 +379,7 @@ def get_churn_alerts(db_path: str, year: int, month: int, cum: str = None, bdx: 
     query_cur = """
         SELECT t.cms, SUM(t.cuoc_tt_tong) as dt_cur, MAX(t.ngay_chap_nhan) as last_date, MAX(b.ten_bdx) as bdx
         FROM transactions t
-        LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+        LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc
         WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ?
         AND t.cms IS NOT NULL AND t.cms != ''
         AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none'
@@ -497,7 +497,7 @@ def get_khhh_changes_v2(db_path: str, nam: int, thang: int, cum: str = None, bdx
             SELECT t.cms, t.buu_cuc, SUM(t.cuoc_tt_tong) as dt,
                    ROW_NUMBER() OVER (PARTITION BY t.cms ORDER BY SUM(t.cuoc_tt_tong) DESC) as rn
             FROM transactions t
-            LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+            LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc
             WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ? AND t.cuoc_tt_tong > 0 {geo_where_str}
             GROUP BY t.cms, t.buu_cuc
         )
@@ -512,7 +512,7 @@ def get_khhh_changes_v2(db_path: str, nam: int, thang: int, cum: str = None, bdx
             SELECT t.cms, t.buu_cuc, SUM(t.cuoc_tt_tong) as dt,
                    ROW_NUMBER() OVER (PARTITION BY t.cms ORDER BY SUM(t.cuoc_tt_tong) DESC) as rn
             FROM transactions t
-            LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+            LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc
             WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ? AND t.cuoc_tt_tong > 0 {geo_where_str}
             GROUP BY t.cms, t.buu_cuc
         )
@@ -526,7 +526,7 @@ def get_khhh_changes_v2(db_path: str, nam: int, thang: int, cum: str = None, bdx
     common_cms = set(cms_curr_rev.keys()) & set(cms_prev_rev.keys())
     
     # Cần join thêm địa lý dim_buucuc
-    df_buucuc = pd.read_sql_query("SELECT ma_bc as buu_cuc, ten_bdx, ten_cum FROM dim_buucuc", conn)
+    df_buucuc = pd.read_sql_query("SELECT ma_buu_cuc as buu_cuc, ten_bdx, ten_cum FROM dim_buucuc", conn)
     
     list_tang = []
     list_giam = []
@@ -571,7 +571,7 @@ def get_khhh_changes_v2(db_path: str, nam: int, thang: int, cum: str = None, bdx
                 SELECT t.cms, t.buu_cuc, SUM(t.cuoc_tt_tong) as dt,
                        ROW_NUMBER() OVER (PARTITION BY t.cms ORDER BY SUM(t.cuoc_tt_tong) DESC) as rn
                 FROM transactions t
-                LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+                LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc
                 WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ? AND t.cuoc_tt_tong > 0
                   AND t.cms IS NOT NULL AND t.cms != ''
                   AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none' {geo_where_str}
@@ -601,7 +601,7 @@ def get_khhh_changes_v2(db_path: str, nam: int, thang: int, cum: str = None, bdx
         bc = info['buu_cuc']
         
         # Lấy địa lý bưu cục
-        cursor.execute("SELECT ten_bdx, ten_cum FROM dim_buucuc WHERE ma_bc = ? LIMIT 1", (bc,))
+        cursor.execute("SELECT ten_bdx, ten_cum FROM dim_buucuc WHERE ma_buu_cuc = ? LIMIT 1", (bc,))
         bc_row = cursor.fetchone()
         ten_cum = bc_row[1] if bc_row else "Khác"
         ten_bdx = bc_row[0] if bc_row else "Khác"
@@ -674,7 +674,7 @@ def get_weekly_changes(db_path: str, year: int, week: int, cum: str = None, bdx:
             SELECT t.cms, t.buu_cuc, SUM(t.cuoc_tt_tong) as dt,
                    ROW_NUMBER() OVER (PARTITION BY t.cms ORDER BY SUM(t.cuoc_tt_tong) DESC) as rn
             FROM transactions t
-            LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+            LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc
             WHERE t.ngay_chap_nhan BETWEEN ? AND ? AND t.cuoc_tt_tong > 0
               AND t.cms IS NOT NULL AND t.cms != ''
               AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none' {geo_where_str}
@@ -691,7 +691,7 @@ def get_weekly_changes(db_path: str, year: int, week: int, cum: str = None, bdx:
             SELECT t.cms, t.buu_cuc, SUM(t.cuoc_tt_tong) as dt,
                    ROW_NUMBER() OVER (PARTITION BY t.cms ORDER BY SUM(t.cuoc_tt_tong) DESC) as rn
             FROM transactions t
-            LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc
+            LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc
             WHERE t.ngay_chap_nhan BETWEEN ? AND ? AND t.cuoc_tt_tong > 0
               AND t.cms IS NOT NULL AND t.cms != ''
               AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none' {geo_where_str}
@@ -704,7 +704,7 @@ def get_weekly_changes(db_path: str, year: int, week: int, cum: str = None, bdx:
     
     # Phân rã
     common_cms = set(cms_curr_rev.keys()) & set(cms_prev_rev.keys())
-    df_buucuc = pd.read_sql_query("SELECT ma_bc as buu_cuc, ten_bdx, ten_cum FROM dim_buucuc", conn)
+    df_buucuc = pd.read_sql_query("SELECT ma_buu_cuc as buu_cuc, ten_bdx, ten_cum FROM dim_buucuc", conn)
     
     list_tang = []
     list_giam = []
