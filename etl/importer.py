@@ -198,8 +198,8 @@ def import_excel_file(db_path, excel_path, import_batch=None, thang=None, mode='
     cursor = conn.cursor()
     
     insert_cols = [
-        'thang_du_lieu', 'nam_du_lieu', 'import_batch', 'stt', 'cms', 'ma_hop_dong', 'buu_cuc',
-        'san_pham_dv', 'ngay_chap_nhan', 'san_luong',
+        'thang_du_lieu', 'nam_du_lieu', 'import_batch', 'stt', 'cms', 'ma_hop_dong', 'ma_buu_cuc',
+        'ten_dich_vu', 'ngay_chap_nhan', 'san_luong',
         'khoi_luong_thuc', 'khoi_luong_tinh_cuoc',
         'cuoc_cb_cp', 'cuoc_cb_gtgt', 'cuoc_cb_cod', 'cuoc_cb_tong',
         'cuoc_tt_cp', 'cuoc_tt_gtgt', 'cuoc_tt_cod', 'cuoc_tt_tong',
@@ -512,8 +512,8 @@ def import_raw_excel_file(db_path, excel_path, import_batch=None, thang=None, mo
     nam_du_lieu = int(first_date_str[:4]) if first_date_str and len(first_date_str) >= 4 else None
     
     insert_cols = [
-        'thang_du_lieu', 'nam_du_lieu', 'import_batch', 'stt', 'cms', 'ma_hop_dong', 'buu_cuc',
-        'san_pham_dv', 'ngay_chap_nhan', 'san_luong',
+        'thang_du_lieu', 'nam_du_lieu', 'import_batch', 'stt', 'cms', 'ma_hop_dong', 'ma_buu_cuc',
+        'ten_dich_vu', 'ngay_chap_nhan', 'san_luong',
         'khoi_luong_thuc', 'khoi_luong_tinh_cuoc',
         'cuoc_cb_cp', 'cuoc_cb_gtgt', 'cuoc_cb_cod', 'cuoc_cb_tong',
         'cuoc_tt_cp', 'cuoc_tt_gtgt', 'cuoc_tt_cod', 'cuoc_tt_tong',

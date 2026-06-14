@@ -145,7 +145,7 @@ def get_aggregated_revenue(db_path, cycle, year, period_val, cum=None, bdx=None,
             (SELECT d.nhom_chinh FROM dim_dichvu d WHERE d.nhom_dich_vu = a.nhom_dich_vu OR d.ten_dich_vu = a.nhom_dich_vu LIMIT 1), 
             'Khác'
         )"""
-        logger.error(f"DEBUG get_aggregated_revenue SQL: {sql} with params {params}", flush=True)
+        logger.debug(f"DEBUG get_aggregated_revenue SQL: {sql} with params {params}")
         cursor = conn.cursor()
         cursor.execute(sql, params)
         for row in cursor.fetchall():
@@ -346,7 +346,7 @@ def register_global_callbacks(app):
         ]
     )
     def update_global_dashboard(n_clicks, year, month, week, cycle, cum, bdx, buu_cuc):
-        logger.error(f"DEBUG update_global_dashboard: cycle={cycle}, year={year}, month={month}, week={week}, cum={cum}, bdx={bdx}, buu_cuc={buu_cuc}", flush=True)
+        logger.debug(f"DEBUG update_global_dashboard: cycle={cycle}, year={year}, month={month}, week={week}, cum={cum}, bdx={bdx}, buu_cuc={buu_cuc}")
         if not year or (cycle == 'Tháng' and not month) or (cycle == 'Tuần' and not week):
             # Return empty/fallback values if filter is incomplete
             empty_kpi = ["—", "—", {"color": "#94A3B8"}, "—", {"color": "#94A3B8"}, "—", {"color": "#94A3B8"}]
