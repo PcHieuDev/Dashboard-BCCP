@@ -8,6 +8,7 @@ __pycache__/
 *.sqlite
 database/*.db
 database/*.sqlite
+!.agent_memory.db
 
 # Excel / Data files (ignore raw data, but keep mapping and templates)
 *.xls

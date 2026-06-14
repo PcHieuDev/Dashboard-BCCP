@@ -25,3 +25,35 @@ Dashboard doanh thu bưu chính chuyển phát (BCCP) hỗ trợ bộ lọc đa 
 - **Cơ sở dữ liệu**: [dashboard.db](file:///E:/OneDrive/z.Database-TTKD-Data/dashboard.db)
 - **Trang thái hiện tại**: Đã hoàn thành **Phase 16 (Tối ưu hóa ETL Import thô phân rã ngày, chế độ ghi đè sửa chữa, tối ưu hóa gộp số liệu SQLite UPSERT, sửa tràn bảng Lịch sử import, và nâng cấp file mẫu Excel đối chiếu thông minh kèm Premium Pastel Conditional Formatting)**. Xem chi tiết toàn bộ lịch sử và trạng thái dự án tại [project_state.md](file:///E:/Projects/worktrees/Dashboard-BCCP/feat-import-optimize/project_state.md).
 - **Cloudflare Tunnel (Truy cập từ xa)**: Tên miền `dashboard.bdna.io.vn` trỏ về `http://127.0.0.1:8050`. Windows Service `cloudflared` đang hoạt động ổn định.
+
+---
+
+## Quy trình Bộ nhớ chung đa Agent (BẮT BUỘC)
+
+> [!CAUTION]
+> Mọi Agent (mọi conversation trong project này) **BẮT BUỘC** tuân thủ quy trình dưới đây.
+> File `agent_memory.py` ở thư mục gốc dự án là hệ thống bộ nhớ chung giữa các phiên chat.
+
+### BƯỚC 1 — KHI BẮT ĐẦU PHIÊN LÀM VIỆC
+Chạy ngầm qua terminal (KHÔNG cần hỏi user) để nắm bắt context từ các Agent trước:
+```
+python agent_memory.py read 5
+git log -n 5 --oneline
+```
+Sau khi đọc, tự tóm tắt cho bản thân: "Dự án hiện ở trạng thái..., Agent trước đã làm..."
+
+### BƯỚC 2 — KHI TẠO HOẶC SỬA FILE QUAN TRỌNG
+Ghi nhận ý nghĩa file vào manifest:
+```
+python agent_memory.py manifest-set "<đường_dẫn_tương_đối>" "<ý_nghĩa>" "<module>"
+```
+
+### BƯỚC 3 — KHI HOÀN THÀNH TÁC VỤ
+Trước khi kết thúc hoặc khi user yêu cầu, ghi nhật ký phiên làm việc:
+```
+python agent_memory.py log "<conversation_id>" "<mô_tả_ngắn_tiếng_Việt>" "<file1,file2,...>" "<role>" "<action_type>"
+```
+Trong đó:
+- `conversation_id`: ID conversation hiện tại (lấy từ system metadata)
+- `role`: general | contractor | builder | debugger
+- `action_type`: create | modify | delete | refactor | debug | review
