@@ -70,18 +70,25 @@ REVENUE_COLUMN = "cuoc_tt_tong"
 # ==============================================================================
 # CẤU HÌNH ĐA DỊCH VỤ (MULTI-SERVICE)
 # ==============================================================================
-SERVICE_GROUPS = ["BCCP", "Hành chính công", "Tài chính Bưu chính", "Phân phối bán lẻ"]
+SERVICE_GROUPS = ["BCCP", "HCC", "TCBC", "PPBL"]
+
+SERVICE_LABELS = {
+    "BCCP": "Bưu chính chuyển phát",
+    "HCC": "Hành chính công",
+    "TCBC": "Tài chính Bưu chính",
+    "PPBL": "Phân phối bán lẻ"
+}
 
 SERVICE_COLORS = {
-    "BCCP": "#3B82F6",              # Xanh dương
-    "Hành chính công": "#10B981",   # Xanh lá
-    "Tài chính Bưu chính": "#F59E0B", # Vàng cam
-    "Phân phối bán lẻ": "#8B5CF6"   # Tím
+    "BCCP": "#3B82F6",    # Xanh dương
+    "HCC": "#10B981",     # Xanh lá
+    "TCBC": "#F59E0B",    # Vàng cam
+    "PPBL": "#8B5CF6"     # Tím
 }
 
 SERVICE_TABLES = {
     "BCCP": "transactions",
-    "Hành chính công": "transactions_hcc",
-    "Tài chính Bưu chính": "transactions_tcbc",
-    "Phân phối bán lẻ": "transactions_ppbl"
+    "HCC": "transactions_hcc",
+    "TCBC": "transactions_tcbc",
+    "PPBL": "transactions_ppbl"
 }

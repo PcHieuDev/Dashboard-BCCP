@@ -1,10 +1,9 @@
 @echo off
-chcp 65001 >nul
 echo ----------------------------------------------------
-echo BẮT ĐẦU CHẠY KIỂM THỬ (PYTEST)
+echo RUNNING PYTEST (KIEM THU TU DONG)
 echo ----------------------------------------------------
-pytest tests/ -v
+python -m pytest tests/ -v
 echo.
 echo ----------------------------------------------------
-echo ĐÃ HOÀN TẤT. BẤM PHÍM BẤT KỲ ĐỂ THOÁT.
+echo DONE. PRESS ANY KEY TO EXIT.
 pause

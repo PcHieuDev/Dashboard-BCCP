@@ -118,13 +118,6 @@ def sync_spdv(conn):
                VALUES (?, ?, ?, ?)""",
             (nhom_chinh, ma_spdv, ten_spdv, nhom_dich_vu),
         )
-        
-        # 2. Đồng bộ vào dim_spdv (bảng cũ để đảm bảo tương thích ngược)
-        cursor.execute(
-            """INSERT OR REPLACE INTO dim_spdv (ma_spdv, ten_spdv, nhom_dich_vu, ghi_chu)
-               VALUES (?, ?, ?, ?)""",
-            (ma_spdv, ten_spdv, nhom_dich_vu, row.get("ghi_chu")),
-        )
         rows_synced += 1
 
     conn.commit()

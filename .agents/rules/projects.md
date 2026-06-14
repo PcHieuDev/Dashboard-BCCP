@@ -1,1 +1,0 @@
-#Luôn tuân thủ quy trình `vibe-coding-8-step` khi triển khai

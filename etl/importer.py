@@ -603,8 +603,8 @@ def check_missing_mappings(db_path_or_conn):
         cursor.execute("""
             SELECT DISTINCT t.san_pham_dv 
             FROM transactions t 
-            LEFT JOIN dim_spdv d ON t.san_pham_dv = d.ma_spdv 
-            WHERE d.ma_spdv IS NULL AND t.san_pham_dv IS NOT NULL AND t.san_pham_dv != ''
+            LEFT JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu 
+            WHERE d.ma_dich_vu IS NULL AND t.san_pham_dv IS NOT NULL AND t.san_pham_dv != ''
         """)
         missing_sp = [r[0] for r in cursor.fetchall()]
         

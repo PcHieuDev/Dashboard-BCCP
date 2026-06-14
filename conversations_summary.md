@@ -5,6 +5,28 @@
 
 ---
 
+## Cuộc trò chuyện `359ee302-e167-4f68-bf74-fdbb1cd44a58`
+- **Thời gian chỉnh sửa cuối:** `14/06/2026 18:20:00`
+
+### 📋 Tóm tắt nội dung thi công — Phase 18: Đồng bộ danh mục SQLite vào Excel mẫu & Nâng cấp công thức đối chiếu chống lệch định dạng
+> ## Ghi nhận thực hiện
+> 
+> ### 1. Tạo và thực thi script đồng bộ templates
+> - Viết mới script [sync_excel_templates.py](file:///E:/Projects/Dashboard-BCCP/scripts/sync_excel_templates.py).
+> - Đọc trực tiếp danh sách 777 bưu cục mới nhất và 102 sản phẩm dịch vụ hoàn chỉnh từ SQLite `dashboard.db`.
+> - Ghi đè cập nhật vào các sheet `Ref_BuuCuc`, `Ref_DichVu`, `Ref_NhomChinh` trong 3 file Excel mẫu: `mau_import_dich_vu_khac.xlsx`, `mau_import_doanh_thu_BCCP.xlsx`, `mau_import_ke_hoach.xlsx`.
+> 
+> ### 2. Nâng cấp công thức đối chiếu thông minh chống lệch định dạng
+> - Thay thế toàn bộ công thức so khớp cũ bằng công thức đối chiếu thông minh mới cho tất cả các dòng dữ liệu (phủ rộng 5,000 -> 10,000 dòng):
+>   `=IF(B2="","",IF(OR(ISNUMBER(MATCH(B2,Ref_BuuCuc!$A$2:$A$10000,0)),ISNUMBER(MATCH(B2&"",Ref_BuuCuc!$A$2:$A$10000,0)),IFERROR(ISNUMBER(MATCH(VALUE(B2),Ref_BuuCuc!$A$2:$A$10000,0)),FALSE)),"OK","Sai mã bưu cục"))`
+> - Giải quyết hoàn toàn tình trạng báo lỗi "Sai mã bưu cục" do Excel tự động chuyển định dạng Số thành định dạng Chuỗi (Text) khi người dùng copy/paste dữ liệu.
+> 
+> ### 💬 Nội dung trao đổi chính của Sếp
+> - *Yêu cầu 1:* Đồng bộ dữ liệu bưu cục và dịch vụ mới nhất vào sheet Ref của file `mau_import_dich_vu_khac.xlsx` (do dữ liệu cũ chưa cập nhật).
+> - *Yêu cầu 2:* Khắc phục lỗi khi copy dán mã bưu cục bị chuyển sang kiểu Số khiến cột đối chiếu báo đỏ "Sai mã...", trong khi import Python vẫn hiểu đúng.
+
+---
+
 ## Cuộc trò chuyện `051bef8c-70c1-4b89-b999-26942544cca7`
 - **Thời gian chỉnh sửa cuối:** `11/06/2026 11:20:00`
 

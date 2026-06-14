@@ -87,8 +87,8 @@ def main():
         # Đọc dữ liệu Danh mục bưu cục
         df_buucuc = pd.read_sql_query("SELECT ma_bc as [Mã bưu cục], ten_buu_cuc as [Tên bưu cục], ten_bdx as [Xã / Phường], ten_cum as [Cụm], ma_bdx as [Mã xã / Phường] FROM dim_buucuc ORDER BY ma_bc", conn)
         
-        # Đọc dữ liệu Sản phẩm (BCCP)
-        df_spdv = pd.read_sql_query("SELECT ma_spdv as [Mã sản phẩm], ten_spdv as [Tên sản phẩm], nhom_dich_vu as [Nhóm dịch vụ con] FROM dim_spdv ORDER BY ma_spdv", conn)
+        # Đọc dữ liệu Sản phẩm (BCCP) từ dim_dichvu
+        df_spdv = pd.read_sql_query("SELECT ma_dich_vu as [Mã sản phẩm], ten_dich_vu as [Tên sản phẩm], nhom_dich_vu as [Nhóm dịch vụ con] FROM dim_dichvu WHERE nhom_chinh = 'BCCP' ORDER BY ma_dich_vu", conn)
         
         # Định dạng lại bảng Nhóm dịch vụ (dim_dichvu) hiển thị đẹp cho Sếp tra cứu
         df_dichvu_ref = df_all.rename(columns={
