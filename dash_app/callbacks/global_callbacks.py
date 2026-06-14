@@ -19,6 +19,12 @@ if str(project_root) not in sys.path:
 from config.settings import DB_PATH, SERVICE_COLORS
 from callbacks.utils import format_revenue
 from analytics.global_metrics import (
+    get_total_revenue_by_service,
+    get_top10_by_comparison,
+    get_12_periods_revenue,
+    get_period_detail_by_xa,
+    get_ytd_detail_by_xa
+)
 
 import logging
 try:
@@ -33,13 +39,6 @@ except ImportError:
         logger = get_logger(__name__)
     except ImportError:
         logger = logging.getLogger(__name__)
-
-    get_total_revenue_by_service,
-    get_top10_by_comparison,
-    get_12_periods_revenue,
-    get_period_detail_by_xa,
-    get_ytd_detail_by_xa
-)
 
 def get_prev_period_info(period_type, period_value, year):
     """Tìm kỳ trước và năm tương ứng"""
