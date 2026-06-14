@@ -405,22 +405,22 @@ def query_sub_service_data(conn, service_key, period_type, period_val, year, sub
         ]
         real_ma_bc_list = set(df_buucuc_real['ma_buu_cuc'])
 
-        # Merge trực tiếp theo buu_cuc
+        # Merge trực tiếp theo ma_buu_cuc
         df_merge = df_pivot
         for df_c in [df_prev, df_yoy, df_plan]:
             if not df_c.empty:
-                df_merge = pd.merge(df_merge, df_c[['buu_cuc', 'dt_prev' if 'dt_prev' in df_c else ('dt_yoy' if 'dt_yoy' in df_c else 'plan_dt')]], on='buu_cuc', how='outer')
+                df_merge = pd.merge(df_merge, df_c[['ma_buu_cuc', 'dt_prev' if 'dt_prev' in df_c else ('dt_yoy' if 'dt_yoy' in df_c else 'plan_dt')]], on='ma_buu_cuc', how='outer')
         df_merge = df_merge.fillna(0.0)
 
         # Chỉ giữ lại bưu cục con thực tế thuộc xã
-        df_merge = df_merge[df_merge['buu_cuc'].isin(real_ma_bc_list)]
+        df_merge = df_merge[df_merge['ma_buu_cuc'].isin(real_ma_bc_list)]
         
         # Chỉ giữ bưu cục thực tế có phát sinh doanh thu thực tế (tong_dt > 0)
         df_merge = df_merge[df_merge['tong_dt'] > 0]
 
         # Gán tên bưu cục hiển thị
-        df_merge['ten_bdx'] = df_merge['buu_cuc'].map(bc_to_ten_bc)
-        df_merge['ma_bdx'] = df_merge['buu_cuc']
+        df_merge['ten_bdx'] = df_merge['ma_buu_cuc'].map(bc_to_ten_bc)
+        df_merge['ma_bdx'] = df_merge['ma_buu_cuc']
         df_merge['ten_cum'] = cum
 
         return df_merge.reset_index(drop=True)
@@ -610,22 +610,22 @@ def query_sub_service_data_ytd(conn, service_key, period_type, period_val, year,
         ]
         real_ma_bc_list = set(df_buucuc_real['ma_buu_cuc'])
 
-        # Merge trực tiếp theo buu_cuc
+        # Merge trực tiếp theo ma_buu_cuc
         df_merge = df_pivot
         for df_c in [df_prev, df_yoy, df_plan]:
             if not df_c.empty:
-                df_merge = pd.merge(df_merge, df_c[['buu_cuc', 'dt_prev' if 'dt_prev' in df_c else ('dt_yoy' if 'dt_yoy' in df_c else 'plan_dt')]], on='buu_cuc', how='outer')
+                df_merge = pd.merge(df_merge, df_c[['ma_buu_cuc', 'dt_prev' if 'dt_prev' in df_c else ('dt_yoy' if 'dt_yoy' in df_c else 'plan_dt')]], on='ma_buu_cuc', how='outer')
         df_merge = df_merge.fillna(0.0)
 
         # Chỉ giữ lại bưu cục con thực tế thuộc xã
-        df_merge = df_merge[df_merge['buu_cuc'].isin(real_ma_bc_list)]
+        df_merge = df_merge[df_merge['ma_buu_cuc'].isin(real_ma_bc_list)]
         
         # Chỉ giữ bưu cục thực tế có phát sinh doanh thu thực tế (tong_dt > 0)
         df_merge = df_merge[df_merge['tong_dt'] > 0]
 
         # Gán tên bưu cục hiển thị
-        df_merge['ten_bdx'] = df_merge['buu_cuc'].map(bc_to_ten_bc)
-        df_merge['ma_bdx'] = df_merge['buu_cuc']
+        df_merge['ten_bdx'] = df_merge['ma_buu_cuc'].map(bc_to_ten_bc)
+        df_merge['ma_bdx'] = df_merge['ma_buu_cuc']
         df_merge['ten_cum'] = cum
 
         return df_merge.reset_index(drop=True)
