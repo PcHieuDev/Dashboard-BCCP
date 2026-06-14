@@ -219,14 +219,30 @@ def create_detail_table_sub(df, sub_services, compare_type, title_label="⭐️ 
             "backgroundColor": "#F8FAFC",
             "fontWeight": "bold",
             "color": "#1E293B",
-            "border": "1px solid #CBD5E1"
+            "border": "1px solid #CBD5E1",
+            "fontSize": "11px",
+            "padding": "6px 6px",
+            "whiteSpace": "normal",
+            "height": "auto",
         },
         style_cell={
-            "padding": "8px 10px",
+            "padding": "4px 6px",
             "textAlign": "left",
-            "fontSize": "13px",
-            "fontFamily": "Inter, sans-serif"
+            "fontSize": "11px",
+            "fontFamily": "Inter, sans-serif",
+            "whiteSpace": "nowrap",
+            "overflow": "hidden",
+            "textOverflow": "ellipsis",
+            "maxWidth": "140px",
         },
+        style_cell_conditional=[
+            {"if": {"column_id": "ten_cum"},  "maxWidth": "90px",  "minWidth": "70px"},
+            {"if": {"column_id": "ten_bdx"},  "maxWidth": "130px", "minWidth": "100px"},
+            {"if": {"column_id": sub_services}, "maxWidth": "110px", "textAlign": "right"},
+            {"if": {"column_id": "tong_dt"},  "maxWidth": "120px", "textAlign": "right"},
+            {"if": {"column_id": cmp_col},    "maxWidth": "110px", "textAlign": "right"},
+            {"if": {"column_id": "ratio_display"}, "maxWidth": "90px", "textAlign": "center"},
+        ],
         style_data_conditional=[
             {
                 "if": {"row_index": 0},
@@ -253,6 +269,7 @@ def create_detail_table_sub(df, sub_services, compare_type, title_label="⭐️ 
             }
         ]
     )
+
 
 def query_sub_service_data(conn, service_key, period_type, period_val, year, sub_services, cum=None, bdx=None, buu_cuc=None):
     """Query chi tiết doanh thu theo bưu cục xã, phân rã theo nhóm dịch vụ con"""

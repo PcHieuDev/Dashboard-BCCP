@@ -235,12 +235,24 @@ def create_detail_table(df, compare_type, title_label="⭐️ TOÀN TỈNH"):
         
     df_sorted = df.sort_values(by=['ten_cum', 'ten_bdx'], ascending=True)
     df_final = pd.concat([prov_row, df_sorted], ignore_index=True)
-    
+
+    # Xác định cột và tên hiển thị doanh thu kỳ so sánh
+    if compare_type == 'prev':
+        cmp_col = 'dt_prev'
+        cmp_col_name = "DT Kỳ trước"
+    elif compare_type == 'yoy':
+        cmp_col = 'dt_yoy'
+        cmp_col_name = "DT Cùng kỳ"
+    else:
+        cmp_col = 'plan_dt'
+        cmp_col_name = "Kế hoạch"
+
     # Định dạng các cột hiển thị số tiền
     df_display = df_final.copy()
-    for col in ["BCCP", "HCC", "TCBC", "PPBL", "tong_dt"]:
-        df_display[col] = df_display[col].map(lambda x: f"{x:,.0f} đ" if x > 0 else "0 đ")
-        
+    for col in ["BCCP", "HCC", "TCBC", "PPBL", "tong_dt", cmp_col]:
+        if col in df_display.columns:
+            df_display[col] = df_display[col].map(lambda x: f"{x:,.0f} đ" if pd.notna(x) and x > 0 else "0 đ")
+
     columns = [
         {"name": "Cụm", "id": "ten_cum"},
         {"name": "Xã / Bưu cục", "id": "ten_bdx"},
@@ -248,10 +260,11 @@ def create_detail_table(df, compare_type, title_label="⭐️ TOÀN TỈNH"):
         {"name": "HCC", "id": "HCC"},
         {"name": "TCBC", "id": "TCBC"},
         {"name": "PPBL", "id": "PPBL"},
-        {"name": "Tổng Doanh Thu", "id": "tong_dt"},
+        {"name": "Tổng DT", "id": "tong_dt"},
+        {"name": cmp_col_name, "id": cmp_col},
         {"name": ratio_col_name, "id": "ratio_display"}
     ]
-    
+
     return dash_table.DataTable(
         data=df_display.to_dict("records"),
         columns=columns,
@@ -262,17 +275,32 @@ def create_detail_table(df, compare_type, title_label="⭐️ TOÀN TỈNH"):
             "backgroundColor": "#F8FAFC",
             "fontWeight": "bold",
             "color": "#1E293B",
-            "border": "1px solid #CBD5E1"
+            "border": "1px solid #CBD5E1",
+            "fontSize": "11px",
+            "padding": "6px 6px",
+            "whiteSpace": "normal",
+            "height": "auto",
         },
         style_cell={
-            "padding": "8px 10px",
+            "padding": "4px 6px",
             "textAlign": "left",
-            "fontSize": "13px",
-            "fontFamily": "Inter, sans-serif"
+            "fontSize": "11px",
+            "fontFamily": "Inter, sans-serif",
+            "whiteSpace": "nowrap",
+            "overflow": "hidden",
+            "textOverflow": "ellipsis",
+            "maxWidth": "140px",
         },
+        style_cell_conditional=[
+            {"if": {"column_id": "ten_cum"},  "maxWidth": "90px",  "minWidth": "70px"},
+            {"if": {"column_id": "ten_bdx"},  "maxWidth": "130px", "minWidth": "100px"},
+            {"if": {"column_id": ["BCCP", "HCC", "TCBC", "PPBL"]}, "maxWidth": "110px", "textAlign": "right"},
+            {"if": {"column_id": "tong_dt"},  "maxWidth": "120px", "textAlign": "right"},
+            {"if": {"column_id": cmp_col},    "maxWidth": "110px", "textAlign": "right"},
+            {"if": {"column_id": "ratio_display"}, "maxWidth": "90px", "textAlign": "center"},
+        ],
         style_data_conditional=[
             {
-                # Dòng Toàn tỉnh nổi bật
                 "if": {"row_index": 0},
                 "backgroundColor": "#EFF6FF",
                 "fontWeight": "bold",
@@ -281,9 +309,23 @@ def create_detail_table(df, compare_type, title_label="⭐️ TOÀN TỈNH"):
             {
                 "if": {"column_id": "tong_dt"},
                 "fontWeight": "bold"
+            },
+            {
+                "if": {"column_id": ["dt_prev", "dt_yoy", "plan_dt"]},
+                "color": "#64748B",
+                "fontStyle": "italic"
+            }
+        ],
+        style_header_conditional=[
+            {
+                "if": {"column_id": ["dt_prev", "dt_yoy", "plan_dt"]},
+                "backgroundColor": "#F1F5F9",
+                "color": "#475569",
+                "fontStyle": "italic"
             }
         ]
     )
+
 
 def register_global_callbacks(app):
     """Đăng ký các callback mới cho trang Tổng quan chung v2.0"""
