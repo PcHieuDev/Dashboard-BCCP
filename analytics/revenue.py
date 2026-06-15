@@ -121,7 +121,7 @@ def query_revenue(
         
     # Lọc theo Bưu cục
     if buu_cuc and buu_cuc != "Tất cả":
-        query_parts.append("AND t.buu_cuc = ?")
+        query_parts.append("AND t.ma_buu_cuc = ?")
         params.append(buu_cuc)
         
     # Lọc theo Hợp đồng
@@ -546,7 +546,7 @@ def query_customer_detail_pivot(
         
     # Lọc theo Bưu cục
     if buu_cuc and buu_cuc != "Tất cả":
-        query_parts.append("AND t.buu_cuc = ?")
+        query_parts.append("AND t.ma_buu_cuc = ?")
         params.append(buu_cuc)
         
     # Lọc theo Hợp đồng (lọc SQL để tối ưu)

@@ -183,7 +183,7 @@ def import_excel_file(db_path, excel_path, import_batch=None, thang=None, mode='
                     logger.info(f"Xóa dữ liệu cũ sản phẩm '{sp}' bưu cục '{bc}' - {m_str}/{y} trong transactions...")
                     cursor_del.execute("""
                         DELETE FROM transactions 
-                        WHERE san_pham_dv = ? AND buu_cuc = ? AND thang_du_lieu = ? AND nam_du_lieu = ?
+                        WHERE ten_dich_vu = ? AND ma_buu_cuc = ? AND thang_du_lieu = ? AND nam_du_lieu = ?
                     """, (sp, bc, m_str, y))
                 conn_del.commit()
                 conn_del.close()
@@ -484,7 +484,7 @@ def import_raw_excel_file(db_path, excel_path, import_batch=None, thang=None, mo
                     logger.info(f"Xóa dữ liệu cũ RAW của sản phẩm '{sp}' - {m_str}/{y} trong transactions...")
                     cursor_del.execute("""
                         DELETE FROM transactions 
-                        WHERE san_pham_dv = ? AND thang_du_lieu = ? AND nam_du_lieu = ?
+                        WHERE ten_dich_vu = ? AND thang_du_lieu = ? AND nam_du_lieu = ?
                     """, (sp, m_str, y))
                 conn_del.commit()
                 conn_del.close()
@@ -601,19 +601,19 @@ def check_missing_mappings(db_path_or_conn):
     try:
         # Kiểm tra sản phẩm
         cursor.execute("""
-            SELECT DISTINCT t.san_pham_dv 
+            SELECT DISTINCT t.ten_dich_vu 
             FROM transactions t 
-            LEFT JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu 
-            WHERE d.ma_dich_vu IS NULL AND t.san_pham_dv IS NOT NULL AND t.san_pham_dv != ''
+            LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu 
+            WHERE d.ma_dich_vu IS NULL AND t.ten_dich_vu IS NOT NULL AND t.ten_dich_vu != ''
         """)
         missing_sp = [r[0] for r in cursor.fetchall()]
         
         # Kiểm tra bưu cục
         cursor.execute("""
-            SELECT DISTINCT t.buu_cuc 
+            SELECT DISTINCT t.ma_buu_cuc 
             FROM transactions t 
-            LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc 
-            WHERE b.ma_buu_cuc IS NULL AND t.buu_cuc IS NOT NULL AND t.buu_cuc != ''
+            LEFT JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc 
+            WHERE b.ma_buu_cuc IS NULL AND t.ma_buu_cuc IS NOT NULL AND t.ma_buu_cuc != ''
         """)
         missing_bc = [r[0] for r in cursor.fetchall()]
     except sqlite3.Error as e:

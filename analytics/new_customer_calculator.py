@@ -158,13 +158,13 @@ def calculate_new_customers(db_path: str, nam: int, thang: int) -> int:
         # A. Lấy bưu cục có số lần phát sinh giao dịch nhiều nhất (nếu bằng thì lấy tổng doanh thu cao nhất)
         query_bc = f"""
             WITH cms_bc_counts AS (
-                SELECT cms, buu_cuc, COUNT(*) as cnt, SUM(cuoc_tt_tong) as sum_rev,
+                SELECT cms, ma_buu_cuc, COUNT(*) as cnt, SUM(cuoc_tt_tong) as sum_rev,
                        ROW_NUMBER() OVER (PARTITION BY cms ORDER BY COUNT(*) DESC, SUM(cuoc_tt_tong) DESC) as rn
                 FROM transactions
                 WHERE nam_du_lieu = ? AND thang_du_lieu = ? AND cms IN ({placeholders})
-                GROUP BY cms, buu_cuc
+                GROUP BY cms, ma_buu_cuc
             )
-            SELECT cms, buu_cuc FROM cms_bc_counts WHERE rn = 1
+            SELECT cms, ma_buu_cuc FROM cms_bc_counts WHERE rn = 1
         """
         cursor.execute(query_bc, [nam, thang_str] + chunk)
         for row in cursor.fetchall():
@@ -241,7 +241,7 @@ def calculate_new_customers(db_path: str, nam: int, thang: int) -> int:
         insert_data.append((cms, thang, nam, buu_cuc, ma_bdx, ten_cum, nhom_dv, tong_doanh_thu, cms_to_ngay_phat_sinh.get(cms)))
         
     cursor.executemany("""
-        INSERT INTO new_customers (cms, thang, nam, buu_cuc, ma_bdx, ten_cum, nhom_dv, tong_doanh_thu, ngay_phat_sinh)
+        INSERT INTO new_customers (cms, thang, nam, ma_buu_cuc, ma_bdx, ten_cum, nhom_dich_vu, tong_doanh_thu, ngay_phat_sinh)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, insert_data)
     
@@ -282,8 +282,23 @@ def populate_historical_new_customers(db_path: str):
     logger.error(f"--- HOÀN THÀNH. Tổng số dòng khách hàng mới đã thêm: {total_added} ---")
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Tính toán khách hàng mới.")
+    parser.add_argument("--all", action="store_true", help="Chạy lại toàn bộ lịch sử (T10/2025 - T06/2026)")
+    parser.add_argument("--thang", type=int, help="Tháng cần tính toán (1-12)")
+    parser.add_argument("--nam", type=int, help="Năm cần tính toán (4 chữ số)")
+    
+    args = parser.parse_args()
     db_file = str(DB_PATH)
     logger.error(f"Đường dẫn DB: {db_file}")
     
-    # 1. Chạy tính toán lịch sử
-    populate_historical_new_customers(db_file)
+    if args.all:
+        populate_historical_new_customers(db_file)
+    elif args.thang and args.nam:
+        logger.error(f"Đang chạy kiểm tra/tính toán đơn lẻ cho tháng T{args.thang:02d}/{args.nam}...")
+        count = calculate_new_customers(db_file, args.nam, args.thang)
+        logger.error(f"Hoàn thành. Đã thêm/cập nhật {count} KH bán mới.")
+    else:
+        logger.error("Hướng dẫn chạy trực tiếp file script:")
+        logger.error("  - Chạy đơn lẻ một tháng: python analytics/new_customer_calculator.py --thang 6 --nam 2026")
+        logger.error("  - Chạy lại toàn bộ lịch sử: python analytics/new_customer_calculator.py --all")

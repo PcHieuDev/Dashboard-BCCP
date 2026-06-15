@@ -128,8 +128,8 @@ def get_total_revenue_by_service(db_path, nam, thang=None, cum=None):
         params["thang"] = thang_str
         
     if cum and cum != "Tất cả":
-        sql_bccp += " INNER JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc"
-        sql_hcc_cp += " INNER JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc"
+        sql_bccp += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc"
+        sql_hcc_cp += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc"
         sql_hcc_new += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc"
         sql_tcbc += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc"
         sql_ppbl += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc"
@@ -204,8 +204,8 @@ def get_ytd_revenue(db_path, nam, thang_den, cum=None):
     params = {"nam": nam}
     
     if cum and cum != "Tất cả":
-        sql_bccp += " INNER JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc"
-        sql_hcc_cp += " INNER JOIN dim_buucuc b ON t.buu_cuc = b.ma_buu_cuc"
+        sql_bccp += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc"
+        sql_hcc_cp += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc"
         sql_hcc_new += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc"
         sql_tcbc += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc"
         sql_ppbl += " INNER JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc"
@@ -694,7 +694,7 @@ def get_12_periods_revenue(conn, period_type, current_period, current_year, cum=
             query += " AND b.ten_bdx = ?"
             params.append(bdx)
         if buu_cuc and buu_cuc != "Tất cả":
-            query += " AND a.buu_cuc = ?"
+            query += " AND a.ma_buu_cuc = ?"
             params.append(buu_cuc)
             
         query += """

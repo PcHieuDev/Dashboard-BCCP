@@ -371,10 +371,10 @@ def register_service_detail_callbacks(app):
             
         conn = sqlite3.connect(str(DB_PATH))
         try:
-            sql_curr = f"SELECT d.ma_dich_vu, d.ten_dich_vu, d.nhom_dich_vu, SUM(t.cuoc_tt_tong) as dt_curr, SUM(t.san_luong) as sl_curr FROM transactions t INNER JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc WHERE d.nhom_chinh = 'BCCP' {geo_clause} AND {curr_time_clause} GROUP BY d.ma_dich_vu, d.ten_dich_vu, d.nhom_dich_vu"
+            sql_curr = f"SELECT d.ma_dich_vu, d.ten_dich_vu, d.nhom_dich_vu, SUM(t.cuoc_tt_tong) as dt_curr, SUM(t.san_luong) as sl_curr FROM transactions t INNER JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu LEFT JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc WHERE d.nhom_chinh = 'BCCP' {geo_clause} AND {curr_time_clause} GROUP BY d.ma_dich_vu, d.ten_dich_vu, d.nhom_dich_vu"
             df_curr = pd.read_sql_query(sql_curr, conn, params=geo_params + curr_time_params)
             
-            sql_prev = f"SELECT d.ma_dich_vu, SUM(t.cuoc_tt_tong) as dt_prev, SUM(t.san_luong) as sl_prev FROM transactions t INNER JOIN dim_dichvu d ON t.san_pham_dv = d.ma_dich_vu LEFT JOIN dim_buucuc b ON t.buu_cuc = b.ma_bc WHERE d.nhom_chinh = 'BCCP' {geo_clause} AND {prev_time_clause} GROUP BY d.ma_dich_vu"
+            sql_prev = f"SELECT d.ma_dich_vu, SUM(t.cuoc_tt_tong) as dt_prev, SUM(t.san_luong) as sl_prev FROM transactions t INNER JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu LEFT JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc WHERE d.nhom_chinh = 'BCCP' {geo_clause} AND {prev_time_clause} GROUP BY d.ma_dich_vu"
             df_prev = pd.read_sql_query(sql_prev, conn, params=geo_params + prev_time_params)
             
             if df_curr.empty: return dash.no_update

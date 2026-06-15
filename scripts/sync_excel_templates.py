@@ -42,9 +42,9 @@ def load_data_from_db():
     # 1. Đọc danh mục bưu cục (bao gồm cả mã 6 số, mã xã 4 số và mã cụm)
     # Lấy ma_bc và ten_buu_cuc để đối chiếu
     df_buucuc = pd.read_sql_query("""
-        SELECT ma_bc as [Mã bưu cục], ten_buu_cuc as [Tên bưu cục] 
+        SELECT ma_buu_cuc as [Mã bưu cục], ten_buu_cuc as [Tên bưu cục] 
         FROM dim_buucuc 
-        ORDER BY length(ma_bc), ma_bc
+        ORDER BY length(ma_buu_cuc), ma_buu_cuc
     """, conn)
     
     # 2. Đọc danh mục dịch vụ (toàn bộ dim_dichvu)

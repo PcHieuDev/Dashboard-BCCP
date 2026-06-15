@@ -153,11 +153,11 @@ def query_and_process_new_customers(year, month, week, cycle, cum_val, bdx_val, 
                 
                 # Query doanh thu và số lượng KH tuần
                 q_week_tx = f"""
-                    SELECT t.cms, t.buu_cuc, SUM(t.cuoc_tt_tong) as dt, MIN(t.ngay_chap_nhan) as ngay_phat_sinh
+                    SELECT t.cms, t.ma_buu_cuc as buu_cuc, SUM(t.cuoc_tt_tong) as dt, MIN(t.ngay_chap_nhan) as ngay_phat_sinh
                     FROM transactions t
                     WHERE t.ngay_chap_nhan BETWEEN ? AND ? 
                       AND t.cms IN ({placeholders_cms})
-                    GROUP BY t.cms, t.buu_cuc
+                    GROUP BY t.cms, t.ma_buu_cuc
                 """
                 df_week_tx = pd.read_sql_query(q_week_tx, conn, params=[w_start, w_end] + cms_list)
                 
