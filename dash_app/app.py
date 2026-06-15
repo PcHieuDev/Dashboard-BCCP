@@ -87,6 +87,29 @@ def load_user(user_id):
     from db.auth import get_user_by_id
     return get_user_by_id(user_id)
 
+def log_user_action(username, status, role="N/A"):
+    """Ghi nhận lịch sử đăng nhập/đăng xuất của người dùng vào file logs/user_logins.log"""
+    import os
+    from datetime import datetime
+    from flask import request
+    
+    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, "user_logins.log")
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    ip_addr = request.headers.get('X-Forwarded-For', request.remote_addr or '127.0.0.1')
+    if ',' in ip_addr:
+        ip_addr = ip_addr.split(',')[0].strip()
+        
+    log_line = f"[{timestamp}] | {status:<7} | {username:<20} | {role:<15} | {ip_addr}\n"
+    
+    try:
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(log_line)
+    except Exception as e:
+        logger.error(f"Lỗi khi ghi log đăng nhập của user {username}: {e}")
+
 @server.route('/test-login/<username>')
 def test_login_route(username):
     """Route phục vụ xác thực nhanh cho các verify script tự động."""
@@ -94,7 +117,9 @@ def test_login_route(username):
     user = get_user_by_username(username)
     if user:
         login_user(user)
+        log_user_action(username, "SUCCESS", user.role)
         return f"OK: logged in as {username}"
+    log_user_action(username, "FAILED")
     return "FAIL: user not found", 404
 
 # --------------------------------------------------------------------------
@@ -324,8 +349,9 @@ def render_page(pathname):
     ], className="empty-state-container"), "⚠️ Trang không tồn tại"
 
 # --------------------------------------------------------------------------
-# CALLBACK XỬ LÝ ĐĂNG NHẬP / ĐĂNG XUẤT
+# CALLBACK XỬ LÝ ĐĂNG NHẬP / ĐĂNG XUẤT KÈM GHI LOG
 # --------------------------------------------------------------------------
+
 @app.callback(
     [Output("login-error-output", "children"),
      Output("login-url", "href")],
@@ -344,8 +370,10 @@ def handle_login(n_clicks, username, password):
     if user:
         login_user(user)
         logger.error(f"Đăng nhập thành công: User {username}")
+        log_user_action(username, "SUCCESS", user.role)
         return "", "/"
     else:
+        log_user_action(username.strip(), "FAILED")
         return "Tên đăng nhập hoặc mật khẩu không đúng!", dash.no_update
 
 @app.callback(
@@ -355,8 +383,12 @@ def handle_login(n_clicks, username, password):
 )
 def handle_logout(n_clicks):
     if n_clicks:
+        from flask_login import current_user
+        username = current_user.username if current_user.is_authenticated else "unknown"
+        role = current_user.role if current_user.is_authenticated else "N/A"
         logout_user()
         logger.error("Đã đăng xuất tài khoản.")
+        log_user_action(username, "LOGOUT", role)
         return "/"
     return dash.no_update
 
