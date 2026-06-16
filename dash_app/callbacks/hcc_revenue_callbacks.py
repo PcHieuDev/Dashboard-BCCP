@@ -405,8 +405,6 @@ def register_hcc_revenue_callbacks(app):
          # Bộ lọc từ Sidebar
          Input("sidebar-year", "value"),
          Input("sidebar-period", "value"),
-         Input("sidebar-date-range", "start_date"),
-         Input("sidebar-date-range", "end_date"),
          Input("sidebar-week-select", "value"),
          Input("sidebar-month-select", "value"),
          Input("sidebar-nhom-dv", "data"),
@@ -416,11 +414,13 @@ def register_hcc_revenue_callbacks(app):
          Input("sidebar-loai-kh", "data"),
          Input("sidebar-hop-dong", "data")]
     )
-    def update_hcc_revenue_table(pathname, g1, g2, compare_opt, year, period, start_date, end_date, week_idx, month_val,
+    def update_hcc_revenue_table(pathname, g1, g2, compare_opt, year, period, week_idx, month_val,
                                  nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         if pathname != "/hcc/revenue":
             return dash.no_update
         spdv = None
+        start_date = None
+        end_date = None
             
         g2_actual = None if g2 == "None" else g2
         compare_prev = compare_opt != "none"
@@ -454,8 +454,6 @@ def register_hcc_revenue_callbacks(app):
          State("hcc-revenue-compare-opt", "value"),
          State("sidebar-year", "value"),
          State("sidebar-period", "value"),
-         State("sidebar-date-range", "start_date"),
-         State("sidebar-date-range", "end_date"),
          State("sidebar-week-select", "value"),
          State("sidebar-month-select", "value"),
          State("sidebar-nhom-dv", "data"),
@@ -466,12 +464,14 @@ def register_hcc_revenue_callbacks(app):
          State("sidebar-hop-dong", "data")],
         prevent_initial_call=True
     )
-    def export_hcc_revenue_table(btn_excel, pathname, g1, g2, compare_opt, year, period, start_date, end_date, week_idx, month_val,
+    def export_hcc_revenue_table(btn_excel, pathname, g1, g2, compare_opt, year, period, week_idx, month_val,
                                  nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         ctx = dash.callback_context
         if not ctx.triggered or pathname != "/hcc/revenue":
             return dash.no_update
         spdv = None
+        start_date = None
+        end_date = None
             
         trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
         if trigger_id != "hcc-revenue-btn-export-excel":

@@ -201,8 +201,6 @@ def register_kpi_callbacks(app):
          Input("tabs-navigation", "value")],
         [State("sidebar-year", "value"),
          State("sidebar-period", "value"),
-         State("sidebar-date-range", "start_date"),
-         State("sidebar-date-range", "end_date"),
          State("sidebar-week-select", "value"),
          State("sidebar-month-select", "value"),
          State("sidebar-compare-mode", "value"),
@@ -213,13 +211,15 @@ def register_kpi_callbacks(app):
          State("sidebar-loai-kh", "data"),
          State("sidebar-hop-dong", "data")]
     )
-    def update_kpi_cards(n_clicks, tab_val, year, period, start_date, end_date, week_idx, month_val, compare_mode,
+    def update_kpi_cards(n_clicks, tab_val, year, period, week_idx, month_val, compare_mode,
                          nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         # Chỉ xử lý khi đang ở Tab Tổng quan KPI
         if tab_val != "tab-kpi" or tab_val is None:
             return [dash.no_update] * 35
 
         spdv = None
+        start_date = None
+        end_date = None
 
         # Chuẩn hóa compare_mode từ list thành string để tương thích ngược với trang KPI cũ
         if isinstance(compare_mode, (list, tuple)):
