@@ -137,4 +137,4 @@ def create_topbar_layout(filter_opts: dict) -> html.Div:
             dbc.Col(geo_group, xs=12, lg=5, className="d-flex align-items-center flex-wrap"),
             dbc.Col(actions_group, xs=12, lg=2, className="d-flex align-items-center justify-content-lg-end mt-2 mt-lg-0")
         ], className="g-2 align-items-end")
-    ], className="topbar-container")
+    ], id="topbar-container", className="topbar-container")

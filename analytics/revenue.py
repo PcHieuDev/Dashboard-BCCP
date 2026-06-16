@@ -463,7 +463,7 @@ def query_revenue_cached(
 
 def create_empty_result_df_for_customer() -> pd.DataFrame:
     """Trả về DataFrame rỗng có cấu trúc cột cơ bản để tránh crash DataTable."""
-    return pd.DataFrame(columns=['ten_cum', 'ten_bdx', 'buu_cuc', 'cms', 'san_luong', 'cuoc_tt_tong'])
+    return pd.DataFrame(columns=['ten_cum', 'ten_bdx', 'ma_buu_cuc', 'cms', 'san_luong', 'cuoc_tt_tong'])
 
 
 def query_customer_detail_pivot(
@@ -608,15 +608,15 @@ def query_customer_detail_pivot(
     # 4. Gộp nhóm lấy số liệu chi tiết khách hàng phẳng
     df_raw['ten_cum'] = df_raw['ten_cum'].fillna("Chưa phân loại")
     df_raw['ten_bdx'] = df_raw['ten_bdx'].fillna("Chưa phân loại")
-    df_raw['buu_cuc'] = df_raw['buu_cuc'].fillna("Chưa phân loại")
+    df_raw['ma_buu_cuc'] = df_raw['ma_buu_cuc'].fillna("Chưa phân loại")
     
-    df_grouped = df_raw.groupby(['ten_cum', 'ten_bdx', 'buu_cuc', 'cms'], as_index=False).agg(
+    df_grouped = df_raw.groupby(['ten_cum', 'ten_bdx', 'ma_buu_cuc', 'cms'], as_index=False).agg(
         san_luong=('san_luong', 'sum'),
         cuoc_tt_tong=('cuoc_tt_tong', 'sum')
     )
     
     # Sắp xếp
-    df_grouped = df_grouped.sort_values(by=['ten_cum', 'ten_bdx', 'buu_cuc', 'cms'])
+    df_grouped = df_grouped.sort_values(by=['ten_cum', 'ten_bdx', 'ma_buu_cuc', 'cms'])
     
     return df_grouped
 

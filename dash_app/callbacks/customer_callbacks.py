@@ -116,8 +116,18 @@ def register_customer_callbacks(app):
         # 2. Kiểm tra dữ liệu rỗng
         if df.empty or len(df) == 0:
             return dbc.Alert("Không tìm thấy dữ liệu phù hợp với bộ lọc hiện tại.", color="warning", className="m-3")
+        
+        # 3. Tính tổng SL & Doanh thu để chèn vào đầu bảng
+        total_row = {
+            "ten_cum": "📊 TỔNG",
+            "ten_bdx": "",
+            "ma_buu_cuc": "",
+            "cms": f"{len(df)} KH",
+            "san_luong": df["san_luong"].sum(),
+            "cuoc_tt_tong": df["cuoc_tt_tong"].sum()
+        }
             
-        # 3. Xác định cấu trúc cột hiển thị phẳng cố định
+        # 4. Xác định cấu trúc cột hiển thị phẳng cố định
         columns = [
             {"name": "Cụm", "id": "ten_cum"},
             {"name": "Xã / Phường", "id": "ten_bdx"},
@@ -126,12 +136,15 @@ def register_customer_callbacks(app):
             {"name": "Sản lượng", "id": "san_luong", "type": "numeric", "format": Format(group=Group.yes)},
             {"name": "Doanh thu không VAT", "id": "cuoc_tt_tong", "type": "numeric", "format": Format(group=Group.yes)}
         ]
-            
-        # 4. Trả về bảng DataTable được định dạng
+        
+        # 5. Trả về bảng DataTable — có dòng tổng ở đầu
+        data = df.to_dict('records')
+        data.insert(0, total_row)
+        
         table = dash_table.DataTable(
             id='customer-detail-datatable',
             columns=columns,
-            data=df.to_dict('records'),
+            data=data,
             page_action='native',
             page_size=50,
             sort_action='native',
@@ -154,11 +167,19 @@ def register_customer_callbacks(app):
             },
             style_data_conditional=[
                 {
+                    'if': {'row_index': 0},
+                    'backgroundColor': '#EFF6FF',
+                    'fontWeight': 'bold',
+                    'color': '#1E3A8A',
+                    'borderTop': '2px solid #3B82F6'
+                },
+                {
                     'if': {'row_index': 'odd'},
                     'backgroundColor': '#F8FAFC',
                 }
             ]
         )
+        return table
         return table
 
     # ==============================================================================
