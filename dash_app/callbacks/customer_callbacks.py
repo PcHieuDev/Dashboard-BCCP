@@ -88,11 +88,9 @@ def register_customer_callbacks(app):
          State("customer-filter-loai-kh", "value"),
          State("customer-filter-hop-dong", "value"),
          State("customer-filter-spdv", "value"),
-         # Bộ lọc địa lý từ Sidebar (State)
+         # Bộ lọc địa lý từ Topbar
          State("sidebar-year", "value"),
          State("sidebar-period", "value"),
-         State("sidebar-date-range", "start_date"),
-         State("sidebar-date-range", "end_date"),
          State("sidebar-week-select", "value"),
          State("sidebar-month-select", "value"),
          State("sidebar-cum", "value"),
@@ -100,7 +98,7 @@ def register_customer_callbacks(app):
          State("sidebar-buu-cuc", "value")]
     )
     def update_customer_table(btn_global, btn_customer, tab_val, nhom_dv, loai_kh, hop_dong, spdv,
-                              year, period, start_date, end_date, week_idx, month_val, cum, bdx, buu_cuc):
+                              year, period, week_idx, month_val, cum, bdx, buu_cuc):
         # Chỉ chạy khi đang ở Tab Chi tiết Khách hàng
         if tab_val != "tab-customer" or tab_val is None:
             return dash.no_update
@@ -109,8 +107,9 @@ def register_customer_callbacks(app):
             return html.Div("Vui lòng thiết lập bộ lọc và bấm 'Lọc Dữ liệu' để xem chi tiết.", className="text-center text-muted p-4")
             
         # 1. Truy vấn dữ liệu qua Cache
+        # sidebar-date-range không còn dùng; truy vấn lấy theo year/period/week/month
         _, _, _, df = resolve_filters_and_query_customer(
-            year, period, start_date, end_date, week_idx, month_val,
+            year, period, None, None, week_idx, month_val,
             nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong
         )
         
@@ -169,11 +168,9 @@ def register_customer_callbacks(app):
         Output("customer-download", "data"),
         [Input("customer-btn-export-excel", "n_clicks")],
         [State("tabs-navigation", "value"),
-         # Bộ lọc địa lý từ Sidebar
+         # Bộ lọc địa lý từ Topbar
          State("sidebar-year", "value"),
          State("sidebar-period", "value"),
-         State("sidebar-date-range", "start_date"),
-         State("sidebar-date-range", "end_date"),
          State("sidebar-week-select", "value"),
          State("sidebar-month-select", "value"),
          # Bộ lọc dịch vụ inline mới
@@ -186,15 +183,16 @@ def register_customer_callbacks(app):
          State("customer-filter-spdv", "value")],
         prevent_initial_call=True
     )
-    def export_customer_table(n_clicks, tab_val, year, period, start_date, end_date, week_idx, month_val,
+    def export_customer_table(n_clicks, tab_val, year, period, week_idx, month_val,
                               nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong, spdv):
         ctx = dash.callback_context
         if not ctx.triggered or tab_val != "tab-customer" or tab_val is None:
             return dash.no_update
             
         # 1. Truy vấn toàn bộ dữ liệu
+        # sidebar-date-range không còn dùng; truy None cho start/end
         _, _, _, df = resolve_filters_and_query_customer(
-            year, period, start_date, end_date, week_idx, month_val,
+            year, period, None, None, week_idx, month_val,
             nhom_dv, spdv, cum, bdx, buu_cuc, loai_kh, hop_dong
         )
         
