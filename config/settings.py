@@ -10,9 +10,9 @@ from pathlib import Path
 _CONFIG_DIR = Path(__file__).resolve().parent          # config/
 PROJECT_DIR = _CONFIG_DIR.parent                       # z.Database-TTKD/
 
-# Database SQLite (OneDrive — tự đồng bộ giữa 2 máy)
+# Database SQLite (E:\z.Database-TTKD-Data)
 # Tách biệt khỏi mã nguồn để Git không track file DB nặng
-DATA_DIR = Path(r"E:\OneDrive\z.Database-TTKD-Data")
+DATA_DIR = Path(r"E:\z.Database-TTKD-Data")
 DB_PATH = DATA_DIR / "dashboard.db"
 PHAN_QUYEN_PATH = DATA_DIR / "phan_quyen_url.xlsx"
 

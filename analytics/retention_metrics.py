@@ -494,14 +494,16 @@ def get_khhh_changes_v2(db_path: str, nam: int, thang: int, cum: str = None, bdx
     # Vì 1 CMS có thể giao dịch nhiều bưu cục, ta lấy bưu cục lớn nhất làm đại diện
     q_curr = f"""
         WITH cms_bc AS (
-            SELECT t.cms, t.ma_buu_cuc as buu_cuc, SUM(t.cuoc_tt_tong) as dt,
+            SELECT t.cms, t.ma_buu_cuc as buu_cuc, SUM(t.cuoc_tt_tong) as dt, SUM(t.san_luong) as sl,
                    ROW_NUMBER() OVER (PARTITION BY t.cms ORDER BY SUM(t.cuoc_tt_tong) DESC) as rn
             FROM transactions t
             LEFT JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc
-            WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ? AND t.cuoc_tt_tong > 0 {geo_where_str}
+            WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ? AND t.cuoc_tt_tong > 0
+              AND t.cms IS NOT NULL AND t.cms != ''
+              AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none' {geo_where_str}
             GROUP BY t.cms, t.ma_buu_cuc
         )
-        SELECT cms, buu_cuc, dt FROM cms_bc WHERE rn = 1
+        SELECT cms, buu_cuc, dt, sl FROM cms_bc WHERE rn = 1
     """
     df_curr = pd.read_sql_query(q_curr, conn, params=[nam, thang_str] + geo_params)
     cms_curr_rev = dict(zip(df_curr['cms'], df_curr['dt']))
@@ -509,17 +511,21 @@ def get_khhh_changes_v2(db_path: str, nam: int, thang: int, cum: str = None, bdx
     # 4. Lấy tất cả CMS có doanh thu trong tháng T-1 và bưu cục
     q_prev = f"""
         WITH cms_bc AS (
-            SELECT t.cms, t.ma_buu_cuc as buu_cuc, SUM(t.cuoc_tt_tong) as dt,
+            SELECT t.cms, t.ma_buu_cuc as buu_cuc, SUM(t.cuoc_tt_tong) as dt, SUM(t.san_luong) as sl,
                    ROW_NUMBER() OVER (PARTITION BY t.cms ORDER BY SUM(t.cuoc_tt_tong) DESC) as rn
             FROM transactions t
             LEFT JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc
-            WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ? AND t.cuoc_tt_tong > 0 {geo_where_str}
+            WHERE t.nam_du_lieu = ? AND t.thang_du_lieu = ? AND t.cuoc_tt_tong > 0
+              AND t.cms IS NOT NULL AND t.cms != ''
+              AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none' {geo_where_str}
             GROUP BY t.cms, t.ma_buu_cuc
         )
-        SELECT cms, buu_cuc, dt FROM cms_bc WHERE rn = 1
+        SELECT cms, buu_cuc, dt, sl FROM cms_bc WHERE rn = 1
     """
     df_prev = pd.read_sql_query(q_prev, conn, params=[t_minus_1_y, t_minus_1_str] + geo_params)
     cms_prev_rev = dict(zip(df_prev['cms'], df_prev['dt']))
+    cms_curr_sl = dict(zip(df_curr['cms'], df_curr['sl']))
+    cms_prev_sl = dict(zip(df_prev['cms'], df_prev['sl']))
     
     # 5. Phân tích Tăng, Giảm, Duy trì
     # Lấy tập hợp CMS chung có doanh thu dương ở cả 2 tháng T và T-1
@@ -542,13 +548,15 @@ def get_khhh_changes_v2(db_path: str, nam: int, thang: int, cum: str = None, bdx
         dt_p = cms_prev_rev[cms]
         g = geo_dict.get(cms, {'ten_cum': 'Khác', 'ten_bdx': 'Khác'})
         
+        sl_c = cms_curr_sl.get(cms, 0)
+        sl_p = cms_prev_sl.get(cms, 0)
         row_d = {
             'cms': cms,
             'ten_cum': g['ten_cum'],
             'ten_bdx': g['ten_bdx'],
-            'sl_ky_nay': 1, # Số lượng bưu gửi hoặc đếm giao dịch có thể điền 1
+            'sl_ky_nay': int(sl_c),
             'dt_ky_nay': dt_c,
-            'sl_ky_truoc': 1,
+            'sl_ky_truoc': int(sl_p),
             'dt_ky_truoc': dt_p,
             'chenh_lech': dt_c - dt_p
         }
@@ -671,7 +679,7 @@ def get_weekly_changes(db_path: str, year: int, week: int, cum: str = None, bdx:
     # Query doanh thu tuần hiện tại
     q_curr = f"""
         WITH cms_bc AS (
-            SELECT t.cms, t.ma_buu_cuc as buu_cuc, SUM(t.cuoc_tt_tong) as dt,
+            SELECT t.cms, t.ma_buu_cuc as buu_cuc, SUM(t.cuoc_tt_tong) as dt, SUM(t.san_luong) as sl,
                    ROW_NUMBER() OVER (PARTITION BY t.cms ORDER BY SUM(t.cuoc_tt_tong) DESC) as rn
             FROM transactions t
             LEFT JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc
@@ -680,15 +688,16 @@ def get_weekly_changes(db_path: str, year: int, week: int, cum: str = None, bdx:
               AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none' {geo_where_str}
             GROUP BY t.cms, t.ma_buu_cuc
         )
-        SELECT cms, buu_cuc, dt FROM cms_bc WHERE rn = 1
+        SELECT cms, buu_cuc, dt, sl FROM cms_bc WHERE rn = 1
     """
     df_curr = pd.read_sql_query(q_curr, conn, params=[c_start, c_end] + geo_params)
     cms_curr_rev = dict(zip(df_curr['cms'], df_curr['dt']))
+    cms_curr_sl = dict(zip(df_curr['cms'], df_curr['sl']))
     
     # Query doanh thu tuần trước
     q_prev = f"""
         WITH cms_bc AS (
-            SELECT t.cms, t.ma_buu_cuc as buu_cuc, SUM(t.cuoc_tt_tong) as dt,
+            SELECT t.cms, t.ma_buu_cuc as buu_cuc, SUM(t.cuoc_tt_tong) as dt, SUM(t.san_luong) as sl,
                    ROW_NUMBER() OVER (PARTITION BY t.cms ORDER BY SUM(t.cuoc_tt_tong) DESC) as rn
             FROM transactions t
             LEFT JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc
@@ -697,10 +706,11 @@ def get_weekly_changes(db_path: str, year: int, week: int, cum: str = None, bdx:
               AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none' {geo_where_str}
             GROUP BY t.cms, t.ma_buu_cuc
         )
-        SELECT cms, buu_cuc, dt FROM cms_bc WHERE rn = 1
+        SELECT cms, buu_cuc, dt, sl FROM cms_bc WHERE rn = 1
     """
     df_prev = pd.read_sql_query(q_prev, conn, params=[p_start, p_end] + geo_params)
     cms_prev_rev = dict(zip(df_prev['cms'], df_prev['dt']))
+    cms_prev_sl = dict(zip(df_prev['cms'], df_prev['sl']))
     
     # Phân rã
     common_cms = set(cms_curr_rev.keys()) & set(cms_prev_rev.keys())
@@ -719,13 +729,15 @@ def get_weekly_changes(db_path: str, year: int, week: int, cum: str = None, bdx:
         dt_p = cms_prev_rev[cms]
         g = geo_dict.get(cms, {'ten_cum': 'Khác', 'ten_bdx': 'Khác'})
         
+        sl_c = cms_curr_sl.get(cms, 0)
+        sl_p = cms_prev_sl.get(cms, 0)
         row_d = {
             'cms': cms,
             'ten_cum': g['ten_cum'],
             'ten_bdx': g['ten_bdx'],
-            'sl_ky_nay': 1,
+            'sl_ky_nay': int(sl_c),
             'dt_ky_nay': dt_c,
-            'sl_ky_truoc': 1,
+            'sl_ky_truoc': int(sl_p),
             'dt_ky_truoc': dt_p,
             'chenh_lech': dt_c - dt_p
         }
