@@ -14,7 +14,7 @@ except ImportError:
     except ImportError:
         logger = logging.getLogger(__name__)
 
-conn = sqlite3.connect(r'E:\OneDrive\z.Database-TTKD-Data\bccp.db')
+conn = sqlite3.connect(r'E:\z.Database-TTKD-Data\bccp.db')
 c = conn.cursor()
 tables = c.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
 for t in tables:

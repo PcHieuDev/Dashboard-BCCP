@@ -21,7 +21,7 @@ except Exception:
 
 # Cấu hình đường dẫn
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DB_PATH = Path(r"E:\OneDrive\z.Database-TTKD-Data\dashboard.db")
+DB_PATH = Path(r"E:\z.Database-TTKD-Data\dashboard.db")
 TEMPLATES_DIR = PROJECT_ROOT / "data" / "mau-file-import"
 
 TEMPLATE_FILES = {

@@ -24,7 +24,7 @@ except ImportError:
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-DB_DIR = Path(r"E:\OneDrive\z.Database-TTKD-Data")
+DB_DIR = Path(r"E:\z.Database-TTKD-Data")
 DB_PATH = DB_DIR / "dashboard.db"
 
 def run_migration():

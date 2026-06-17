@@ -15,7 +15,7 @@ from datetime import datetime
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-DB_PATH = Path("E:/OneDrive/z.Database-TTKD-Data/dashboard.db")
+DB_PATH = Path("E:/z.Database-TTKD-Data/dashboard.db")
 BACKUP_PATH = DB_PATH.with_name(f"dashboard.db.bak_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
 
 

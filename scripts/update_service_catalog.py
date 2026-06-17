@@ -23,7 +23,7 @@ except ImportError:
         logger = logging.getLogger(__name__)
 
 
-DB_PATH = r'E:\OneDrive\z.Database-TTKD-Data\dashboard.db'
+DB_PATH = r'E:\z.Database-TTKD-Data\dashboard.db'
 EXCEL_PATH = r'E:\Projects\worktrees\Dashboard-BCCP\feat-update-services\data\dieu-chinh\dieu_chinh_dichvu.xlsx'
 CSV_OUT_PATH = r'E:\Projects\worktrees\Dashboard-BCCP\feat-update-services\data\mapping-spdv.csv'
 MA_REF_PATH = r'E:\Projects\worktrees\Dashboard-BCCP\feat-update-services\data\mau-file-import\ma_tham_chieu.xlsx'
