@@ -78,6 +78,27 @@ def create_summary_tables(conn):
         PRIMARY KEY (nam, tuan_so, ma_buu_cuc, nhom_chinh, nhom_dich_vu)
     );
     """)
+
+    # 4. Bảng agg_daily (Tổng hợp cấp ngày)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS agg_daily (
+        ngay           DATE    NOT NULL,
+        nam            INTEGER NOT NULL,
+        thang          INTEGER NOT NULL,
+        ma_buu_cuc     TEXT    NOT NULL,
+        nhom_dich_vu   TEXT    NOT NULL,
+        bk_e           TEXT    NOT NULL,
+        tong_doanh_thu    REAL DEFAULT 0,
+        tong_san_luong    INTEGER DEFAULT 0,
+        so_kh_phat_sinh   INTEGER DEFAULT 0,
+        PRIMARY KEY (ngay, ma_buu_cuc, nhom_dich_vu, bk_e)
+    );
+    """)
+    
+    # Chỉ mục tối ưu hóa tìm kiếm cho bảng agg_daily
+    cursor.execute("""
+    CREATE INDEX IF NOT EXISTS idx_agg_daily_date_bc ON agg_daily (ngay, ma_buu_cuc);
+    """)
     
     conn.commit()
     logger.error("[Aggregator] Đã tạo hoặc xác minh sự tồn tại của các bảng summary.")
@@ -407,3 +428,175 @@ def rebuild_plans_weekly(conn, nam: int):
     conn.commit()
     logger.error(f"[Aggregator] Hoàn tất rebuild plans_weekly {nam}. Đã chèn {total_inserted} dòng.")
     return total_inserted
+
+
+def rebuild_daily(conn, nam: int):
+    """
+    Rebuild dữ liệu cho bảng agg_daily của năm chỉ định.
+    Gộp từ bảng transactions và 4 bảng dịch vụ phụ.
+    """
+    cursor = conn.cursor()
+    
+    # 1. Xóa dữ liệu cũ
+    cursor.execute("DELETE FROM agg_daily WHERE nam = ?", (nam,))
+    conn.commit()
+    
+    # Hàm hỗ trợ phân loại sơ bộ nhóm dịch vụ (Heuristic) khi thiếu mapping
+    def get_rough_nhom_dich_vu(ma_sp):
+        ma_sp = str(ma_sp).upper().strip()
+        if ma_sp.startswith('HCC'):
+            return 'Chuyển phát HCC'
+        elif ma_sp.startswith('KT1') or ma_sp.startswith('RTN') or ma_sp.startswith('TTN'):
+            return 'Truyền thống'
+        elif ma_sp.startswith('CTN'):
+            tmdt_codes = {'CTN007', 'CTN008', 'CTN009', 'CTN019', 'CTN020', 'CTN022', 'CTN028', 'CTN031'}
+            if ma_sp in tmdt_codes:
+                return 'TMĐT'
+            return 'Truyền thống'
+        elif ma_sp.startswith('ETN'):
+            tmdt_ems = {'ETN031', 'ETN037', 'ETN048', 'ETN051'}
+            if ma_sp in tmdt_ems:
+                return 'TMĐT'
+            return 'Truyền thống'
+        elif any(ma_sp.startswith(p) for p in ['CQT', 'EQT', 'RQT', 'TQT', 'LQT', 'PRM', 'DHL', 'UPS']):
+            return 'Quốc tế'
+        return 'Khác'
+
+    # 2. Quét cảnh báo mapping thiếu cho 4 nhóm dịch vụ chính (BCCP & HCC)
+    try:
+        # Quét từ transactions
+        cursor.execute("""
+            SELECT DISTINCT t.ten_dich_vu
+            FROM transactions t
+            LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
+            WHERE t.nam_du_lieu = ? 
+              AND (d.ma_dich_vu IS NULL OR d.bk_e IS NULL)
+        """, (nam,))
+        unmapped = set(row[0] for row in cursor.fetchall())
+        
+        # Quét từ các bảng phụ
+        for tbl in ['transactions_hcc', 'transactions_tcbc', 'transactions_ppbl', 'transactions_phbc']:
+            cursor.execute(f"""
+                SELECT DISTINCT t.ten_dich_vu
+                FROM {tbl} t
+                LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu OR t.ten_dich_vu = d.ten_dich_vu
+                WHERE t.tu_nam = ? 
+                  AND (d.ma_dich_vu IS NULL OR d.bk_e IS NULL)
+            """, (nam,))
+            for row in cursor.fetchall():
+                unmapped.add(row[0])
+                
+        # Phân loại và in cảnh báo
+        warnings = []
+        for ma_sp in sorted(unmapped):
+            cursor.execute("SELECT nhom_dich_vu FROM dim_dichvu WHERE ma_dich_vu = ? OR ten_dich_vu = ?", (ma_sp, ma_sp))
+            row = cursor.fetchone()
+            nhom = row[0] if row else get_rough_nhom_dich_vu(ma_sp)
+            
+            if nhom in ['Truyền thống', 'TMĐT', 'Quốc tế', 'Chuyển phát HCC']:
+                warnings.append(f"Mã dịch vụ '{ma_sp}' (thuộc nhóm '{nhom}') chưa được cấu hình phân loại BK/E trong CSV mapping.")
+                
+        if warnings:
+            logger.error("\n" + "="*80)
+            logger.error(f"[WARNING] PHÁT HIỆN THIẾU MAPPING BK/E TRONG NĂM {nam}:")
+            for w in warnings:
+                logger.error(f"  ⚠️  {w}")
+            logger.error("Vui lòng cập nhật file mapping và chạy lại import / rebuild để sửa chữa số liệu.")
+            logger.error("="*80 + "\n")
+    except Exception as e:
+        logger.error(f"[Aggregator] Lỗi khi quét cảnh báo mapping: {e}")
+
+    logger.error(f"[Aggregator] Đang rebuild agg_daily cho năm {nam}...")
+    
+    # 3. Gộp BCCP (từ transactions)
+    query_trans = """
+    INSERT INTO agg_daily (ngay, nam, thang, ma_buu_cuc, nhom_dich_vu, bk_e, tong_doanh_thu, tong_san_luong, so_kh_phat_sinh)
+    SELECT 
+        t.ngay_chap_nhan as ngay,
+        ? as nam,
+        CAST(strftime('%m', t.ngay_chap_nhan) as INTEGER) as thang,
+        t.ma_buu_cuc,
+        COALESCE(d.nhom_dich_vu, 'Khác') as nhom_dich_vu,
+        CASE 
+            WHEN COALESCE(d.nhom_dich_vu, 'Khác') IN ('Truyền thống', 'TMĐT', 'Quốc tế', 'Chuyển phát HCC') THEN
+                COALESCE(d.bk_e, 'Khác')
+            ELSE
+                'Không phân loại'
+        END as bk_e,
+        SUM(t.cuoc_tt_tong) as tong_doanh_thu,
+        SUM(t.san_luong) as tong_san_luong,
+        COUNT(DISTINCT CASE 
+            WHEN t.cms IS NOT NULL AND t.cms != '' 
+                 AND t.cms NOT LIKE 'VANGLAI_%' 
+                 AND LOWER(t.cms) != 'none' 
+            THEN t.cms 
+        END) as so_kh_phat_sinh
+    FROM transactions t
+    LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
+    WHERE t.nam_du_lieu = ?
+    GROUP BY 
+        t.ngay_chap_nhan, 
+        t.ma_buu_cuc, 
+        COALESCE(d.nhom_dich_vu, 'Khác'),
+        CASE 
+            WHEN COALESCE(d.nhom_dich_vu, 'Khác') IN ('Truyền thống', 'TMĐT', 'Quốc tế', 'Chuyển phát HCC') THEN
+                COALESCE(d.bk_e, 'Khác')
+            ELSE
+                'Không phân loại'
+        END
+    """
+    cursor.execute(query_trans, (nam, nam))
+    rows_bccp = cursor.rowcount
+    conn.commit()
+    logger.error(f"[Aggregator] Đã gộp agg_daily từ transactions (BCCP): {rows_bccp} dòng.")
+
+    # 4. Gộp các bảng phụ (HCC, TCBC, PPBL, PHBC) bằng UPSERT
+    query_sub = """
+    INSERT INTO agg_daily (ngay, nam, thang, ma_buu_cuc, nhom_dich_vu, bk_e, tong_doanh_thu, tong_san_luong, so_kh_phat_sinh)
+    SELECT 
+        printf('%04d-%02d-%02d', t.tu_nam, t.tu_thang, t.tu_ngay) as ngay,
+        ? as nam,
+        t.tu_thang as thang,
+        t.ma_buu_cuc,
+        COALESCE(d.nhom_dich_vu, t.ten_dich_vu) as nhom_dich_vu,
+        CASE 
+            WHEN COALESCE(d.nhom_dich_vu, t.ten_dich_vu) IN ('Truyền thống', 'TMĐT', 'Quốc tế', 'Chuyển phát HCC') THEN
+                COALESCE(d.bk_e, 'Khác')
+            ELSE
+                'Không phân loại'
+        END as bk_e,
+        SUM(t.doanh_thu) as tong_doanh_thu,
+        SUM(t.san_luong) as tong_san_luong,
+        0 as so_kh_phat_sinh
+    FROM (
+        SELECT ma_buu_cuc, ten_dich_vu, doanh_thu, san_luong, tu_ngay, tu_thang, tu_nam FROM transactions_hcc
+        UNION ALL
+        SELECT ma_buu_cuc, ten_dich_vu, doanh_thu, san_luong, tu_ngay, tu_thang, tu_nam FROM transactions_tcbc
+        UNION ALL
+        SELECT ma_buu_cuc, ten_dich_vu, doanh_thu, san_luong, tu_ngay, tu_thang, tu_nam FROM transactions_ppbl
+        UNION ALL
+        SELECT ma_buu_cuc, ten_dich_vu, doanh_thu, san_luong, tu_ngay, tu_thang, tu_nam FROM transactions_phbc
+    ) t
+    LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu OR t.ten_dich_vu = d.ten_dich_vu
+    WHERE t.tu_nam = ?
+    GROUP BY 
+        printf('%04d-%02d-%02d', t.tu_nam, t.tu_thang, t.tu_ngay),
+        t.ma_buu_cuc,
+        COALESCE(d.nhom_dich_vu, t.ten_dich_vu),
+        CASE 
+            WHEN COALESCE(d.nhom_dich_vu, t.ten_dich_vu) IN ('Truyền thống', 'TMĐT', 'Quốc tế', 'Chuyển phát HCC') THEN
+                COALESCE(d.bk_e, 'Khác')
+            ELSE
+                'Không phân loại'
+        END
+    ON CONFLICT(ngay, ma_buu_cuc, nhom_dich_vu, bk_e) DO UPDATE SET
+        tong_doanh_thu = tong_doanh_thu + excluded.tong_doanh_thu,
+        tong_san_luong = tong_san_luong + excluded.tong_san_luong
+    """
+    cursor.execute(query_sub, (nam, nam))
+    rows_sub = cursor.rowcount
+    conn.commit()
+    logger.error(f"[Aggregator] Đã gộp/UPSERT agg_daily từ 4 bảng phụ: {rows_sub} dòng.")
+    
+    return rows_bccp + rows_sub
+

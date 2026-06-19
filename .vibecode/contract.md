@@ -13,6 +13,7 @@ Tài liệu xác nhận phạm vi công việc và kết quả nghiệm thu cho 
     *   [sync_mappings.py](file:///E:/Projects/Dashboard-BCCP/scripts/sync_mappings.py) hỗ trợ đọc cột `BK/E` từ file CSV mới và import vào DB.
 *   [ ] **Mã nguồn ETL**:
     *   [etl/aggregator.py](file:///E:/Projects/Dashboard-BCCP/etl/aggregator.py) có hàm khởi tạo bảng ngày và hàm `rebuild_daily(conn, nam)` tính toán chính xác số liệu Ngày + Bưu cục + Nhóm dịch vụ + BK/E từ bảng thô và 4 bảng phụ.
+    *   [etl/importer.py](file:///E:/Projects/Dashboard-BCCP/etl/importer.py) tự động kích hoạt `rebuild_daily` khi nạp file Excel mới.
     *   [scripts/rebuild_summaries.py](file:///E:/Projects/Dashboard-BCCP/scripts/rebuild_summaries.py) tích hợp bước chạy rebuild bảng ngày cho năm 2025 và 2026.
 *   [ ] **Mã nguồn Kiểm tra chất lượng**:
     *   [scripts/verify_sums.py](file:///E:/Projects/Dashboard-BCCP/scripts/verify_sums.py) bổ sung kiểm tra chênh lệch số liệu bảng `agg_daily` so với bảng thô.

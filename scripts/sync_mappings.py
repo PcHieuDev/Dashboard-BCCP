@@ -60,12 +60,32 @@ def sync_spdv(conn):
         logger.error(f"❌ Lỗi: Không thể đọc file mapping sản phẩm {MAPPING_PATH} hoặc thiếu cột bắt buộc.")
         return 0
         
-    expected_cols = ["nhom_chinh", "ma_spdv", "ten_spdv", "nhom_dich_vu"]
-    for col in expected_cols:
-        if col not in df.columns:
-            logger.error(f"❌ Lỗi: Cột '{col}' không tồn tại trong file CSV mapping sản phẩm.")
-            logger.error(f"   Các cột đang có: {list(df.columns)}")
-            return 0
+    # Tạo danh sách các cột thực tế
+    cols = list(df.columns)
+    
+    # Tìm cột ma_spdv, ten_spdv
+    if "ma_spdv" not in cols or "ten_spdv" not in cols:
+        logger.error(f"❌ Lỗi: Thiếu cột ma_spdv hoặc ten_spdv trong file CSV mapping sản phẩm.")
+        logger.error(f"   Các cột đang có: {cols}")
+        return 0
+        
+    # Tìm cột nhom_dich_vu (hỗ trợ cả 'loại dịch vụ' hoặc 'nhom_dich_vu')
+    nhom_dv_col = None
+    for c in ["nhom_dich_vu", "loại dịch vụ"]:
+        if c in cols:
+            nhom_dv_col = c
+            break
+    if not nhom_dv_col:
+        logger.error(f"❌ Lỗi: Thiếu cột nhom_dich_vu hoặc loại dịch vụ trong file CSV mapping sản phẩm.")
+        logger.error(f"   Các cột đang có: {cols}")
+        return 0
+        
+    # Tìm cột bk_e (hỗ trợ cả 'bk/e' hoặc 'bk_e')
+    bk_e_col = None
+    for c in ["bk/e", "bk_e"]:
+        if c in cols:
+            bk_e_col = c
+            break
 
     # Thêm cột ghi_chu nếu chưa có
     if "ghi_chu" not in df.columns:
@@ -87,6 +107,18 @@ def sync_spdv(conn):
 
     cursor = conn.cursor()
 
+    # Thêm cột bk_e vào bảng dim_dichvu nếu chưa tồn tại
+    try:
+        cursor.execute("PRAGMA table_info(dim_dichvu)")
+        table_cols = [row[1] for row in cursor.fetchall()]
+        if 'bk_e' not in table_cols:
+            logger.error("➕ Thêm cột bk_e vào bảng dim_dichvu...")
+            cursor.execute("ALTER TABLE dim_dichvu ADD COLUMN bk_e TEXT")
+            conn.commit()
+    except Exception as e:
+        logger.error(f"❌ Lỗi khi thêm cột bk_e vào dim_dichvu: {e}")
+        return 0
+
     # 2. Xóa các dòng BCCP và mã HCC (HCC001-HCC004) để thực hiện nạp mới (TRUNCATE)
     # Giữ lại các dòng seed data cho HCC (không phải dạng mã HCC001...), TCBC, PPBL
     try:
@@ -101,28 +133,45 @@ def sync_spdv(conn):
         logger.error(f"❌ Lỗi khi làm sạch dữ liệu cũ trong dim_dichvu: {e}")
         return 0
 
-    # 3. Ghi vào cả dim_dichvu mới và dim_spdv cũ
+    # 3. Ghi vào dim_dichvu
     rows_synced = 0
     for _, row in df.iterrows():
         ma_spdv = str(row["ma_spdv"]).strip()
         if not ma_spdv or pd.isna(row["ma_spdv"]):
             continue
             
-        nhom_chinh = str(row["nhom_chinh"]).strip()
         ten_spdv = str(row["ten_spdv"]).strip()
-        nhom_dich_vu = str(row["nhom_dich_vu"]).strip()
         
-        # 1. Đồng bộ vào dim_dichvu (bảng đa dịch vụ mới)
+        # Nhóm dịch vụ con
+        nhom_dich_vu = str(row[nhom_dv_col]).strip()
+        if nhom_dich_vu == 'Hành chính công':
+            nhom_dich_vu = 'Chuyển phát HCC'
+            
+        # Xác định nhóm chính
+        if nhom_dich_vu == 'Chuyển phát HCC' or ma_spdv.startswith('HCC'):
+            nhom_chinh = 'HCC'
+        else:
+            nhom_chinh = 'BCCP'
+            
+        # Xác định bk_e
+        bk_e_val = 'Khác'
+        if bk_e_col and not pd.isna(row[bk_e_col]):
+            bk_e_val = str(row[bk_e_col]).strip()
+            # Theo yêu cầu của Sếp, nếu trống thì cho vào 'Khác'
+            if not bk_e_val or bk_e_val.lower() == 'nan' or bk_e_val == '':
+                bk_e_val = 'Khác'
+        
         cursor.execute(
-            """INSERT OR REPLACE INTO dim_dichvu (nhom_chinh, ma_dich_vu, ten_dich_vu, nhom_dich_vu)
-               VALUES (?, ?, ?, ?)""",
-            (nhom_chinh, ma_spdv, ten_spdv, nhom_dich_vu),
+            """INSERT OR REPLACE INTO dim_dichvu (nhom_chinh, ma_dich_vu, ten_dich_vu, nhom_dich_vu, bk_e)
+               VALUES (?, ?, ?, ?, ?)""",
+            (nhom_chinh, ma_spdv, ten_spdv, nhom_dich_vu, bk_e_val),
         )
         rows_synced += 1
 
     conn.commit()
-    logger.error(f"✅ Đã đồng bộ thành công {rows_synced} sản phẩm vào bảng dim_dichvu và dim_spdv.")
+    logger.error(f"✅ Đã đồng bộ thành công {rows_synced} sản phẩm vào bảng dim_dichvu.")
     return rows_synced
+
 
 def sync_buucuc(conn):
     """Đồng bộ mapping bưu cục từ CSV vào bảng dim_buucuc."""

@@ -87,6 +87,45 @@ def verify():
     logger.error(f"-> Chênh lệch Doanh thu = {agg_week_hcc_dt - raw_hcc_dt:,.6f}")
     logger.error(f"-> Chênh lệch Sản lượng = {agg_week_hcc_sl - raw_hcc_sl}")
     
+    # 3. Đối chiếu tổng hợp ngày (agg_daily) với bảng thô
+    logger.error("\n--- 3. BẢNG TỔNG HỢP NGÀY (agg_daily) vs BẢNG THÔ NĂM 2026 ---")
+    
+    # 3.1. Tính tổng từ các nguồn thô
+    # Từ transactions (BCCP)
+    raw_bccp_dt, raw_bccp_sl = c.execute("SELECT SUM(cuoc_tt_tong), SUM(san_luong) FROM transactions WHERE nam_du_lieu = 2026").fetchone()
+    raw_bccp_dt = raw_bccp_dt or 0.0
+    raw_bccp_sl = raw_bccp_sl or 0
+    
+    # Từ các bảng phụ (HCC, TCBC, PPBL, PHBC)
+    raw_subs_dt, raw_subs_sl = c.execute("""
+        SELECT SUM(doanh_thu), SUM(san_luong) 
+        FROM (
+            SELECT doanh_thu, san_luong, tu_nam FROM transactions_hcc
+            UNION ALL
+            SELECT doanh_thu, san_luong, tu_nam FROM transactions_tcbc
+            UNION ALL
+            SELECT doanh_thu, san_luong, tu_nam FROM transactions_ppbl
+            UNION ALL
+            SELECT doanh_thu, san_luong, tu_nam FROM transactions_phbc
+        ) 
+        WHERE tu_nam = 2026
+    """).fetchone()
+    raw_subs_dt = raw_subs_dt or 0.0
+    raw_subs_sl = raw_subs_sl or 0
+    
+    total_raw_dt = raw_bccp_dt + raw_subs_dt
+    total_raw_sl = raw_bccp_sl + raw_subs_sl
+    
+    # 3.2. Tính tổng từ bảng agg_daily
+    agg_daily_dt, agg_daily_sl = c.execute("SELECT SUM(tong_doanh_thu), SUM(tong_san_luong) FROM agg_daily WHERE nam = 2026").fetchone()
+    agg_daily_dt = agg_daily_dt or 0.0
+    agg_daily_sl = agg_daily_sl or 0
+    
+    logger.error(f"Tổng Thô 2026 (BCCP + Phụ): Doanh thu = {total_raw_dt:,.2f}, Sản lượng = {total_raw_sl:,}")
+    logger.error(f"Tổng Ngày 2026 (agg_daily):  Doanh thu = {agg_daily_dt:,.2f}, Sản lượng = {agg_daily_sl:,}")
+    logger.error(f"-> Chênh lệch Doanh thu = {agg_daily_dt - total_raw_dt:,.6f}")
+    logger.error(f"-> Chênh lệch Sản lượng = {agg_daily_sl - total_raw_sl}")
+    
     conn.close()
 
 if __name__ == "__main__":
