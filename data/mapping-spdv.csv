@@ -1,4 +1,4 @@
-﻿ma_spdv;ten_spdv;Loại dịch vụ;BK/E
+ma_spdv;ten_spdv;Loại dịch vụ;BK/E
 CTN001;Chuyển phát tiêu chuẩn;Truyền thống;BK
 CTN012;Chuyển phát Quà tặng Tiêu chuẩn;Truyền thống;BK
 CTN015;Chuyển phát Nông sản;Truyền thống;BK
@@ -81,3 +81,8 @@ HCC002;Hành chính công EMS có VAT;Hành chính công;EMS
 HCC003;Hành chính công BPBĐ;Hành chính công;BK
 HCC004;Hành chính công BPBĐ có VAT;Hành chính công;BK
 ETN043;EMS Siêu tốc Hà Nội - HCM;Truyền thống;EMS
+CTN021;Chuyển phát hàng cứu trợ;Truyền thống;BK
+CTN023;Chuyển phát Tiêu chuẩn TMĐT nội tỉnh đặc biệt;Truyền thống;BK
+ETN046;EMS Trung thu Express;Truyền thống;EMS
+ETN052;Chuyển phát nhanh hàng nông sản;Truyền thống;EMS
+
