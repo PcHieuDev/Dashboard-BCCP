@@ -1,22 +1,33 @@
-# CONTRACT: Dashboard BCCP (Nâng cấp Code)
+# Contract: Cam kết Phạm vi và Sản phẩm bàn giao
 
-## DELIVERABLES
-| # | Item | Details | Requirements |
-|---|------|---------|--------------|
-| 1 | Hệ thống Logging | `config/logger.py`, ghi log ra file và console, dọn dẹp các lệnh `print()` cũ | REQ-001 |
-| 2 | Môi trường Test | Thư mục `tests/` với các file test mẫu cơ bản, file `chay_kiem_thu.bat` | REQ-002 |
-| 3 | Môi trường Linting | File cấu hình `.flake8`, file `kiem_tra_code.bat` | REQ-003 |
+Tài liệu xác nhận phạm vi công việc và kết quả nghiệm thu cho tính năng thêm bảng `agg_daily` có cột `BK/E`.
 
-## TECH STACK
-- Thư viện: `pytest`, `pytest-cov`, `flake8`, `logging` (Python stdlib)
+---
 
-## TASK GRAPH SUMMARY
-3 TIPs, dự kiến hoàn thành trong 60 phút.
+## 1. Kết quả bàn giao mong muốn (Deliverables)
 
-## NOT INCLUDED (Các hạng mục không bao gồm)
-- **Không viết test cho 100% dự án**: Chỉ viết bộ khung và các bài test mẫu đại diện cho chức năng cốt lõi (ví dụ: ETL và Analytics), để dành không gian cho việc viết test dần dần sau này.
-- **Không đập đi xây lại code cũ**: Nếu công cụ Linting phát hiện lỗi phong cách (style) ở code cũ quá nhiều, tôi sẽ cấu hình bỏ qua, chỉ sửa các lỗi nghiêm trọng gây sập app.
-- **Không chuyển đổi PostgreSQL**: Hoãn sang Phase sau theo chỉ đạo.
+*   [ ] **Bảng Cơ sở dữ liệu**:
+    *   Bảng `dim_dichvu` trong `dashboard.db` được bổ sung thêm cột `bk_e` và nạp thành công dữ liệu từ file mapping mới.
+    *   Bảng `agg_daily` được tạo lập thành công trong CSDL `dashboard.db` cùng chỉ mục `idx_agg_daily_date_bc`.
+*   [ ] **Mã nguồn đồng bộ Mapping**:
+    *   [sync_mappings.py](file:///E:/Projects/Dashboard-BCCP/scripts/sync_mappings.py) hỗ trợ đọc cột `BK/E` từ file CSV mới và import vào DB.
+*   [ ] **Mã nguồn ETL**:
+    *   [etl/aggregator.py](file:///E:/Projects/Dashboard-BCCP/etl/aggregator.py) có hàm khởi tạo bảng ngày và hàm `rebuild_daily(conn, nam)` tính toán chính xác số liệu Ngày + Bưu cục + Nhóm dịch vụ + BK/E từ bảng thô và 4 bảng phụ.
+    *   [scripts/rebuild_summaries.py](file:///E:/Projects/Dashboard-BCCP/scripts/rebuild_summaries.py) tích hợp bước chạy rebuild bảng ngày cho năm 2025 và 2026.
+*   [ ] **Mã nguồn Kiểm tra chất lượng**:
+    *   [scripts/verify_sums.py](file:///E:/Projects/Dashboard-BCCP/scripts/verify_sums.py) bổ sung kiểm tra chênh lệch số liệu bảng `agg_daily` so với bảng thô.
 
-## CONFIRM
-Reply "CONFIRM" to receive the Task Graph.
+---
+
+## 2. Tiêu chí nghiệm thu (Acceptance Criteria)
+
+1.  Chạy `python scripts/sync_mappings.py` thành công không lỗi, bảng `dim_dichvu` có dữ liệu cột `bk_e`.
+2.  Chạy `python scripts/rebuild_summaries.py` hoàn thành toàn bộ (gồm cả bước build `agg_daily` mới) cho năm 2025 và 2026.
+3.  Chạy `python scripts/verify_sums.py` và kết quả chênh lệch Doanh thu / Sản lượng giữa bảng ngày `agg_daily` và bảng thô bằng `0` (hoặc khớp hoàn toàn).
+4.  Cảnh báo log hiển thị rõ ràng nếu có dịch vụ bị thiếu mapping trong quá trình rebuild.
+
+---
+
+## 3. Ràng buộc & Loại trừ (Exclusions)
+*   **Không chỉnh sửa** bất kỳ tệp tin nào thuộc dự án Chatbot (`Chatbot-hoidap-database`).
+*   **Không chỉnh sửa** giao diện Dashboard chính (Dash App UI) trong đợt triển khai này.

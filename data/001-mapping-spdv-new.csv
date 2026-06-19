@@ -1,0 +1,83 @@
+﻿ma_spdv;ten_spdv;Loại dịch vụ;BK/E
+CTN001;Chuyển phát tiêu chuẩn;Truyền thống;BK
+CTN012;Chuyển phát Quà tặng Tiêu chuẩn;Truyền thống;BK
+CTN015;Chuyển phát Nông sản;Truyền thống;BK
+CTN016;Chuyển phát Tiêu chuẩn đồng giá;Truyền thống;BK
+ETN001;EMS Premium Tài liệu;Truyền thống;EMS
+ETN003;EMS hỏa tốc;Truyền thống;EMS
+ETN011;EMS Premium Hàng hóa;Truyền thống;EMS
+ETN013;EMS hỏa tốc;Truyền thống;EMS
+ETN029;EMS Thư đồng giá;Truyền thống;EMS
+ETN030;EMS HSXT;Truyền thống;EMS
+ETN034;EMS tài chính ngân hàng gói tiêu chuẩn;Truyền thống;EMS
+ETN036;EMS tài chính ngân hàng gói vàng;Truyền thống;EMS
+ETN039;EMS chuyên tuyến;Truyền thống;EMS
+ETN044;EMS Last Mile Premium;Truyền thống;EMS
+ETN045;EMS Lastmile Standard A;Truyền thống;EMS
+ETN047;Chuyển phát nhanh EMS Quà Tặng;Truyền thống;EMS
+ETN049;EMS Tài liệu – Gói ưu đãi;Truyền thống;EMS
+ETN050;EMS Hàng hoá nhanh – Gói ưu đãi;Truyền thống;EMS
+KT1001;KT1;Truyền thống;BK
+KT1002;KT1 Hỏa tốc;Truyền thống;BK
+KT1003;KT1 Hẹn giờ;Truyền thống;BK
+KT1004;KT1 Hỏa tốc Hẹn giờ;Truyền thống;BK
+KT1005;KTI A;Truyền thống;BK
+KT1006;KT1 B;Truyền thống;BK
+KT1007;KTI C;Truyền thống;BK
+KT1008;KT1 Hỏa tốc - A;Truyền thống;BK
+KT1009;KT1 Hỏa tốc - B;Truyền thống;BK
+KT1010;KT1 Hỏa tốc - C;Truyền thống;BK
+KT1011;KT1 Hỏa tốc Hẹn giờ - A;Truyền thống;BK
+KT1012;KT1 Hỏa tốc Hẹn giờ - B;Truyền thống;BK
+KT1013;KT1 Hỏa tốc Hẹn giờ - C;Truyền thống;BK
+KT1014;KT1 Hẹn giờ - A;Truyền thống;BK
+KT1015;KT1 Hẹn giờ - B;Truyền thống;BK
+KT1016;KT1 Hẹn giờ - C;Truyền thống;BK
+RTN001;Bưu phẩm bảo đảm;Truyền thống;BK
+RTN004;Bưu phẩm bảo đảm đồng giá;Truyền thống;BK
+TTN001;Bưu phẩm thường - Thư;Truyền thống;BK
+TTN003;Bưu phẩm thường - Ấn phẩm;Truyền thống;BK
+TTN006;Bưu phẩm KĐC;Truyền thống;BK
+CTN007;Chuyển phát Tiêu chuẩn Thương mại điện tử;TMĐT;BK
+CTN008;Tiêu chuẩn sàn Thương mại điện tử;TMĐT;BK
+CTN009;Chuyển phát Tiêu chuẩn TMĐT đồng giá - gói Cơ bản;TMĐT;BK
+CTN019;Chuyển phát Tiêu chuẩn TMĐT đồng giá - Gói Bạc;TMĐT;BK
+CTN020;Chuyển phát Tiêu chuẩn TMĐT đồng giá - Gói Vàng;TMĐT;BK
+CTN022;Chuyển phát Tiêu chuẩn TMĐT đồng giá - Gói Kim Cương;TMĐT;BK
+ETN031;Chuyển phát nhanh EMS Thương mại điện tử;TMĐT;EMS
+ETN037;Chuyển phát nhanh EMS Thương mại điện tử đồng giá;TMĐT;EMS
+ETN048;EMS Thương mại điện tử Eco;TMĐT;EMS
+ETN051;EMS Thương mại điện tử Eco Plus;TMĐT;EMS
+CQT002;Bưu kiện thủy bộ;Quốc tế;BK
+CQT003;Bưu kiện máy bay;Quốc tế;BK
+CQT004;Bưu kiện chuyên tuyến;Quốc tế;BK
+CQT007;Bưu kiện bay - Gói Đồng;Quốc tế;BK
+CQT008;Bưu kiện máy bay - Gói Bạc;Quốc tế;BK
+CQT009;Bưu kiện máy bay - Gói Vàng;Quốc tế;BK
+CQT010;Bưu kiện máy bay - Gói Kim Cương;Quốc tế;BK
+DHL001;DHL Tài liệu zone10;Quốc tế;Đại lý QT
+DHL002;DHL Hàng hoá zone10;Quốc tế;Đại lý QT
+EQT001;EMS tài liệu quốc tế;Quốc tế;EMS
+EQT002;EMS hàng hóa quốc tế;Quốc tế;EMS
+EQT003;CPN Chuyên tuyến đi Mỹ;Quốc tế;EMS
+LQT004;Gói nhỏ Epacket;Quốc tế;BK
+LQT005;Gói nhỏ Asean Pack;Quốc tế;BK
+PRM004;Gói nhỏ Prime Tracked;Quốc tế;BK
+RQT001;Tài liệu bảo đảm đi quốc tế;Quốc tế;BK
+RQT003;Ân phẩm bảo đảm;Quốc tế;BK
+RQT006;Gói nhỏ đảm bảo;Quốc tế;BK
+RQT008;Gói nhỏ đảm bảo - Gói bạc;Quốc tế;BK
+RQT009;Gói nhỏ bảo đảm - Gói vàng;Quốc tế;BK
+RQT010;Gói nhỏ bảo đảm - Gói kim cương;Quốc tế;BK
+RQT011;Gói nhỏ đảm bảo - Gói đồng;Quốc tế;BK
+TQT001;Tài liệu cơ bản đi quốc tế;Quốc tế;BK
+TQT007;Thư công ích đi Quốc tế;Quốc tế;BK
+UPS002;UPS Tài liệu;Quốc tế;Đại lý QT
+CTN024;Chuển phát Tiêu chuẩn - Giá trị cao;Truyền thống;BK
+CTN028;Chuyển phát Tiêu chuẩn TMĐT đồng giá - Gói Bạch Kim;TMĐT;BK
+CTN031;Chuyển phát Tiêu chuẩn TMĐT 48h - Gói Pro;TMĐT;BK
+HCC001;Hành chính công EMS;Hành chính công;EMS
+HCC002;Hành chính công EMS có VAT;Hành chính công;EMS
+HCC003;Hành chính công BPBĐ;Hành chính công;BK
+HCC004;Hành chính công BPBĐ có VAT;Hành chính công;BK
+ETN043;EMS Siêu tốc Hà Nội - HCM;Truyền thống;EMS

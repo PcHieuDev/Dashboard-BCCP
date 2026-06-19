@@ -1,26 +1,32 @@
-# RRI REPORT: Dashboard BCCP (Refactoring)
-Generated: 2026-06-11
-Complexity: Medium (Technical Refactoring)
-Questions Asked: 3 (Challenge Mode)
+# RRI Report: Yêu cầu chi tiết cho bảng `agg_daily` và cột `BK/E`
 
-## REQUIREMENTS MATRIX
-| REQ-ID  | Requirement          | Source    | Priority | Persona    |
-|---------|----------------------|-----------|----------|------------|
-| REQ-001 | Triển khai Logging thay thế print() | RRI Q#1 | P0       | Operator   |
-| REQ-002 | Thiết lập kiểm thử tự động (Pytest) | RRI Q#2 | P1       | QA / Tester|
-| REQ-003 | Áp dụng kiểm soát code (Linting) | RRI Q#3 | P2       | Developer  |
+Tài liệu ghi nhận kết quả Phỏng vấn ngược làm rõ yêu cầu (Reverse Requirements Interview - RRI) giữa Sếp và Contractor.
 
-## AUTO-ANSWERED (từ báo cáo Quét mã nguồn)
-- **Cấu trúc hiện tại**: Đã chia module tốt (etl, analytics, dash_app), nên việc thêm test và logging sẽ dễ dàng khoanh vùng.
-- **Database**: Vẫn giữ nguyên SQLite, chưa chuyển PostgreSQL (theo chỉ đạo của Sếp).
+---
 
-## DECISIONS LOG
-| Decision | Options Considered | Chosen | Rationale |
-|----------|--------------------|--------|-----------|
-| [D-001]  | Chọn thư viện Test | pytest | Chuẩn ngành, dễ viết, dễ đọc báo cáo |
-| [D-002]  | Thư mục lưu Log    | logs/  | Tách biệt khỏi thư mục code chính |
+## 1. Kết Quả Phỏng Vấn Nghiệp Vụ (Q&A)
 
-## OPEN QUESTIONS (Dành cho Sếp quyết định)
-- **[OQ-001] Logging (Ghi nhật ký)**: Tôi đề xuất hệ thống sẽ lưu tối đa 5 file nhật ký gần nhất, mỗi file 10MB (đầy tự động cắt sang file mới). Sếp thấy hợp lý không?
-- **[OQ-002] Testing (Kiểm thử)**: Vì Sếp không chuyên IT, tôi đề xuất chỉ tạo test cho **khâu nhập dữ liệu (ETL)** và **khâu tính toán (Analytics)** để đảm bảo số liệu báo cáo luôn đúng. Giao diện (UI) tạm thời chưa cần test tự động để tiết kiệm thời gian. Sếp đồng ý chứ?
-- **[OQ-003] Linting (Kiểm tra cú pháp)**: Tôi sẽ bật mức độ kiểm tra "cơ bản" trước để không làm xáo trộn code cũ đang chạy tốt, chủ yếu để chặn các lỗi ngớ ngẩn (như viết sai tên biến) cho các đoạn code mới sau này. Sếp thấy ổn không?
+| Câu hỏi RRI | Quyết định của Sếp (Đáp án) | Ý nghĩa kỹ thuật / Logic áp dụng |
+| :--- | :--- | :--- |
+| **Q1**: Phân loại `BK/E` cho dịch vụ phụ (TCBC, PPBL, PHBC)? | **Phương án A**: Mặc định là `'Khác'`. | Các dòng dữ liệu từ 4 bảng phụ nếu không tìm thấy mã trong file mapping sẽ được gán giá trị mặc định là `'Khác'`. |
+| **Q2**: Xử lý mã dịch vụ mới hoặc trống cột `BK/E`? | **Phương án A + Ghi Log**: Gán mặc định là `'Khác'` + Ghi cảnh báo trong log import. | Hệ thống tự động gán `'Khác'` để tiến trình chạy mượt, đồng thời in cảnh báo trong log để Sếp biết cần bổ sung mapping và chạy import đè. |
+| **Q3**: Cột số lượng khách hàng phát sinh (`so_kh_phat_sinh`)? | **Có**. | Thêm cột `so_kh_phat_sinh` vào bảng `agg_daily`. Logic đếm: `COUNT(DISTINCT cms)` cho các khách hàng hợp lệ (không null/rỗng/vãng lai). |
+| **Q4**: Cập nhật giao diện Dashboard chính? | **Chưa nâng cấp**. | Không chỉnh sửa giao diện Dash App (UI) trong đợt này. Chỉ bổ sung bảng, cấu trúc DB và logic ETL chạy ngầm. |
+| **Q5**: Phạm vi năm dữ liệu tổng hợp? | **Rebuild toàn bộ từ đầu năm 2025**. | Script `rebuild_summaries.py` sẽ thực hiện quét và tổng hợp dữ liệu ngày cho cả năm 2025 và 2026. |
+
+---
+
+## 2. Phạm Vi Thực Hiện (Scope of Work)
+
+### 📌 Trong phạm vi (In-Scope)
+*   **Database**: Bổ sung bảng `agg_daily` có cột `bk_e`. Cập nhật bảng `dim_dichvu` để thêm cột `bk_e`.
+*   **Đồng bộ Mapping**: Cập nhật `sync_mappings.py` để import cột `BK/E` từ file `001-mapping-spdv-new.csv` mới vào bảng `dim_dichvu`.
+*   **Tiến trình ETL**: 
+    *   Hàm khởi tạo summary tables bổ sung tạo bảng `agg_daily` và index.
+    *   Viết hàm `rebuild_daily` gộp doanh thu, sản lượng, và đếm số khách hàng phát sinh theo Ngày + Bưu cục + Nhóm dịch vụ con + BK/E cho mảng BCCP và các mảng dịch vụ phụ.
+    *   Tích hợp vào `rebuild_summaries.py` chạy cho cả 2025 và 2026.
+*   **Đối chiếu số liệu**: Cập nhật `verify_sums.py` để kiểm tra đối chiếu tính đúng đắn của bảng ngày so với bảng thô.
+
+### 🚫 Ngoài phạm vi (Out-of-Scope)
+*   Không thay đổi giao diện Dash App (UI).
+*   Không sửa đổi bất kỳ tệp tin nào thuộc dự án Chatbot.

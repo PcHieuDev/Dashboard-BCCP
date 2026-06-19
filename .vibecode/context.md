@@ -1,32 +1,39 @@
-# PROJECT CONTEXT: Dashboard BCCP (Refactoring)
-Generated: 2026-06-11 | For: Builder
+# Context: Bối cảnh dự án phục vụ Builder
 
-## 1. Project Overview
-Dự án Dashboard doanh thu BCCP (Dash). Mục tiêu hiện tại là nâng cấp chất lượng mã nguồn (Code Quality Refactoring) bằng cách thay thế các lệnh in `print()` thô sơ bằng hệ thống `logging` chuẩn, thiết lập môi trường kiểm thử tự động `pytest`, và áp dụng `flake8` để kiểm soát lỗi cú pháp. Không thay đổi giao diện UI hay cấu trúc database.
+Tài liệu cung cấp bối cảnh kỹ thuật, quy tắc code và các quyết định nghiệp vụ của Sếp cho Builder thực thi.
 
-## 2. Tech Stack & Conventions
-- Language: Python 3.13
-- Framework: Dash
-- Database: SQLite
-- Testing: pytest
-- Linting: flake8
-- Logging: Python's built-in `logging` module
+---
 
-## 3. Architecture (summary)
-Hệ thống được chia thành:
-- `dash_app/`: Frontend & Callbacks
-- `etl/`: Pipeline xử lý dữ liệu Excel -> SQLite
-- `analytics/`: Xử lý logic nghiệp vụ và query DB
-- Khung Logging mới sẽ nằm ở `config/logger.py` và được import ở khắp nơi.
-- Khung Testing mới sẽ nằm ở `tests/` chạy độc lập ngoài thư mục code.
+## 1. Tổng Quan Dự Án
+Dự án Dashboard doanh thu BCCP cần bổ sung bảng tổng hợp theo ngày `agg_daily` vào Database SQLite chung `dashboard.db` để phục vụ cho các dự án tích hợp sau này (như chatbot). Không thay đổi giao diện Dash App (UI) hiện tại.
 
-## 4. Key Decisions (from RRI)
-| Decision | Chosen | Rationale |
-|----------|--------|-----------|
-| Thư viện Test | pytest | Chuẩn ngành, dễ thiết lập, xuất report dễ nhìn |
-| Thư mục Log | logs/ | Tách biệt khỏi thư mục code, dễ dàng dọn dẹp |
-| File cấu hình Lint | .flake8 | Linh hoạt, cấu hình tắt các cảnh báo không cần thiết |
+---
 
-## 5. Patterns to Follow
-- Logging: Sử dụng `from config.logger import get_logger`, sau đó `logger = get_logger(__name__)` ở đầu mỗi file. Tránh dùng `print()`.
-- Testing: Viết các hàm bắt đầu bằng chữ `test_`, lưu file bắt đầu bằng `test_`. Dùng fixture trong `conftest.py` thay vì lặp lại code setup.
+## 2. Các Quyết Định Nghiệp Vụ Của Sếp (RRI)
+1.  **Cột phân loại `BK/E`**: 
+    *   Mảng BCCP và HCC được map theo file CSV `001-mapping-spdv-new.csv` (lưu ý: copy file này đè lên `data/mapping-spdv.csv` của dự án).
+    *   Không còn giá trị `'Đại lý'` (chỉ có `BK`, `EMS`, `Đại lý QT`, `Khác`, `Không phân loại`).
+    *   Các dịch vụ phụ (TCBC, PPBL, PHBC) không có trong file mapping CSV -> Mặc định gán là `'Không phân loại'`.
+    *   Các dịch vụ thuộc mảng chính (Truyền thống, TMĐT, Quốc tế, Chuyển phát HCC) nhưng không có trong mapping CSV -> Gán là `'Khác'`.
+2.  **Logic cảnh báo (Log Warning)**:
+    *   Chỉ in cảnh báo `[WARNING]` ra log hệ thống nếu dịch vụ chưa được map thuộc một trong bốn nhóm: **Truyền thống**, **TMĐT**, **Quốc tế**, **Chuyển phát HCC**.
+    *   Các nhóm khác tự động gán là `'Không phân loại'` và **không cảnh báo**.
+3.  **Số khách hàng phát sinh (`so_kh_phat_sinh`)**:
+    *   Đếm số lượng khách hàng phát sinh doanh thu trong ngày bằng logic `COUNT(DISTINCT cms)`. 
+    *   Khách hàng hợp lệ là khách hàng có `cms` không NULL, không rỗng `""`, không bắt đầu bằng `'VANGLAI_'` và giá trị không phải là `'none'` (không phân biệt hoa thường).
+
+---
+
+## 3. Kiến Trúc Cơ Sở Dữ Liệu
+*   **Bảng `dim_dichvu`**: Bổ sung cột `bk_e` (TEXT).
+*   **Bảng `agg_daily`**:
+    *   Khóa chính: `PRIMARY KEY (ngay, ma_buu_cuc, nhom_dich_vu, bk_e)`.
+    *   Cột: `ngay`, `nam`, `thang`, `ma_buu_cuc`, `nhom_dich_vu`, `bk_e`, `tong_doanh_thu`, `tong_san_luong`, `so_kh_phat_sinh`.
+    *   Chỉ mục: `idx_agg_daily_date_bc` trên cột `(ngay, ma_buu_cuc)`.
+
+---
+
+## 4. Kỷ Luật Code (Karpathy Principles)
+*   **Think & Simplify**: Viết code rõ ràng, có ghi chú tiếng Việt dễ hiểu.
+*   **Surgical Edits**: Sửa đúng chỗ, không làm ảnh hưởng đến các hàm tổng hợp tháng/tuần đang chạy ổn định.
+*   **Database Connection**: Đóng kết nối (`conn.close()`) ngay sau khi sử dụng để tránh lỗi `database is locked`.

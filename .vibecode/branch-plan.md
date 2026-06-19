@@ -1,19 +1,30 @@
-# BRANCH PLAN: Dashboard BCCP (Refactoring)
-Generated: 2026-06-11
+# Branch Plan: Triển khai tính năng `agg_daily` có cột `BK/E`
 
-## Branch Mapping
+Kịch bản phân nhánh và điều phối thực hiện các nhiệm vụ (TIPs) cho dự án Dashboard-BCCP.
 
-| # | Branch | Module | TIPs | Worktree Path | Dependencies |
-|---|--------|--------|------|---------------|-------------|
-| 1 | feat/refactor-code-quality | Logging, Testing, Linting | TIP-refactor-001, 002, 003 | E:\Projects\worktrees\Dashboard-BCCP\feat-refactor-code-quality | None |
+---
 
-## Merge Order
-Chỉ có 1 nhánh duy nhất (Single Branch Workflow cho Refactoring) nên sau khi hoàn thiện sẽ merge trực tiếp vào main.
+## 1. Kế hoạch Phân Nhánh (Branching Strategy)
+*   **Mô hình**: Single Mode (Dự án quy mô nhỏ, chạy trên một nhánh phát triển độc lập).
+*   **Nhánh phát triển**: `feat/agg-daily`
+*   **Đường dẫn Worktree đề xuất**: `E:\Projects\worktrees\Dashboard-BCCP\feat-agg-daily`
+*   **Thứ tự thực hiện**: Tuyến tính (TIP-001 -> TIP-002 -> TIP-003 -> TIP-004).
 
-## Conflict Prevention
-Mọi sửa đổi liên quan đến `print()` thay bằng `logging` đều sẽ thực hiện trên nhánh `feat/refactor-code-quality`. Để tránh rủi ro, nhánh này sẽ được thi công liên tục và merge sớm nhất có thể.
+---
 
-## Instructions for User
-1. Sau khi xác nhận Branch Plan này, Chủ thầu sẽ tự động tạo nhánh và worktree tại đường dẫn:
-   `E:\Projects\worktrees\Dashboard-BCCP\feat-refactor-code-quality`
-2. Mở cửa sổ chat mới (Builder) trỏ workspace vào đường dẫn worktree đó và yêu cầu: "thực hiện TIPs".
+## 2. Danh Sách Nhiệm Vụ (Task List / TIPs)
+
+| Mã TIP | Tên Nhiệm Vụ | File Ảnh Hưởng | Độ Ưu Tiên |
+| :--- | :--- | :--- | :--- |
+| **TIP-agg-001** | Đồng bộ cột `BK/E` vào `dim_dichvu` | `data/mapping-spdv.csv`<br>`scripts/sync_mappings.py` | P0 (Cao nhất) |
+| **TIP-agg-002** | Tạo bảng `agg_daily` & viết hàm ETL | `etl/aggregator.py` | P0 |
+| **TIP-agg-003** | Tích hợp Rebuild số liệu 2025 & 2026 | `scripts/rebuild_summaries.py` | P0 |
+| **TIP-agg-004** | Cập nhật Script kiểm tra đối chiếu số liệu | `scripts/verify_sums.py` | P0 |
+
+---
+
+## 3. Quy trình Thi công (Build Execution)
+1.  **Contractor** tạo nhánh `feat/agg-daily` và tạo worktree tương ứng tại thư mục `E:\Projects\worktrees\Dashboard-BCCP\feat-agg-daily`.
+2.  Chuyển sang vai trò **Builder** trên worktree mới để thực thi từng TIP.
+3.  Sau mỗi TIP, Builder thực hiện chạy kiểm thử, viết Completion Report, cập nhật Build Log và thực hiện Commit.
+4.  Khi hoàn thành tất cả TIP, Contractor thực hiện Verify (Nghiệm thu) và Merge vào nhánh `main`.
