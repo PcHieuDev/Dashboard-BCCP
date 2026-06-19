@@ -30,7 +30,8 @@ from etl.aggregator import (
     create_summary_tables, 
     rebuild_all_monthly, 
     rebuild_weekly, 
-    rebuild_plans_weekly
+    rebuild_plans_weekly,
+    rebuild_daily
 )
 from analytics.new_customer_calculator import populate_historical_new_customers
 
@@ -94,6 +95,11 @@ def main():
         logger.error(f"\n--- BƯỚC 4: Phân bổ kế hoạch tuần (plans_weekly) cho các năm: {years_to_rebuild} ---")
         for yr in years_to_rebuild:
             rebuild_plans_weekly(conn, yr)
+            
+        # 4.5. Rebuild các bảng ngày
+        logger.error(f"\n--- BƯỚC 4.5: Rebuild bảng tổng hợp theo ngày (agg_daily) cho các năm: {years_to_rebuild} ---")
+        for yr in years_to_rebuild:
+            rebuild_daily(conn, yr)
             
         # 5. Tính toán lại khách hàng mới
         logger.error("\n--- BƯỚC 5: Tính toán lại dữ liệu khách hàng mới (new_customers) ---")

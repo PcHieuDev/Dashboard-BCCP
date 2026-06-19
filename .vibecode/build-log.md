@@ -1,45 +1,26 @@
-# BUILD LOG: Dashboard BCCP
-Branch: feat/refactor-code-quality
-Builder started: 2026-06-11T16:11:00+07:00
+# Build Log: Nhật ký thi công tính năng `agg_daily` có cột `BK/E`
+
+Nhật ký ghi nhận lịch trình triển khai và lịch sử commit của Builder trên nhánh `feat/agg-daily-v2`.
 
 ---
 
-## TIP-refactor-001: Triển khai hệ thống Logging tập trung
-- Status: DONE
-- Started: 16:11
-- Completed: 16:15
-- Files: 1 created, 29 modified
-- Tests: 2/2 passed
-- Commit: `feat(logging): TIP-refactor-001 — add central logger and replace prints`
-- Issues: None
+## 1. Nhật ký triển khai (Timeline)
+
+| Thời gian | Trạng thái | Nội dung thực hiện | Người thực hiện |
+| :--- | :--- | :--- | :--- |
+| 2026-06-19 | **DONE** | Tạo nhánh `feat/agg-daily-v2` và worktree tương ứng. | Builder |
+| 2026-06-19 | **DONE** | Thực hiện **TIP-agg-001**: Cập nhật `sync_mappings.py` và bảng `dim_dichvu` có cột `bk_e`. | Builder |
+| 2026-06-19 | **DONE** | Thực hiện **TIP-agg-002**: Tạo bảng `agg_daily` và viết hàm `rebuild_daily` trong `etl/aggregator.py`. | Builder |
+| 2026-06-19 | **DONE** | Thực hiện **TIP-agg-003**: Tích hợp bước gọi `rebuild_daily` vào `scripts/rebuild_summaries.py` cho năm 2025 & 2026. | Builder |
+| 2026-06-19 | **DONE** | Thực hiện cập nhật `etl/importer.py` để tự động cập nhật bảng ngày khi import dữ liệu Excel mới. | Builder |
+| 2026-06-19 | **DONE** | Thực hiện **TIP-agg-004**: Viết bước kiểm tra đối chiếu số liệu bảng ngày trong `scripts/verify_sums.py`. | Builder |
+| 2026-06-19 | **DONE** | Chạy thử nghiệm rebuild toàn bộ 2025-2026 và chạy đối chiếu thành công, chênh lệch bằng 0. | Builder |
 
 ---
 
-## TIP-refactor-002: Thiết lập môi trường Pytest và test mẫu
-- Status: DONE
-- Started: 16:15
-- Completed: 16:16
-- Files: 4 created, 1 modified
-- Tests: setup done
-- Commit: `feat(test): TIP-refactor-002 - add pytest environment`
-- Issues: None
-
----
-
-## TIP-refactor-003: Cấu hình Flake8 và file chạy hàng loạt
-- Status: DONE
-- Started: 16:16
-- Completed: 16:17
-- Files: 2 created, 1 modified
-- Tests: setup done
-- Commit: `feat(linting): TIP-refactor-003 - add flake8 configuration`
-- Issues: None
-
----
-
-## SUMMARY
-- Branch: feat/refactor-code-quality
-- Total TIPs: 3
-- DONE: 3
-- BLOCKED: 0
-- Overall: READY FOR VERIFY
+## 2. Lịch sử Commit đề xuất (Proposed Commits)
+*   `feat(etl): TIP-agg-001 — update sync_mappings.py to support bk_e in dim_dichvu`
+*   `feat(etl): TIP-agg-002 — create agg_daily table and implement rebuild_daily in aggregator.py`
+*   `feat(etl): TIP-agg-003 — integrate rebuild_daily to rebuild_summaries.py for 2025 and 2026`
+*   `feat(etl): update importer.py to auto-refresh agg_daily upon Excel import`
+*   `feat(qa): TIP-agg-004 — add daily aggregation consistency checks to verify_sums.py`

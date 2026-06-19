@@ -105,12 +105,12 @@ def _get_db_connection(db_path):
 
 def _auto_aggregate_after_import(db_path, service_type, years_months_pairs):
     """
-    Tự động gộp lại số liệu tháng/tuần ngay sau khi nạp thành công.
+    Tự động gộp lại số liệu tháng/tuần/ngày ngay sau khi nạp thành công.
     """
     import logging
     logger = logging.getLogger(__name__)
     try:
-        from etl.aggregator import rebuild_monthly, rebuild_monthly_customer, rebuild_weekly, rebuild_plans_weekly
+        from etl.aggregator import rebuild_monthly, rebuild_monthly_customer, rebuild_weekly, rebuild_plans_weekly, rebuild_daily
         conn = _get_db_connection(db_path)
         try:
             for nam, thang_int in years_months_pairs:
@@ -123,6 +123,9 @@ def _auto_aggregate_after_import(db_path, service_type, years_months_pairs):
                     
                 # 2. Gộp doanh thu tuần (weekly)
                 rebuild_weekly(conn, nam)
+                
+                # 2.5. Gộp doanh thu ngày (daily)
+                rebuild_daily(conn, nam)
                 
                 # 3. Gộp kế hoạch tuần nếu là nạp Kế hoạch
                 if service_type == 'PLAN':
