@@ -20,8 +20,12 @@ def backup_database(db_path, backup_dir=None):
         return False
         
     if backup_dir is None:
-        # Mac dinh tao thu muc backups cung cap voi file DB
-        backup_dir = os.path.join(os.path.dirname(db_path), 'backups')
+        # Mac dinh su dung thu muc backup tu settings, neu loi thi dung thu muc backups cung cap voi DB
+        try:
+            from config.settings import BACKUP_DIR
+            backup_dir = str(BACKUP_DIR)
+        except Exception:
+            backup_dir = os.path.join(os.path.dirname(db_path), 'backups')
         
     try:
         os.makedirs(backup_dir, exist_ok=True)
@@ -81,7 +85,11 @@ def run_backup_by_schedule(db_path):
     now = datetime.now()
     # Chỉ tự động chạy từ 17:00 đến 23:59
     if now.hour >= 17:
-        backup_dir = os.path.join(os.path.dirname(db_path), 'backups')
+        try:
+            from config.settings import BACKUP_DIR
+            backup_dir = str(BACKUP_DIR)
+        except Exception:
+            backup_dir = os.path.join(os.path.dirname(db_path), 'backups')
         os.makedirs(backup_dir, exist_ok=True)
         
         # Tim kiem xem hom nay da co ban backup nao chua (dang dashboard_backup_YYYYMMDD_*.db)
