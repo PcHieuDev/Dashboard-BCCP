@@ -370,6 +370,9 @@ def import_raw_excel_file(db_path, excel_path, import_batch=None, thang=None, mo
             engine = "openpyxl" if excel_path.endswith(".xlsx") else None
             df = pd.read_excel(excel_path, sheet_name=sheetname, header=None, engine=engine)
             
+            # Cấu hình section mặc định là phát sinh
+            current_section = "phat_sinh"
+            
             start_row = 0
             for idx in range(min(50, len(df))):
                 val_a = str(df.iloc[idx, 0]).strip() if pd.notna(df.iloc[idx, 0]) else ""
@@ -387,13 +390,20 @@ def import_raw_excel_file(db_path, excel_path, import_batch=None, thang=None, mo
                 val_b = clean_str_field(row_vals[1])
                 val_d = str(row_vals[3]).strip() if pd.notna(row_vals[3]) else ""
                 
-                # Bỏ qua dòng tiêu đề section
-                if "1. Chi tiết sản lượng phát sinh" in val_a or "2. Chi tiết sản lượng điều chỉnh" in val_a:
+                # Nhận diện thay đổi Section
+                if "1. Chi tiết sản lượng phát sinh" in val_a:
+                    current_section = "phat_sinh"
+                    continue
+                elif "2. Chi tiết sản lượng điều chỉnh" in val_a:
+                    current_section = "dieu_chinh"
                     continue
                     
                 # Nhận diện dòng group CMS
                 if val_a != "" and val_d == "":
-                    current_cms = val_b
+                    if val_b != "":
+                        current_cms = val_b
+                    else:
+                        current_cms = ""
                     continue
                     
                 # Dòng chi tiết bưu gửi
@@ -421,7 +431,8 @@ def import_raw_excel_file(db_path, excel_path, import_batch=None, thang=None, mo
                         'Buu_Cuc': clean_str_field(row_vals[5]),
                         'San_Pham': clean_str_field(row_vals[9]),
                         'Ngay_CN': parsed_date,
-                        'Ma_BG': val_d,
+                        # Chỉ đếm mã bưu gửi ở section phát sinh, section điều chỉnh để None để pandas nunique không đếm
+                        'Ma_BG': val_d if current_section == "phat_sinh" else None,
                         'KL_Thuc': get_num(row_vals[13]),
                         'KL_TinhCuoc': get_num(row_vals[14]),
                         'CB_CP': get_num(row_vals[15]),
