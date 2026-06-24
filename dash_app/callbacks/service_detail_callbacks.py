@@ -188,6 +188,8 @@ def register_service_detail_callbacks(app):
                 prev = row['dt_prev']
                 if prev > 0:
                     return ((curr - prev) / prev) * 100.0
+                elif curr > 0:
+                    return 100.0
                 return 0.0
                 
             df_merged['pct_change'] = df_merged.apply(calc_change, axis=1)
