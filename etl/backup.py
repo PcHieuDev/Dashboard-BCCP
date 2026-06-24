@@ -39,6 +39,8 @@ def backup_database(db_path, backup_dir=None):
         
         # Ket noi nguon va dich
         src_conn = sqlite3.connect(db_path)
+        # M-07: Cho SQLite cho toi da 30s neu DB dang bi lock thay vi fail ngay
+        src_conn.execute("PRAGMA busy_timeout=30000;")
         dst_conn = sqlite3.connect(backup_path)
         
         # Su dung API SQLite Backup an toan cap page

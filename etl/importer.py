@@ -217,6 +217,9 @@ def import_excel_file(db_path, excel_path, import_batch=None, thang=None, mode='
     inserted = 0
     warnings = []
     batch_buffer = []
+    # H-01: Giá trị mặc định cho nam trước vòng lặp — tránh nam=None nếu mọi dòng đều thiếu ngày hợp lệ
+    from datetime import datetime as _dt
+    nam = _dt.now().year
     
     for row_idx, row in enumerate(ws.iter_rows(min_row=EXCEL_DATA_START_ROW, 
                                                  max_col=ws.max_column,
@@ -289,14 +292,16 @@ def import_excel_file(db_path, excel_path, import_batch=None, thang=None, mode='
         batch_buffer.append(row_data)
         
         if len(batch_buffer) >= BATCH_SIZE:
+            _before = conn.total_changes
             cursor.executemany(insert_sql, batch_buffer)
-            inserted += cursor.rowcount
+            inserted += conn.total_changes - _before
             conn.commit()
             batch_buffer = []
             
     if batch_buffer:
+        _before = conn.total_changes
         cursor.executemany(insert_sql, batch_buffer)
-        inserted += cursor.rowcount
+        inserted += conn.total_changes - _before
         conn.commit()
         
     skipped = total_rows - inserted
@@ -838,8 +843,14 @@ def import_service_excel(db_path, excel_path, service_type, import_batch=None, t
             if total_days <= 0:
                 total_days = 1
                 
+            # H-03: Whitelist nhom_chinh — bỏ qua giá trị không hợp lệ
+            VALID_NHOM = {'hcc', 'tcbc', 'ppbl', 'phbc'}
+            nhom_lower = nhom_chinh.lower() if nhom_chinh else ''
+            if nhom_lower not in VALID_NHOM:
+                warnings.append(f"Dòng {row_data_line}: nhom_chinh không hợp lệ '{nhom_chinh}' — bỏ qua")
+                continue
             # Xác định bảng đích
-            table_dest = f"transactions_{nhom_chinh.lower()}"
+            table_dest = f"transactions_{nhom_lower}"
             if table_dest not in records_by_table:
                 records_by_table[table_dest] = []
                 
@@ -897,8 +908,9 @@ def import_service_excel(db_path, excel_path, service_type, import_batch=None, t
                  tu_ngay, tu_thang, tu_nam, den_ngay, den_thang, den_nam, stt)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """
+                _before_ins = conn_ins.total_changes
                 cursor_ins.executemany(insert_sql, rows)
-                inserted += cursor_ins.rowcount
+                inserted += conn_ins.total_changes - _before_ins
             conn_ins.commit()
         except Exception as ex_ins:
             logger.error(f"Lỗi khi insert dữ liệu dịch vụ mới: {ex_ins}", exc_info=True)
