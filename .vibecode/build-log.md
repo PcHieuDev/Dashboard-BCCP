@@ -1,49 +1,57 @@
 # BUILD LOG: Dashboard-BCCP
-Branch: fix/etl
-Builder started: 2026-06-24 18:12 (ICT)
+Branch: fix/scripts-config
+Builder started: 2026-06-24T11:12:00+07:00
 
 ---
 
-## TIP-etl-001: Sửa nam=None + whitelist nhom_chinh
+## TIP-sc-001: Sửa hardcoded paths trong update_service_catalog + verify_db_vs_excel
 - Status: DONE
-- Started: 18:12
-- Completed: 18:15
-- Files: 0 created, 1 modified (etl/importer.py)
-- Tests: 2/2 passed
-- Commit: `fix(etl): TIP-etl-001+002 — nam fallback, whitelist nhom_chinh, aggregator logger.info`
-- Commit hash: 7e17323
-- Issues: `row_data_line` không tồn tại trong scope → dùng `nhom_chinh` trực tiếp trong message
-
----
-
-## TIP-etl-002: Đổi logger.error→info trong aggregator + kiểm tra ON CONFLICT agg_weekly
-- Status: DONE
-- Started: 18:12
-- Completed: 18:15
-- Files: 0 created, 1 modified (etl/aggregator.py)
-- Tests: 2/2 passed
-- Commit: `fix(etl): TIP-etl-001+002 — nam fallback, whitelist nhom_chinh, aggregator logger.info`
-- Commit hash: 7e17323
-- Issues: H-04 (ON CONFLICT) — schema đã đúng, không cần sửa (PRIMARY KEY thực tế khớp hoàn toàn)
-
----
-
-## TIP-etl-003: Sửa backup busy_timeout + importer rowcount
-- Status: DONE
-- Started: 18:15
-- Completed: 18:16
-- Files: 0 created, 2 modified (etl/backup.py, etl/importer.py)
-- Tests: 2/2 passed
-- Commit: `fix(etl): TIP-etl-003 — backup busy_timeout 30s, importer rowcount total_changes`
-- Commit hash: 5fe52e1
+- Started: 2026-06-24T11:12:00+07:00
+- Completed: 2026-06-24T11:14:55+07:00
+- Files: 0 created, 2 modified (update_service_catalog.py, verify_db_vs_excel.py)
+- Tests: 2/2 AC passed (syntax check OK)
+- Commit: `fix(scripts): TIP-sc-001 + TIP-sc-002 -- sua hardcoded paths + SQL DELETE ngoac + logger level`
+- Commit hash: 14c9d9a
 - Issues: None
+  - C-03: Xóa 4 hardcoded paths trỏ vào worktree feat-update-services
+  - C-04: import DB_PATH từ config.settings
+  - M-19: sys.path fallback sửa từ parent.parent.parent → parent.parent (2 cấp)
+
+---
+
+## TIP-sc-002: Sửa SQL DELETE logic sync_mappings + đổi logger level
+- Status: DONE
+- Started: 2026-06-24T11:12:00+07:00
+- Completed: 2026-06-24T11:14:55+07:00
+- Files: 0 created, 1 modified (sync_mappings.py)
+- Tests: 2/2 AC passed (syntax check OK, logic verified)
+- Commit: `fix(scripts): TIP-sc-001 + TIP-sc-002 -- sua hardcoded paths + SQL DELETE ngoac + logger level`
+- Commit hash: 14c9d9a
+- Issues: None
+  - H-14: Thêm ngoặc tường minh DELETE WHERE clause
+  - Logger: 7 dòng logger.error → logger.info
+
+---
+
+## TIP-sc-003: rebuild_summaries logger + connection lifecycle + config/settings BACKUP_DIR fallback
+- Status: DONE
+- Started: 2026-06-24T11:16:00+07:00
+- Completed: 2026-06-24T11:17:20+07:00
+- Files: 0 created, 2 modified (scripts/rebuild_summaries.py, config/settings.py)
+- Tests: 3/3 AC passed (syntax OK + runtime BACKUP_DIR test OK)
+- Commit: `fix(scripts): TIP-sc-003 -- rebuild_summaries logger+conn lifecycle + settings BACKUP_DIR fallback`
+- Commit hash: c6b7fa6
+- Issues: None
+  - C-02: 6 logger.error → logger.info
+  - H-04-pattern: conn đóng trong finally, bước 5 tách khối riêng
+  - L-13: BACKUP_DIR fallback DATA_DIR/backups khi OneDrive không mount
 
 ---
 
 ## SUMMARY
-- Branch: fix/etl
+- Branch: fix/scripts-config
 - Total TIPs: 3
-- DONE: 3
+- DONE: 3 (TIP-sc-001, TIP-sc-002, TIP-sc-003)
 - BLOCKED: 0
-- Commits: [7e17323, 5fe52e1]
+- Commits: 14c9d9a, 35ae46c, c6b7fa6
 - Overall: READY FOR VERIFY
