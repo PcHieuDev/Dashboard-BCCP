@@ -62,9 +62,12 @@ def generate_tokens():
     # Xuất Excel (lưu vào thư mục cùng DB)
     output_path = os.path.join(os.path.dirname(DB_PATH), 'phan_quyen_url.xlsx')
     
-    # Tạo URL mẫu cho user dễ hình dung
+    # Tạo URL mẫu cho user dễ hình dung (Đã sửa lại port 8050 của Dash)
     df_out = pd.DataFrame(tokens)
-    df_out['URL Truy Cập'] = 'http://localhost:8501/?token=' + df_out['Token']
+    # LƯU Ý: Nếu server dùng tên miền, bạn có thể thay 'localhost' bằng tên miền của bạn
+    # Ví dụ: 'http://dashboard.bdna.io.vn/?token=' hoặc 'http://192.168.1.100:8050/?token='
+    domain_or_ip = 'http://localhost:8050'
+    df_out['URL Truy Cập'] = domain_or_ip + '/?token=' + df_out['Token']
     df_out.to_excel(output_path, index=False)
     
     logger.info(f"✅ Đã tạo thành công {len(tokens)} token phân quyền!")

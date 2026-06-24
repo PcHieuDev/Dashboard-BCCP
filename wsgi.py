@@ -1,5 +1,9 @@
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'dash_app'))
+
 from waitress import serve
-from dash_app.app import app
+from app import app
 
 if __name__ == '__main__':
     print("Starting production server with Waitress on http://0.0.0.0:8050...")
