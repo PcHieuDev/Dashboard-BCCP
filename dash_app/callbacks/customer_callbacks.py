@@ -180,7 +180,6 @@ def register_customer_callbacks(app):
             ]
         )
         return table
-        return table
 
     # ==============================================================================
     # 4. CALLBACK XUẤT EXCEL BẢNG CHI TIẾT KHÁCH HÀNG (CMS)
@@ -239,8 +238,6 @@ def register_customer_callbacks(app):
             filter_parts.append(f"Tháng: {month_val}")
         elif period == "Tuần" and week_idx is not None:
             filter_parts.append(f"Tuần index: {week_idx}")
-        elif start_date and end_date:
-            filter_parts.append(f"Từ ngày: {start_date} - Đến ngày: {end_date}")
             
         filter_parts.append(f"Cụm: {cum or 'Tất cả'}")
         filter_parts.append(f"Bưu điện Xã: {bdx or 'Tất cả'}")

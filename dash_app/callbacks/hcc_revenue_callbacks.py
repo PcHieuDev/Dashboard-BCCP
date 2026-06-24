@@ -424,7 +424,7 @@ def register_hcc_revenue_callbacks(app):
             
         g2_actual = None if g2 == "None" else g2
         compare_prev = compare_opt != "none"
-        compare_mode = compare_opt if compare_prev else "prev_period"
+        compare_mode = compare_opt if compare_prev else "none"
         
         # 1. Truy vấn dữ liệu có cache dựa vào các bộ lọc
         _, _, _, df = resolve_filters_and_query_hcc(
@@ -479,7 +479,7 @@ def register_hcc_revenue_callbacks(app):
             
         g2_actual = None if g2 == "None" else g2
         compare_prev = compare_opt != "none"
-        compare_mode = compare_opt if compare_prev else "prev_period"
+        compare_mode = compare_opt if compare_prev else "none"
         
         # 1. Truy vấn dữ liệu có cache dựa vào các bộ lọc
         date_from, date_to, _, df = resolve_filters_and_query_hcc(
