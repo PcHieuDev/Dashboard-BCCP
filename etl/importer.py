@@ -292,14 +292,16 @@ def import_excel_file(db_path, excel_path, import_batch=None, thang=None, mode='
         batch_buffer.append(row_data)
         
         if len(batch_buffer) >= BATCH_SIZE:
+            _before = conn.total_changes
             cursor.executemany(insert_sql, batch_buffer)
-            inserted += cursor.rowcount
+            inserted += conn.total_changes - _before
             conn.commit()
             batch_buffer = []
             
     if batch_buffer:
+        _before = conn.total_changes
         cursor.executemany(insert_sql, batch_buffer)
-        inserted += cursor.rowcount
+        inserted += conn.total_changes - _before
         conn.commit()
         
     skipped = total_rows - inserted
@@ -906,8 +908,9 @@ def import_service_excel(db_path, excel_path, service_type, import_batch=None, t
                  tu_ngay, tu_thang, tu_nam, den_ngay, den_thang, den_nam, stt)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """
+                _before_ins = conn_ins.total_changes
                 cursor_ins.executemany(insert_sql, rows)
-                inserted += cursor_ins.rowcount
+                inserted += conn_ins.total_changes - _before_ins
             conn_ins.commit()
         except Exception as ex_ins:
             logger.error(f"Lỗi khi insert dữ liệu dịch vụ mới: {ex_ins}", exc_info=True)
