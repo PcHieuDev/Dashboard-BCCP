@@ -709,7 +709,7 @@ def register_kpi_callbacks(app):
                         ORDER BY SUM(t2.cuoc_tt_tong) DESC LIMIT 1) as nhom_dv_chinh
                 FROM top_cms t
             """
-            df_cur_cms_tot = pd.read_sql_query(sql_cur, conn_tmp, params=params_cur)
+            df_cur_cms_tot = pd.read_sql_query(sql_cur, conn_tmp, params=params_cur + params_cur)
             df_main_dv = df_cur_cms_tot[['cms', 'nhom_dv_chinh']].copy() if not df_cur_cms_tot.empty else pd.DataFrame(columns=['cms', 'nhom_dv_chinh'])
             
             if prev_from and prev_to and not df_cur_cms_tot.empty:
