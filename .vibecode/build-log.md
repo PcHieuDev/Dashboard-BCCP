@@ -33,10 +33,25 @@ Builder started: 2026-06-24T11:12:00+07:00
 
 ---
 
+## TIP-sc-003: rebuild_summaries logger + connection lifecycle + config/settings BACKUP_DIR fallback
+- Status: DONE
+- Started: 2026-06-24T11:16:00+07:00
+- Completed: 2026-06-24T11:17:20+07:00
+- Files: 0 created, 2 modified (scripts/rebuild_summaries.py, config/settings.py)
+- Tests: 3/3 AC passed (syntax OK + runtime BACKUP_DIR test OK)
+- Commit: `fix(scripts): TIP-sc-003 -- rebuild_summaries logger+conn lifecycle + settings BACKUP_DIR fallback`
+- Commit hash: c6b7fa6
+- Issues: None
+  - C-02: 6 logger.error → logger.info
+  - H-04-pattern: conn đóng trong finally, bước 5 tách khối riêng
+  - L-13: BACKUP_DIR fallback DATA_DIR/backups khi OneDrive không mount
+
+---
+
 ## SUMMARY
 - Branch: fix/scripts-config
 - Total TIPs: 3
-- DONE: 2 (TIP-sc-001, TIP-sc-002)
-- PENDING: 1 (TIP-sc-003 — sẽ thực hiện batch tiếp theo)
-- Commits: 14c9d9a
-- Overall: IN PROGRESS — Đang chờ User "tiếp tục" để thực hiện TIP-sc-003
+- DONE: 3 (TIP-sc-001, TIP-sc-002, TIP-sc-003)
+- BLOCKED: 0
+- Commits: 14c9d9a, 35ae46c, c6b7fa6
+- Overall: READY FOR VERIFY
