@@ -214,7 +214,7 @@ def register_kpi_callbacks(app):
     def update_kpi_cards(n_clicks, tab_val, year, period, week_idx, month_val, compare_mode,
                          nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         # Chỉ xử lý khi đang ở Tab Tổng quan KPI
-        if tab_val != "tab-kpi" or tab_val is None:
+        if tab_val is None or tab_val != "tab-kpi":
             return [dash.no_update] * 35
 
         spdv = None

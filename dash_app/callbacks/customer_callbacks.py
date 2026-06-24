@@ -100,7 +100,7 @@ def register_customer_callbacks(app):
     def update_customer_table(btn_global, btn_customer, tab_val, nhom_dv, loai_kh, hop_dong, spdv,
                               year, period, week_idx, month_val, cum, bdx, buu_cuc):
         # Chỉ chạy khi đang ở Tab Chi tiết Khách hàng
-        if tab_val != "tab-customer" or tab_val is None:
+        if tab_val is None or tab_val != "tab-customer":
             return dash.no_update
             
         if not btn_global and not btn_customer:
@@ -207,7 +207,7 @@ def register_customer_callbacks(app):
     def export_customer_table(n_clicks, tab_val, year, period, week_idx, month_val,
                               nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong, spdv):
         ctx = dash.callback_context
-        if not ctx.triggered or tab_val != "tab-customer" or tab_val is None:
+        if not ctx.triggered or tab_val is None or tab_val != "tab-customer":
             return dash.no_update
             
         # 1. Truy vấn toàn bộ dữ liệu

@@ -42,7 +42,7 @@ def register_sidebar_callbacks(app):
             else:
                 df = f"Tuần trong năm {year}"
         else:  # Tháng
-            df = f"Tháng {month_val:02d}/{year}"
+            df = f"Tháng {month_val:02d}/{year}" if month_val else f"Năm {year}"
         return html.Span(["Báo cáo doanh thu thời kỳ ", html.B(df), f" ({period})"])
 
     # 2. Callback ẩn/hiện Topbar và highlight menu item theo URL pathname

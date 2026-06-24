@@ -228,11 +228,11 @@ def register_new_customer_callbacks(app):
         df, kpi_curr, kpi_4m, kpi_rev = query_and_process_new_customers(year, month, week, cycle, cum_val, bdx_val, bc_val)
         
         # Format strings
-        curr_label = f"KH phát sinh trong Tháng {month:02d}/{year}" if cycle == 'Tháng' else f"KH có doanh thu Tuần {week}/{year}"
+        curr_label = f"KH phát sinh trong Tháng {month:02d}/{year}" if cycle == 'Tháng' and month else f"KH có doanh thu Tuần {week}/{year}"
         curr_sub = f"Theo định nghĩa doanh thu > 0 ({curr_label})"
         
         kpi_4m_sub = f"Thời kỳ 4 tháng gần nhất tính đến nay"
-        kpi_rev_sub = f"Phát sinh trong kỳ (Tháng {month:02d} hoặc Tuần {week}) của KH 4 tháng"
+        kpi_rev_sub = f"Phát sinh trong kỳ (Tháng {month:02d} hoặc Tuần {week}) của KH 4 tháng" if month else f"Phát sinh trong kỳ (Tuần {week}) của KH 4 tháng"
         
         # Render DataTable
         if df.empty:
