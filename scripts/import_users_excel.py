@@ -18,7 +18,7 @@ if str(project_root) not in sys.path:
 
 from config.settings import DB_PATH
 
-def import_users_from_excel(excel_path):
+def import_users_from_excel(excel_path, sheet_name=0):
     if not Path(excel_path).exists():
         print(f"Lỗi: Không tìm thấy file {excel_path}")
         return
@@ -28,8 +28,8 @@ def import_users_from_excel(excel_path):
         return
 
     try:
-        # Đọc file Excel
-        df = pd.read_excel(excel_path)
+        # Đọc file Excel, hỗ trợ chọn sheet
+        df = pd.read_excel(excel_path, sheet_name=sheet_name)
         
         # Đảm bảo các cột cần thiết tồn tại
         required_cols = ['username', 'password', 'role']
@@ -99,6 +99,9 @@ def import_users_from_excel(excel_path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Import danh sách user từ file Excel.")
     parser.add_argument("excel_file", help="Đường dẫn đến file Excel chứa danh sách tài khoản")
+    parser.add_argument("--sheet", default=0, help="Tên sheet (ví dụ: 'Worksheet' hoặc 'Sheet1'). Mặc định là sheet đầu tiên.")
     args = parser.parse_args()
     
-    import_users_from_excel(args.excel_file)
+    # Ép kiểu int nếu người dùng nhập số (index)
+    sheet = int(args.sheet) if str(args.sheet).isdigit() else args.sheet
+    import_users_from_excel(args.excel_file, sheet)
