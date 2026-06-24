@@ -863,7 +863,7 @@ def register_service_callbacks(app):
                     return default_returns
                 finally:
                     conn.close()
-            update_service_dashboard.__name__ = f"update_service_dashboard_{pfx.replace('-', '_')}"
+
 
             @app.callback(
                 Output(f"{pfx}-table-a-container", "children"),
@@ -927,7 +927,7 @@ def register_service_callbacks(app):
                     return html.Div(f"Lỗi load bảng chi tiết xã: {e}")
                 finally:
                     conn.close()
-            update_service_table_a.__name__ = f"update_service_table_a_{pfx.replace('-', '_')}"
+
 
             @app.callback(
                 Output(f"{pfx}-table-b-container", "children"),
@@ -991,7 +991,7 @@ def register_service_callbacks(app):
                     return html.Div(f"Lỗi load bảng lũy kế YTD: {e}")
                 finally:
                     conn.close()
-            update_service_table_b.__name__ = f"update_service_table_b_{pfx.replace('-', '_')}"
+
             
         # Chạy hàm khởi tạo callbacks
         make_callbacks(prefix)
