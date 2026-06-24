@@ -517,6 +517,12 @@ def rebuild_daily(conn, nam: int):
         CAST(strftime('%m', t.ngay_chap_nhan) as INTEGER) as thang,
         t.ma_buu_cuc,
         COALESCE(d.nhom_dich_vu, 'Khác') as nhom_dich_vu,
+        -- [NGHIỆP VỤ] Cột bk_e có 4 giá trị hợp lệ: 'BK', 'E', 'Khác', 'Không phân loại'.
+        -- Khi dịch vụ thuộc nhóm chính (TT/TMĐT/Quốc tế/HCC) mà cột bk_e chưa được
+        -- điền trong dim_dichvu (= NULL), COALESCE trả về 'Khác' — đây là ĐÚNG NGHIỆP VỤ:
+        -- dịch vụ chưa phân loại BK/E được xếp vào nhóm 'Khác'.
+        -- Dịch vụ không thuộc 4 nhóm chính → 'Không phân loại' (ví dụ: PHBC, dịch vụ phụ).
+        -- KHÔNG SỬA logic này trừ khi Sếp yêu cầu.
         CASE 
             WHEN COALESCE(d.nhom_dich_vu, 'Khác') IN ('Truyền thống', 'TMĐT', 'Quốc tế', 'Chuyển phát HCC') THEN
                 COALESCE(d.bk_e, 'Khác')
