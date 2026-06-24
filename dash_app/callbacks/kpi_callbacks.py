@@ -368,7 +368,12 @@ def register_kpi_callbacks(app):
             if df_tr.empty or 'ngay' not in df_tr.columns:
                 return []
             if nhom_name:
-                filtered = df_tr[df_tr['nhom_dv'] == nhom_name]
+                if 'nhom_dich_vu' in df_tr.columns:
+                    filtered = df_tr[df_tr['nhom_dich_vu'] == nhom_name]
+                elif 'nhom_dv' in df_tr.columns:
+                    filtered = df_tr[df_tr['nhom_dv'] == nhom_name]
+                else:
+                    return []
             else:
                 filtered = df_tr.groupby('ngay').sum(numeric_only=True).reset_index()
             if filtered.empty:

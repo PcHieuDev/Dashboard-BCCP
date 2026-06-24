@@ -268,8 +268,7 @@ def create_detail_table_sub(df, sub_services, compare_type, title_label="⭐️ 
 def query_sub_service_data(conn, service_key, period_type, period_val, year, sub_services, cum=None, bdx=None, buu_cuc=None):
     """Query chi tiết doanh thu theo bưu cục xã, phân rã theo nhóm dịch vụ con"""
     import config.week_calendar as calendar_helper
-    cursor = conn.cursor()
-    
+
     # 1. Tìm kỳ trước và cùng kỳ
     prev_val, prev_yr = get_prev_period_info(period_type, period_val, year)
     
@@ -465,8 +464,7 @@ def query_sub_service_data(conn, service_key, period_type, period_val, year, sub
 def query_sub_service_data_ytd(conn, service_key, period_type, period_val, year, sub_services, cum=None, bdx=None, buu_cuc=None):
     """Query chi tiết doanh thu lũy kế YTD theo bưu cục xã, phân rã theo nhóm dịch vụ con"""
     import config.week_calendar as calendar_helper
-    cursor = conn.cursor()
-    
+
     # 1. Query doanh thu YTD hiện tại
     if period_type == 'Tháng':
         sql = """
