@@ -5,3 +5,4 @@ openpyxl
 pytest
 pytest-cov
 flake8
+xlrd
