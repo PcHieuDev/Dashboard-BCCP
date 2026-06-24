@@ -217,6 +217,9 @@ def import_excel_file(db_path, excel_path, import_batch=None, thang=None, mode='
     inserted = 0
     warnings = []
     batch_buffer = []
+    # H-01: Giá trị mặc định cho nam trước vòng lặp — tránh nam=None nếu mọi dòng đều thiếu ngày hợp lệ
+    from datetime import datetime as _dt
+    nam = _dt.now().year
     
     for row_idx, row in enumerate(ws.iter_rows(min_row=EXCEL_DATA_START_ROW, 
                                                  max_col=ws.max_column,
@@ -838,8 +841,14 @@ def import_service_excel(db_path, excel_path, service_type, import_batch=None, t
             if total_days <= 0:
                 total_days = 1
                 
+            # H-03: Whitelist nhom_chinh — bỏ qua giá trị không hợp lệ
+            VALID_NHOM = {'hcc', 'tcbc', 'ppbl', 'phbc'}
+            nhom_lower = nhom_chinh.lower() if nhom_chinh else ''
+            if nhom_lower not in VALID_NHOM:
+                warnings.append(f"Dòng {row_data_line}: nhom_chinh không hợp lệ '{nhom_chinh}' — bỏ qua")
+                continue
             # Xác định bảng đích
-            table_dest = f"transactions_{nhom_chinh.lower()}"
+            table_dest = f"transactions_{nhom_lower}"
             if table_dest not in records_by_table:
                 records_by_table[table_dest] = []
                 
