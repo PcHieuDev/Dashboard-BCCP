@@ -494,12 +494,12 @@ def import_raw_excel_file(db_path, excel_path, import_batch=None, thang=None, mo
             if to_delete:
                 conn_del = _get_db_connection(db_path)
                 cursor_del = conn_del.cursor()
-                for sp, m_str, y in to_delete:
-                    logger.info(f"Xóa dữ liệu cũ RAW của sản phẩm '{sp}' - {m_str}/{y} trong transactions...")
+                for sp, bc, m_str, y in to_delete:
+                    logger.info(f"Xóa dữ liệu cũ RAW của sản phẩm '{sp}' bưu cục '{bc}' - {m_str}/{y} trong transactions...")
                     cursor_del.execute("""
                         DELETE FROM transactions 
-                        WHERE ten_dich_vu = ? AND thang_du_lieu = ? AND nam_du_lieu = ?
-                    """, (sp, m_str, y))
+                        WHERE ten_dich_vu = ? AND ma_buu_cuc = ? AND thang_du_lieu = ? AND nam_du_lieu = ?
+                    """, (sp, bc, m_str, y))
                 conn_del.commit()
                 conn_del.close()
         except Exception as ex_del:
