@@ -30,3 +30,9 @@ ENV/
 scratch/
 *.log
 .gemini/
+
+# AI conversation files & temp backups
+conversations_summary.md
+data/dim_dichvu_backup_*.csv
+agent_memory.py
+.agent_memory.db
