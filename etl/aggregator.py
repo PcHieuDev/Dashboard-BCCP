@@ -101,7 +101,7 @@ def create_summary_tables(conn):
     """)
     
     conn.commit()
-    logger.error("[Aggregator] Đã tạo hoặc xác minh sự tồn tại của các bảng summary.")
+    logger.info("[Aggregator] Đã tạo hoặc xác minh sự tồn tại của các bảng summary.")
 
 def rebuild_monthly(conn, nam: int, thang: int):
     """
@@ -207,7 +207,7 @@ def rebuild_monthly(conn, nam: int, thang: int):
     cursor.execute(query, params)
     conn.commit()
     inserted_rows = cursor.rowcount
-    logger.error(f"[Aggregator] Đã rebuild agg_monthly cho T{thang:02d}/{nam} — Đã ghi nhận {inserted_rows} dòng.")
+    logger.info(f"[Aggregator] Đã rebuild agg_monthly cho T{thang:02d}/{nam} — Đã ghi nhận {inserted_rows} dòng.")
     return inserted_rows
 
 def rebuild_monthly_customer(conn, nam: int, thang: int):
@@ -243,7 +243,7 @@ def rebuild_monthly_customer(conn, nam: int, thang: int):
     cursor.execute(query, (thang, nam, thang_str))
     conn.commit()
     inserted_rows = cursor.rowcount
-    logger.error(f"[Aggregator] Đã rebuild agg_monthly_customer cho T{thang:02d}/{nam} — Đã ghi nhận {inserted_rows} dòng.")
+    logger.info(f"[Aggregator] Đã rebuild agg_monthly_customer cho T{thang:02d}/{nam} — Đã ghi nhận {inserted_rows} dòng.")
     return inserted_rows
 
 def rebuild_all_monthly(conn):
@@ -254,7 +254,7 @@ def rebuild_all_monthly(conn):
     cursor.execute("SELECT DISTINCT nam_du_lieu, thang_du_lieu FROM transactions WHERE nam_du_lieu IS NOT NULL AND thang_du_lieu IS NOT NULL")
     pairs = cursor.fetchall()
     
-    logger.error(f"[Aggregator] Tìm thấy {len(pairs)} cặp Năm-Tháng cần rebuild.")
+    logger.info(f"[Aggregator] Tìm thấy {len(pairs)} cặp Năm-Tháng cần rebuild.")
     for nam_du_lieu, thang_str in sorted(pairs):
         try:
             # Parse 'T01' -> 1
@@ -279,7 +279,7 @@ def rebuild_weekly(conn, nam: int):
     
     # Lấy danh sách các tuần trong năm
     weeks = get_week_list(nam)
-    logger.error(f"[Aggregator] Đang rebuild agg_weekly cho năm {nam} ({len(weeks)} tuần)...")
+    logger.info(f"[Aggregator] Đang rebuild agg_weekly cho năm {nam} ({len(weeks)} tuần)...")
     
     total_inserted = 0
     
@@ -315,7 +315,7 @@ def rebuild_weekly(conn, nam: int):
         total_inserted += cursor.rowcount
         
     conn.commit()
-    logger.error(f"[Aggregator] Bước 1: Hoàn tất transactions weekly (BCCP). Đã ghi nhận {total_inserted} records.")
+    logger.info(f"[Aggregator] Bước 1: Hoàn tất transactions weekly (BCCP). Đã ghi nhận {total_inserted} records.")
     
     # BƯỚC 2: Gộp trực tiếp tuần cho 4 dịch vụ phụ (HCC, TCBC, PPBL, PHBC) dựa trên ngày cụ thể
     total_sub_inserted = 0
@@ -360,7 +360,7 @@ def rebuild_weekly(conn, nam: int):
         total_sub_inserted += cursor.rowcount
         
     conn.commit()
-    logger.error(f"[Aggregator] Bước 2: Hoàn tất gộp weekly cho 4 dịch vụ phụ (HCC/TCBC/PPBL/PHBC) - Đã ghi nhận thêm {total_sub_inserted} records.")
+    logger.info(f"[Aggregator] Bước 2: Hoàn tất gộp weekly cho 4 dịch vụ phụ (HCC/TCBC/PPBL/PHBC) - Đã ghi nhận thêm {total_sub_inserted} records.")
     return total_inserted + total_sub_inserted
 
 def rebuild_plans_weekly(conn, nam: int):
@@ -400,7 +400,7 @@ def rebuild_plans_weekly(conn, nam: int):
     # Tập hợp danh sách tất cả các tổ hợp có trong kế hoạch
     buucuc_dichvu_pairs = set((ma_buu_cuc, nhom_chinh, nhom_dich_vu) for (_, ma_buu_cuc, nhom_chinh, nhom_dich_vu, _) in plans_data)
     
-    logger.error(f"[Aggregator] Đang phân bổ plans_weekly cho năm {nam}...")
+    logger.info(f"[Aggregator] Đang phân bổ plans_weekly cho năm {nam}...")
     
     total_inserted = 0
     
@@ -426,7 +426,7 @@ def rebuild_plans_weekly(conn, nam: int):
                 total_inserted += 1
                 
     conn.commit()
-    logger.error(f"[Aggregator] Hoàn tất rebuild plans_weekly {nam}. Đã chèn {total_inserted} dòng.")
+    logger.info(f"[Aggregator] Hoàn tất rebuild plans_weekly {nam}. Đã chèn {total_inserted} dòng.")
     return total_inserted
 
 
@@ -506,7 +506,7 @@ def rebuild_daily(conn, nam: int):
     except Exception as e:
         logger.error(f"[Aggregator] Lỗi khi quét cảnh báo mapping: {e}")
 
-    logger.error(f"[Aggregator] Đang rebuild agg_daily cho năm {nam}...")
+    logger.info(f"[Aggregator] Đang rebuild agg_daily cho năm {nam}...")
     
     # 3. Gộp BCCP (từ transactions)
     query_trans = """
@@ -517,6 +517,12 @@ def rebuild_daily(conn, nam: int):
         CAST(strftime('%m', t.ngay_chap_nhan) as INTEGER) as thang,
         t.ma_buu_cuc,
         COALESCE(d.nhom_dich_vu, 'Khác') as nhom_dich_vu,
+        -- [NGHIỆP VỤ] Cột bk_e có 4 giá trị hợp lệ: 'BK', 'E', 'Khác', 'Không phân loại'.
+        -- Khi dịch vụ thuộc nhóm chính (TT/TMĐT/Quốc tế/HCC) mà cột bk_e chưa được
+        -- điền trong dim_dichvu (= NULL), COALESCE trả về 'Khác' — đây là ĐÚNG NGHIỆP VỤ:
+        -- dịch vụ chưa phân loại BK/E được xếp vào nhóm 'Khác'.
+        -- Dịch vụ không thuộc 4 nhóm chính → 'Không phân loại' (ví dụ: PHBC, dịch vụ phụ).
+        -- KHÔNG SỬA logic này trừ khi Sếp yêu cầu.
         CASE 
             WHEN COALESCE(d.nhom_dich_vu, 'Khác') IN ('Truyền thống', 'TMĐT', 'Quốc tế', 'Chuyển phát HCC') THEN
                 COALESCE(d.bk_e, 'Khác')
@@ -548,7 +554,7 @@ def rebuild_daily(conn, nam: int):
     cursor.execute(query_trans, (nam, nam))
     rows_bccp = cursor.rowcount
     conn.commit()
-    logger.error(f"[Aggregator] Đã gộp agg_daily từ transactions (BCCP): {rows_bccp} dòng.")
+    logger.info(f"[Aggregator] Đã gộp agg_daily từ transactions (BCCP): {rows_bccp} dòng.")
 
     # 4. Gộp các bảng phụ (HCC, TCBC, PPBL, PHBC) bằng UPSERT
     query_sub = """
@@ -596,7 +602,7 @@ def rebuild_daily(conn, nam: int):
     cursor.execute(query_sub, (nam, nam))
     rows_sub = cursor.rowcount
     conn.commit()
-    logger.error(f"[Aggregator] Đã gộp/UPSERT agg_daily từ 4 bảng phụ: {rows_sub} dòng.")
+    logger.info(f"[Aggregator] Đã gộp/UPSERT agg_daily từ 4 bảng phụ: {rows_sub} dòng.")
     
     return rows_bccp + rows_sub
 

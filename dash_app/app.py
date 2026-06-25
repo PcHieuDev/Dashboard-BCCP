@@ -60,6 +60,7 @@ if sys.platform.startswith('win'):
 # KHỞI TẠO DASH APP & CẤU HÌNH BẢO MẬT (FLASK-LOGIN)
 # --------------------------------------------------------------------------
 import os
+import logging
 from flask_login import LoginManager, current_user, login_user, logout_user
 
 app = dash.Dash(
@@ -76,6 +77,22 @@ server.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'bccp_dashboard_rbac_
 # Cấu hình session bảo mật
 server.config['SESSION_COOKIE_HTTPONLY'] = True
 server.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+# --------------------------------------------------------------------------
+# KHỞI TẠO LOGGER (C-05: phải khai báo trước log_user_action)
+# --------------------------------------------------------------------------
+try:
+    from config.logger import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import sys as _sys
+    from pathlib import Path as _Path
+    _sys.path.append(str(_Path(__file__).resolve().parent.parent.parent))
+    try:
+        from config.logger import get_logger
+        logger = get_logger(__name__)
+    except ImportError:
+        logger = logging.getLogger(__name__)
 
 # Thiết lập quản lý phiên đăng nhập
 login_manager = LoginManager()
@@ -110,17 +127,6 @@ def log_user_action(username, status, role="N/A"):
     except Exception as e:
         logger.error(f"Lỗi khi ghi log đăng nhập của user {username}: {e}")
 
-@server.route('/test-login/<username>')
-def test_login_route(username):
-    """Route phục vụ xác thực nhanh cho các verify script tự động."""
-    from db.auth import get_user_by_username
-    user = get_user_by_username(username)
-    if user:
-        login_user(user)
-        log_user_action(username, "SUCCESS", user.role)
-        return f"OK: logged in as {username}"
-    log_user_action(username, "FAILED")
-    return "FAIL: user not found", 404
 
 # --------------------------------------------------------------------------
 # LOAD DỮ LIỆU BAN ĐẦU CHO SIDEBAR DROPDOWNS
@@ -369,7 +375,7 @@ def handle_login(n_clicks, username, password):
     
     if user:
         login_user(user)
-        logger.error(f"Đăng nhập thành công: User {username}")
+        logger.info(f"Đăng nhập thành công: User {username}")
         log_user_action(username, "SUCCESS", user.role)
         return "", "/"
     else:
@@ -387,7 +393,7 @@ def handle_logout(n_clicks):
         username = current_user.username if current_user.is_authenticated else "unknown"
         role = current_user.role if current_user.is_authenticated else "N/A"
         logout_user()
-        logger.error("Đã đăng xuất tài khoản.")
+        logger.info("Đã đăng xuất tài khoản.")
         log_user_action(username, "LOGOUT", role)
         return "/"
     return dash.no_update
@@ -414,24 +420,11 @@ import threading
 import time
 from etl.backup import run_backup_by_schedule
 
-import logging
-try:
-    from config.logger import get_logger
-    logger = get_logger(__name__)
-except ImportError:
-    import sys
-    from pathlib import Path
-    sys.path.append(str(Path(__file__).resolve().parent.parent.parent))
-    try:
-        from config.logger import get_logger
-        logger = get_logger(__name__)
-    except ImportError:
-        logger = logging.getLogger(__name__)
 
 
 def start_auto_backup_thread():
     def backup_worker():
-        logger.error("[Auto-Backup] Khởi động background thread tự động backup CSDL...")
+        logger.info("[Auto-Backup] Khởi động background thread tự động backup CSDL...")
         # Đợi 10 giây đầu để ứng dụng khởi chạy hoàn tất
         time.sleep(10)
         while True:

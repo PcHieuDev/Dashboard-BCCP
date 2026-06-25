@@ -217,6 +217,9 @@ def import_excel_file(db_path, excel_path, import_batch=None, thang=None, mode='
     inserted = 0
     warnings = []
     batch_buffer = []
+    # H-01: Giá trị mặc định cho nam trước vòng lặp — tránh nam=None nếu mọi dòng đều thiếu ngày hợp lệ
+    from datetime import datetime as _dt
+    nam = _dt.now().year
     
     for row_idx, row in enumerate(ws.iter_rows(min_row=EXCEL_DATA_START_ROW, 
                                                  max_col=ws.max_column,
@@ -289,14 +292,16 @@ def import_excel_file(db_path, excel_path, import_batch=None, thang=None, mode='
         batch_buffer.append(row_data)
         
         if len(batch_buffer) >= BATCH_SIZE:
+            _before = conn.total_changes
             cursor.executemany(insert_sql, batch_buffer)
-            inserted += cursor.rowcount
+            inserted += conn.total_changes - _before
             conn.commit()
             batch_buffer = []
             
     if batch_buffer:
+        _before = conn.total_changes
         cursor.executemany(insert_sql, batch_buffer)
-        inserted += cursor.rowcount
+        inserted += conn.total_changes - _before
         conn.commit()
         
     skipped = total_rows - inserted
@@ -838,8 +843,14 @@ def import_service_excel(db_path, excel_path, service_type, import_batch=None, t
             if total_days <= 0:
                 total_days = 1
                 
+            # H-03: Whitelist nhom_chinh — bỏ qua giá trị không hợp lệ
+            VALID_NHOM = {'hcc', 'tcbc', 'ppbl', 'phbc'}
+            nhom_lower = nhom_chinh.lower() if nhom_chinh else ''
+            if nhom_lower not in VALID_NHOM:
+                warnings.append(f"Dòng {row_data_line}: nhom_chinh không hợp lệ '{nhom_chinh}' — bỏ qua")
+                continue
             # Xác định bảng đích
-            table_dest = f"transactions_{nhom_chinh.lower()}"
+            table_dest = f"transactions_{nhom_lower}"
             if table_dest not in records_by_table:
                 records_by_table[table_dest] = []
                 
@@ -897,8 +908,9 @@ def import_service_excel(db_path, excel_path, service_type, import_batch=None, t
                  tu_ngay, tu_thang, tu_nam, den_ngay, den_thang, den_nam, stt)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """
+                _before_ins = conn_ins.total_changes
                 cursor_ins.executemany(insert_sql, rows)
-                inserted += cursor_ins.rowcount
+                inserted += conn_ins.total_changes - _before_ins
             conn_ins.commit()
         except Exception as ex_ins:
             logger.error(f"Lỗi khi insert dữ liệu dịch vụ mới: {ex_ins}", exc_info=True)
@@ -1085,155 +1097,8 @@ def import_plan_excel(db_path, excel_path, import_batch=None, mode='append'):
         logger.error(f"Lỗi khi import Kế hoạch: {e}")
         return {'batch_id': batch_id, 'file': filename, 'thang': 'N/A', 'total_rows': 0, 'inserted': 0, 'skipped': 0, 'warnings': [str(e)]}
 
-def import_phbc_excel(db_path, excel_path, import_batch=None, mode='append'):
-    """
-    Import file Excel dữ liệu Phát hành báo chí (PHBC).
-    """
-    import pandas as pd
-    filename = os.path.basename(excel_path)
-    logger.info(f"Bắt đầu import PHBC: {filename}")
-    
-    batch_id = import_batch or (datetime.now().strftime('%Y%m%d_%H%M%S') + '_PHBC_' + filename)
-    
-    try:
-        engine = "openpyxl" if str(excel_path).endswith(".xlsx") else "xlrd"
-        df = pd.read_excel(excel_path, engine=engine)
-        
-        # Xác định cột dựa vào tên
-        cols = [str(c).lower().strip() for c in df.columns]
-        
-        bc_idx, dt_idx, thang_idx, nam_idx = None, None, None, None
-        
-        for i, c in enumerate(cols):
-            if 'bưu cục' in c or 'buu_cuc' in c or 'buu cuc' in c or 'ma_bc' in c or 'mã bc' in c or 'bc' in c:
-                if bc_idx is None: bc_idx = i
-            if 'doanh thu' in c or 'doanh_thu' in c or 'dt' in c:
-                if dt_idx is None: dt_idx = i
-            if 'tháng' in c or 'thang' in c:
-                if thang_idx is None: thang_idx = i
-            if 'năm' in c or 'nam' in c or 'year' in c:
-                if nam_idx is None: nam_idx = i
-                
-        if None in (bc_idx, dt_idx, thang_idx, nam_idx):
-            warnings = [f"File PHBC thiếu cột. Các cột: {', '.join(df.columns)}"]
-            return {'batch_id': batch_id, 'file': filename, 'thang': 'N/A', 'total_rows': 0, 'inserted': 0, 'skipped': 0, 'warnings': warnings}
-            
+# NOTE: Hàm import_phbc_excel đã bị xóa (2026-06-24).
+# PHBC không còn là loại file riêng — dữ liệu PHBC được gộp vào file mẫu
+# mau_import_dich_vu_khac.xlsx và xử lý qua import_service_excel() như
+# các loại dịch vụ khác (HCC, TCBC, PPBL).
 
-        # Nếu là overwrite, xóa dữ liệu PHBC cũ của tháng/năm
-        if mode == 'overwrite' and len(df) > 0:
-            logger.info("Chế độ ghi đè PHBC: Đang xác định tháng/năm và bưu cục để xóa...")
-            try:
-                to_delete = set()
-                for idx, row in df.iterrows():
-                    bc_val = str(row.iloc[bc_idx]).strip().upper() if pd.notna(row.iloc[bc_idx]) else ""
-                    thang_val = str(row.iloc[thang_idx]).strip() if pd.notna(row.iloc[thang_idx]) else ""
-                    nam_val = _safe_int(row.iloc[nam_idx])
-                    
-                    if bc_val and thang_val:
-                        if not thang_val.startswith("T"):
-                            try:
-                                thang_num = int(float(thang_val))
-                                thang_val = f"T{thang_num:02d}"
-                            except:
-                                continue
-                        if nam_val == 0:
-                            nam_val = datetime.now().year
-                        to_delete.add((thang_val, nam_val, bc_val))
-                
-                if to_delete:
-                    conn_del = _get_db_connection(db_path)
-                    cursor_del = conn_del.cursor()
-                    for thang_val, nam_val, bc_val in to_delete:
-                        logger.info(f"Xóa PHBC cũ của bưu cục {bc_val} tháng {thang_val}/{nam_val}...")
-                        cursor_del.execute("""
-                            DELETE FROM transactions_phbc
-                            WHERE thang_du_lieu = ? AND nam_du_lieu = ? AND ma_buu_cuc = ?
-                        """, (thang_val, nam_val, bc_val))
-                    conn_del.commit()
-                    conn_del.close()
-            except Exception as ex_del:
-                logger.error(f"Lỗi khi xóa PHBC cũ: {ex_del}")
-
-        conn = _get_db_connection(db_path)
-        cursor = conn.cursor()
-        
-        insert_sql = """
-        INSERT OR REPLACE INTO transactions_phbc 
-        (thang_du_lieu, nam_du_lieu, ma_buu_cuc, doanh_thu, import_batch)
-        VALUES (?, ?, ?, ?, ?)
-        """
-        
-        batch_buffer = []
-        inserted = 0
-        total_rows = 0
-        warnings = []
-        first_thang = "T01"
-        last_nam = datetime.now().year
-        
-        for idx, row in df.iterrows():
-            total_rows += 1
-            bc_val = str(row.iloc[bc_idx]).strip().upper() if pd.notna(row.iloc[bc_idx]) else ""
-            dt_val = _safe_float(row.iloc[dt_idx])
-            thang_val = str(row.iloc[thang_idx]).strip() if pd.notna(row.iloc[thang_idx]) else ""
-            nam_val = _safe_int(row.iloc[nam_idx])
-            
-            if not bc_val:
-                continue
-                
-            if thang_val.startswith("T"):
-                pass
-            else:
-                try:
-                    thang_num = int(float(thang_val))
-                    thang_val = f"T{thang_num:02d}"
-                except ValueError:
-                    warnings.append(f"Dòng {idx+2}: Tháng không hợp lệ ('{thang_val}')")
-                    continue
-                    
-            if total_rows == 1:
-                first_thang = thang_val
-                
-            if nam_val == 0:
-                nam_val = datetime.now().year
-                
-            batch_buffer.append((thang_val, nam_val, bc_val, dt_val, batch_id))
-            
-            if len(batch_buffer) >= BATCH_SIZE:
-                cursor.executemany(insert_sql, batch_buffer)
-                inserted += cursor.rowcount
-                batch_buffer = []
-                
-        if batch_buffer:
-            cursor.executemany(insert_sql, batch_buffer)
-            inserted += cursor.rowcount
-            
-        skipped = total_rows - inserted
-        
-        cursor.execute("""
-            INSERT INTO import_log (batch_id, file_name, thang_du_lieu, 
-                                    so_dong_import, so_dong_trung, trang_thai, ghi_chu)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (batch_id, filename, first_thang, inserted, skipped, 'SUCCESS' if not warnings else 'SUCCESS_WITH_WARNINGS', '; '.join(warnings[:5]) if warnings else None))
-        
-        conn.commit()
-        conn.close()
-
-        # Tự động gộp số liệu cho tháng vừa nạp
-        try:
-            thang_int = int(thang[1:]) if thang.startswith('T') else int(thang)
-            _auto_aggregate_after_import(db_path, service_type, [(nam_du_lieu, thang_int)])
-        except Exception as ex_ref:
-            logger.error(f"Lỗi tự động refresh {service_type}: {ex_ref}")
-
-        return {
-            'batch_id': batch_id,
-            'file': filename,
-            'thang': first_thang,
-            'total_rows': total_rows,
-            'inserted': inserted,
-            'skipped': skipped,
-            'warnings': warnings
-        }
-    except Exception as e:
-        logger.error(f"Lỗi khi import PHBC: {e}")
-        return {'batch_id': batch_id, 'file': filename, 'thang': 'N/A', 'total_rows': 0, 'inserted': 0, 'skipped': 0, 'warnings': [str(e)]}

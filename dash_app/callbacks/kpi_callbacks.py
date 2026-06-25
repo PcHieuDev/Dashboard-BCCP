@@ -214,7 +214,7 @@ def register_kpi_callbacks(app):
     def update_kpi_cards(n_clicks, tab_val, year, period, week_idx, month_val, compare_mode,
                          nhom_dv, cum, bdx, buu_cuc, loai_kh, hop_dong):
         # Chỉ xử lý khi đang ở Tab Tổng quan KPI
-        if tab_val != "tab-kpi" or tab_val is None:
+        if tab_val is None or tab_val != "tab-kpi":
             return [dash.no_update] * 35
 
         spdv = None
@@ -368,7 +368,12 @@ def register_kpi_callbacks(app):
             if df_tr.empty or 'ngay' not in df_tr.columns:
                 return []
             if nhom_name:
-                filtered = df_tr[df_tr['nhom_dv'] == nhom_name]
+                if 'nhom_dich_vu' in df_tr.columns:
+                    filtered = df_tr[df_tr['nhom_dich_vu'] == nhom_name]
+                elif 'nhom_dv' in df_tr.columns:
+                    filtered = df_tr[df_tr['nhom_dv'] == nhom_name]
+                else:
+                    return []
             else:
                 filtered = df_tr.groupby('ngay').sum(numeric_only=True).reset_index()
             if filtered.empty:
@@ -709,7 +714,7 @@ def register_kpi_callbacks(app):
                         ORDER BY SUM(t2.cuoc_tt_tong) DESC LIMIT 1) as nhom_dv_chinh
                 FROM top_cms t
             """
-            df_cur_cms_tot = pd.read_sql_query(sql_cur, conn_tmp, params=params_cur)
+            df_cur_cms_tot = pd.read_sql_query(sql_cur, conn_tmp, params=params_cur + params_cur)
             df_main_dv = df_cur_cms_tot[['cms', 'nhom_dv_chinh']].copy() if not df_cur_cms_tot.empty else pd.DataFrame(columns=['cms', 'nhom_dv_chinh'])
             
             if prev_from and prev_to and not df_cur_cms_tot.empty:

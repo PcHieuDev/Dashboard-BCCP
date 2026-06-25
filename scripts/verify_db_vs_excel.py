@@ -10,13 +10,19 @@ import sqlite3
 import openpyxl
 from pathlib import Path
 
+# Thêm thư mục gốc vào path để import settings (2 cấp: scripts/ -> project_root/)
+_project_root = Path(__file__).resolve().parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
+from config.settings import DB_PATH
+
 # Đảm bảo in tiếng Việt chính xác trên Windows Console
 try:
     sys.stdout.reconfigure(encoding='utf-8')
 except Exception:
     pass
 
-DB_PATH = Path(r"E:\z.Database-TTKD-Data\dashboard.db")
 EXCEL_DIR = Path(r"E:\OneDrive\TTKD - Công việc hàng ngày\0. KHM, tai ban hang thang\chi-tiet-KH-hopdong-loaidichvu\du-lieu-goc-4.2.4-casreport\ket-qua-gop-tung-thang-new")
 
 def get_db_summary(conn, thang, nam=2026):

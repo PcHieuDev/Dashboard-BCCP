@@ -101,7 +101,7 @@ def sync_spdv(conn):
         # Đọc dữ liệu hiện tại
         df_backup = pd.read_sql_query("SELECT * FROM dim_dichvu", conn)
         df_backup.to_csv(backup_file, index=False, encoding="utf-8-sig")
-        logger.error(f"💾 Đã tạo file backup bảng dim_dichvu tại: {backup_file}")
+        logger.info(f"💾 Đã tạo file backup bảng dim_dichvu tại: {backup_file}")
     except Exception as e:
         logger.error(f"⚠️ Cảnh báo: Không thể backup bảng dim_dichvu: {e}")
 
@@ -112,7 +112,7 @@ def sync_spdv(conn):
         cursor.execute("PRAGMA table_info(dim_dichvu)")
         table_cols = [row[1] for row in cursor.fetchall()]
         if 'bk_e' not in table_cols:
-            logger.error("➕ Thêm cột bk_e vào bảng dim_dichvu...")
+            logger.info("➕ Thêm cột bk_e vào bảng dim_dichvu...")
             cursor.execute("ALTER TABLE dim_dichvu ADD COLUMN bk_e TEXT")
             conn.commit()
     except Exception as e:
@@ -123,12 +123,12 @@ def sync_spdv(conn):
     # Giữ lại các dòng seed data cho HCC (không phải dạng mã HCC001...), TCBC, PPBL
     try:
         cursor.execute("""
-            DELETE FROM dim_dichvu 
-            WHERE nhom_chinh = 'BCCP' AND ma_dich_vu != 'PHBC_DEFAULT'
+            DELETE FROM dim_dichvu
+            WHERE (nhom_chinh = 'BCCP' AND ma_dich_vu != 'PHBC_DEFAULT')
                OR (nhom_chinh = 'HCC' AND ma_dich_vu LIKE 'HCC%')
         """)
         conn.commit()
-        logger.error("🧹 Đã làm sạch các dòng BCCP và mã HCC cũ trong bảng dim_dichvu.")
+        logger.info("🧹 Đã làm sạch các dòng BCCP và mã HCC cũ trong bảng dim_dichvu.")
     except Exception as e:
         logger.error(f"❌ Lỗi khi làm sạch dữ liệu cũ trong dim_dichvu: {e}")
         return 0
@@ -169,7 +169,7 @@ def sync_spdv(conn):
         rows_synced += 1
 
     conn.commit()
-    logger.error(f"✅ Đã đồng bộ thành công {rows_synced} sản phẩm vào bảng dim_dichvu.")
+    logger.info(f"✅ Đã đồng bộ thành công {rows_synced} sản phẩm vào bảng dim_dichvu.")
     return rows_synced
 
 
@@ -227,7 +227,7 @@ def sync_buucuc(conn):
         rows_synced += 1
 
     conn.commit()
-    logger.error(f"✅ Đã đồng bộ thành công {rows_synced} bưu cục vào bảng dim_buucuc.")
+    logger.info(f"✅ Đã đồng bộ thành công {rows_synced} bưu cục vào bảng dim_buucuc.")
     return rows_synced
 
 def clear_caches():
@@ -239,7 +239,7 @@ def clear_caches():
         clear_query_cache()
         clear_db_cache()
         clear_global_metrics_cache()
-        logger.error("🧹 Đã làm sạch bộ nhớ cache của Dashboard.")
+        logger.info("🧹 Đã làm sạch bộ nhớ cache của Dashboard.")
     except Exception:
         # Nếu đang chạy độc lập ngoài app thì bỏ qua cache clear
         pass
@@ -251,7 +251,7 @@ def main():
     except Exception:
         pass
 
-    logger.error("🔄 Bắt đầu đồng bộ danh mục từ tệp CSV...")
+    logger.info("🔄 Bắt đầu đồng bộ danh mục từ tệp CSV...")
     if not DB_PATH.exists():
         logger.error(f"❌ Lỗi: Cơ sở dữ liệu không tồn tại tại {DB_PATH}")
         sys.exit(1)
@@ -261,7 +261,7 @@ def main():
         sync_spdv(conn)
         sync_buucuc(conn)
         clear_caches()
-        logger.error("\n🎉 Tất cả danh mục đã được cập nhật thành công!")
+        logger.info("\n🎉 Tất cả danh mục đã được cập nhật thành công!")
     except Exception as e:
         logger.error(f"❌ Lỗi xảy ra trong quá trình đồng bộ: {e}")
     finally:

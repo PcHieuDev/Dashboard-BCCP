@@ -9,6 +9,7 @@ import sqlite3
 import pandas as pd
 from pathlib import Path
 from functools import lru_cache
+from io import StringIO
 import sys
 
 # Thêm thư mục gốc vào sys.path để import cấu hình chung
@@ -103,7 +104,7 @@ def execute_query_cached(sql: str, params: list | tuple | None = None) -> pd.Dat
     """
     params_tuple = tuple(params) if params is not None else None
     json_data = _execute_query_cached_raw(sql, params_tuple)
-    return pd.read_json(json_data, orient='split')
+    return pd.read_json(StringIO(json_data), orient='split')
 
 
 def clear_db_cache():

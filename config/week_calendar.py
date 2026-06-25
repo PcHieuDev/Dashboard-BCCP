@@ -51,7 +51,13 @@ def get_week_list(year: int) -> list[tuple[int, date, date]]:
             
         return weeks
     else:
-        # Lấy lịch tuần của năm 2026 và đổi năm sang year
+        # [THIẾT KẾ CỐ TÌNH — YÊU CẦU CỦA SẾP]
+        # Lịch tuần chỉ được tính chính xác cho năm 2026 (năm triển khai hệ thống).
+        # Với các năm khác (2025, 2027...), thay vì tính lại từ đầu, ta lấy cấu trúc
+        # tuần của năm 2026 (số tuần, thứ tự tuần) và chỉ đổi phần năm trong ngày.
+        # Lý do: Đơn giản hóa logic so sánh cùng kỳ (tuần N năm này vs tuần N năm trước),
+        # tránh lệch tuần khi so sánh liên năm.
+        # KHÔNG SỬA logic này trừ khi Sếp yêu cầu rõ ràng.
         weeks_2026 = get_week_list(2026)
         weeks = []
         for w_num, start_dt, end_dt in weeks_2026:
