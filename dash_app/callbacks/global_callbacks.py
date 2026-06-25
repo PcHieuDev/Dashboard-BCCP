@@ -40,6 +40,28 @@ except ImportError:
     except ImportError:
         logger = logging.getLogger(__name__)
 
+def _get_phbc_revenue(db_path, year, month, cycle='Tháng'):
+    """
+    Query doanh thu PHBC từ transactions_phbc — chỉ dùng cho kỳ THÁNG.
+    
+    Lý do:
+    - agg_monthly: KHÔNG có PHBC → cần cộng thêm từ transactions_phbc
+    - agg_weekly : ĐÃ có PHBC (aggregator gộp từ tu_ngay/den_ngay) → KHÔNG cần cộng thêm
+    """
+    if cycle != 'Tháng' or not year or not month:
+        return 0.0
+    try:
+        conn = sqlite3.connect(str(db_path))
+        thang_str = f"T{month:02d}"
+        df = pd.read_sql_query(
+            "SELECT SUM(doanh_thu) as dt FROM transactions_phbc WHERE nam_du_lieu=? AND thang_du_lieu=?",
+            conn, params=[year, thang_str]
+        )
+        conn.close()
+        return float(df.iloc[0]['dt'] or 0)
+    except Exception:
+        return 0.0
+
 def get_prev_period_info(period_type, period_value, year):
     """Tìm kỳ trước và năm tương ứng"""
     import config.week_calendar as calendar_helper
@@ -417,7 +439,13 @@ def register_global_callbacks(app):
                     
             # Kế hoạch kỳ hiện tại
             rev_plan = get_plans_current_period(DB_PATH, cycle, period_val, year, cum, bdx, buu_cuc)
-            
+
+            # Cộng thêm PHBC vào tổng BCCP
+            # (PHBC lưu riêng ở transactions_phbc, không có trong agg_monthly/agg_weekly)
+            rev_cur['BCCP']  += _get_phbc_revenue(DB_PATH, year, period_val, cycle)
+            rev_prev['BCCP'] += _get_phbc_revenue(DB_PATH, prev_yr, prev_val, cycle)
+            rev_yoy['BCCP']  += _get_phbc_revenue(DB_PATH, year - 1 if cycle == 'Tháng' else prev_yr, period_val, cycle)
+
             kpi_outputs = []
             for service in ["BCCP", "HCC", "TCBC", "PPBL"]:
                 cur_dt = rev_cur.get(service, 0.0)
