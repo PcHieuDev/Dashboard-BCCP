@@ -335,10 +335,11 @@ def register_kpi_callbacks(app):
         phbc_prev = _get_phbc_revenue(DB_PATH, pyear, pmonth)
         phbc_yoy = _get_phbc_revenue(DB_PATH, yoy_year, month_val)
         
-        # 3. Doanh thu BCCP = Tổng
-        bccp_cur = tot_cur
-        bccp_prev = tot_prev
-        bccp_yoy = tot_yoy
+        # 3. Doanh thu BCCP = Tổng BCCP (giao dịch thường) + PHBC (bảng riêng)
+        # LƯU Ý: PHBC lưu ở transactions_phbc riêng, KHÔNG có trong df_cur
+        bccp_cur = tot_cur + phbc_cur
+        bccp_prev = tot_prev + phbc_prev
+        bccp_yoy = tot_yoy + phbc_yoy
         
         # 4. Các cấu phần BCCP
         tt_cur = get_revenue_by_nhom(df_cur, 'Truyền thống')
