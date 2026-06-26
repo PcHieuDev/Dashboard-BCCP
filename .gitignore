@@ -30,3 +30,7 @@ ENV/
 scratch/
 *.log
 .gemini/
+
+# Cau hinh duong dan cuc bo - khong track
+config/local_settings.py
+local_settings.py

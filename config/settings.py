@@ -10,15 +10,28 @@ from pathlib import Path
 _CONFIG_DIR = Path(__file__).resolve().parent          # config/
 PROJECT_DIR = _CONFIG_DIR.parent                       # z.Database-TTKD/
 
-# Database SQLite (E:\z.Database-TTKD-Data)
-# Tách biệt khỏi mã nguồn để Git không track file DB nặng
-DATA_DIR = Path(r"E:\z.Database-TTKD-Data")
-DB_PATH = DATA_DIR / "dashboard.db"
-BACKUP_DIR = Path(r"E:\OneDrive\z.back-up-DB")
-PHAN_QUYEN_PATH = DATA_DIR / "phan_quyen_url.xlsx"
+# Database SQLite — đường dẫn mặc định cho SERVER (ổ D:\)
+# Mỗi máy tạo file config/local_settings.py để override, file này KHÔNG bị Git track
+# Ví dụ local_settings.py:
+#   DATA_DIR   = Path(r"E:\z.Database-TTKD-Data")
+#   BACKUP_DIR = Path(r"E:\OneDrive\z.back-up-DB")
+#   DATA_PATH  = Path(r"E:\OneDrive\TTKD - ...\ket-qua-gop-tung-thang")
 
-# Thư mục chứa dữ liệu gốc đã gộp theo tháng (absolute path)
-DATA_PATH = Path(r"E:\OneDrive\TTKD - Công việc hàng ngày\0. KHM, tai ban hang thang\chi-tiet-KH-hopdong-loaidichvu\du-lieu-goc-4.2.4-casreport\ket-qua-gop-tung-thang")
+DATA_DIR   = Path(r"D:\z.Database-TTKD-Data")
+BACKUP_DIR = Path(r"D:\OneDrive\z.back-up-DB")
+DATA_PATH  = Path(r"D:\OneDrive\TTKD - Công việc hàng ngày\0. KHM, tai ban hang thang\chi-tiet-KH-hopdong-loaidichvu\du-lieu-goc-4.2.4-casreport\ket-qua-gop-tung-thang")
+
+# Override bằng local_settings.py nếu tồn tại (không bị Git track)
+try:
+    from config.local_settings import *  # noqa: F401,F403
+except ImportError:
+    try:
+        from local_settings import *  # noqa: F401,F403
+    except ImportError:
+        pass  # Dùng đường dẫn mặc định ở trên
+
+DB_PATH          = DATA_DIR / "dashboard.db"
+PHAN_QUYEN_PATH  = DATA_DIR / "phan_quyen_url.xlsx"
 
 # File mapping sản phẩm dịch vụ và địa lý
 MAPPING_PATH = PROJECT_DIR / "data" / "mapping-spdv.csv"
