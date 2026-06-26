@@ -250,7 +250,7 @@ def _execute_import_task(db_path, tmp_path, service_type, mode, batch_id):
     """
     Thực thi import dữ liệu theo từng loại dịch vụ và mode.
     """
-    from etl.importer import import_any_excel_file, import_phbc_excel, import_service_excel, import_plan_excel
+    from etl.importer import import_any_excel_file, import_service_excel, import_plan_excel
     if service_type == "BCCP":
         res = import_any_excel_file(db_path, tmp_path, import_batch=batch_id, mode=mode)
         try:
@@ -275,7 +275,8 @@ def _execute_import_task(db_path, tmp_path, service_type, mode, batch_id):
             logger.error(f"Lỗi tính toán KH bán mới trong queue: {ex}")
         return res
     elif service_type == "PHBC":
-        return import_phbc_excel(db_path, tmp_path, import_batch=batch_id, mode=mode)
+        # PHBC duoc gop vao import_service_excel (import_phbc_excel da bi xoa 2026-06-24)
+        return import_service_excel(db_path, tmp_path, "PHBC", import_batch=batch_id, mode=mode)
     elif service_type in ["HCC", "TCBC", "PPBL", "SERVICES"]:
         # "SERVICES" đại diện cho nạp đè/nạp thường tất cả dịch vụ dịch vụ con HCC/TCBC/PPBL/PHBC
         actual_service = "SERVICES" if service_type == "SERVICES" else service_type
