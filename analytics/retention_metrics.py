@@ -576,7 +576,7 @@ def get_khhh_changes_v2(db_path: str, nam: int, thang: int, cum: str = None, bdx
         m_str = f"T{m:02d}"
         q_l = f"""
             WITH cms_bc AS (
-                SELECT t.cms, t.ma_buu_cuc as buu_cuc, SUM(t.cuoc_tt_tong) as dt,
+                SELECT t.cms, t.ma_buu_cuc as buu_cuc, SUM(t.cuoc_tt_tong) as dt, SUM(t.san_luong) as sl,
                        ROW_NUMBER() OVER (PARTITION BY t.cms ORDER BY SUM(t.cuoc_tt_tong) DESC) as rn
                 FROM transactions t
                 LEFT JOIN dim_buucuc b ON t.ma_buu_cuc = b.ma_buu_cuc
@@ -585,7 +585,7 @@ def get_khhh_changes_v2(db_path: str, nam: int, thang: int, cum: str = None, bdx
                   AND t.cms NOT LIKE 'VANGLAI_%' AND LOWER(t.cms) != 'none' {geo_where_str}
                 GROUP BY t.cms, t.ma_buu_cuc
             )
-            SELECT cms, buu_cuc, dt FROM cms_bc WHERE rn = 1
+            SELECT cms, buu_cuc, dt, sl FROM cms_bc WHERE rn = 1
         """
         df_l = pd.read_sql_query(q_l, conn, params=[y, m_str] + geo_params)
         
@@ -597,6 +597,7 @@ def get_khhh_changes_v2(db_path: str, nam: int, thang: int, cum: str = None, bdx
                     'thang_gan_nhat': m,
                     'nam_gan_nhat': y,
                     'dt_gan_nhat': row['dt'],
+                    'sl_gan_nhat': int(row['sl'] or 0),
                     'buu_cuc': row['buu_cuc']
                 }
                 
@@ -618,7 +619,7 @@ def get_khhh_changes_v2(db_path: str, nam: int, thang: int, cum: str = None, bdx
             'cms': cms,
             'ten_cum': ten_cum,
             'ten_bdx': ten_bdx,
-            'sl_gan_nhat': 1,
+            'sl_gan_nhat': info['sl_gan_nhat'],
             'dt_gan_nhat': info['dt_gan_nhat'],
             'thang_gan_nhat': f"T{info['thang_gan_nhat']:02d}/{info['nam_gan_nhat']}"
         })
@@ -760,7 +761,7 @@ def get_weekly_changes(db_path: str, year: int, week: int, cum: str = None, bdx:
             'cms': cms,
             'ten_cum': g['ten_cum'],
             'ten_bdx': g['ten_bdx'],
-            'sl_gan_nhat': 1,
+            'sl_gan_nhat': int(cms_prev_sl.get(cms, 0)),
             'dt_gan_nhat': cms_prev_rev[cms],
             'thang_gan_nhat': f"Tuần {prev_w}/{prev_yr}"
         })
