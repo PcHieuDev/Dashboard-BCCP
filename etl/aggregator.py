@@ -264,7 +264,7 @@ def rebuild_all_monthly(conn):
         except Exception as e:
             logger.error(f"[Aggregator] [LỖI] Không thể rebuild tháng {thang_str}/{nam_du_lieu}: {e}")
 
-def rebuild_weekly(conn, nam: int):
+def rebuild_weekly(conn, nam: int, thang_filter: int = None):
     """
     Rebuild dữ liệu cho bảng agg_weekly của năm chỉ định.
     Gồm 2 bước:
@@ -274,11 +274,20 @@ def rebuild_weekly(conn, nam: int):
     from config.week_calendar import get_week_list
     cursor = conn.cursor()
     
-    # 1. Xóa dữ liệu cũ của năm đó
-    cursor.execute("DELETE FROM agg_weekly WHERE nam = ?", (nam,))
-    
     # Lấy danh sách các tuần trong năm
     weeks = get_week_list(nam)
+    
+    # 1. Xóa dữ liệu cũ của các tuần bị ảnh hưởng
+    if thang_filter is not None:
+        # Lọc ra các tuần giao thoa với tháng đó (bắt đầu hoặc kết thúc trong tháng)
+        weeks = [w for w in weeks if w[1].month == thang_filter or w[2].month == thang_filter]
+        if weeks:
+            week_nums = [w[0] for w in weeks]
+            placeholders = ",".join("?" for _ in week_nums)
+            cursor.execute(f"DELETE FROM agg_weekly WHERE nam = ? AND tuan_so IN ({placeholders})", (nam, *week_nums))
+    else:
+        cursor.execute("DELETE FROM agg_weekly WHERE nam = ?", (nam,))
+    
     logger.info(f"[Aggregator] Đang rebuild agg_weekly cho năm {nam} ({len(weeks)} tuần)...")
     
     total_inserted = 0
@@ -430,7 +439,7 @@ def rebuild_plans_weekly(conn, nam: int):
     return total_inserted
 
 
-def rebuild_daily(conn, nam: int):
+def rebuild_daily(conn, nam: int, thang_filter: int = None):
     """
     Rebuild dữ liệu cho bảng agg_daily của năm chỉ định.
     Gộp từ bảng transactions và 4 bảng dịch vụ phụ.
@@ -438,7 +447,10 @@ def rebuild_daily(conn, nam: int):
     cursor = conn.cursor()
     
     # 1. Xóa dữ liệu cũ
-    cursor.execute("DELETE FROM agg_daily WHERE nam = ?", (nam,))
+    if thang_filter is not None:
+        cursor.execute("DELETE FROM agg_daily WHERE nam = ? AND thang = ?", (nam, thang_filter))
+    else:
+        cursor.execute("DELETE FROM agg_daily WHERE nam = ?", (nam,))
     conn.commit()
     
     # Hàm hỗ trợ phân loại sơ bộ nhóm dịch vụ (Heuristic) khi thiếu mapping
@@ -506,9 +518,15 @@ def rebuild_daily(conn, nam: int):
     except Exception as e:
         logger.error(f"[Aggregator] Lỗi khi quét cảnh báo mapping: {e}")
 
-    logger.info(f"[Aggregator] Đang rebuild agg_daily cho năm {nam}...")
+    logger.info(f"[Aggregator] Đang rebuild agg_daily cho năm {nam} (tháng={thang_filter})...")
     
     # 3. Gộp BCCP (từ transactions)
+    thang_cond = ""
+    params_trans = [nam, nam]
+    if thang_filter is not None:
+        thang_cond = " AND CAST(strftime('%m', t.ngay_chap_nhan) as INTEGER) = ?"
+        params_trans.append(thang_filter)
+
     query_trans = """
     INSERT INTO agg_daily (ngay, nam, thang, ma_buu_cuc, nhom_dich_vu, bk_e, tong_doanh_thu, tong_san_luong, so_kh_phat_sinh)
     SELECT 
@@ -539,7 +557,7 @@ def rebuild_daily(conn, nam: int):
         END) as so_kh_phat_sinh
     FROM transactions t
     LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu
-    WHERE t.nam_du_lieu = ?
+    WHERE t.nam_du_lieu = ? {thang_cond}
     GROUP BY 
         t.ngay_chap_nhan, 
         t.ma_buu_cuc, 
@@ -550,13 +568,29 @@ def rebuild_daily(conn, nam: int):
             ELSE
                 'Không phân loại'
         END
-    """
-    cursor.execute(query_trans, (nam, nam))
+    """.format(thang_cond=thang_cond)
+    
+    cursor.execute(query_trans, tuple(params_trans))
     rows_bccp = cursor.rowcount
     conn.commit()
     logger.info(f"[Aggregator] Đã gộp agg_daily từ transactions (BCCP): {rows_bccp} dòng.")
 
     # 4. Gộp các bảng phụ (HCC, TCBC, PPBL, PHBC) bằng UPSERT
+    sub_thang_cond = ""
+    params_sub = [nam]
+    if thang_filter is not None:
+        sub_thang_cond = " WHERE tu_thang = ?"
+        # Cần truyền tham số cho từng subquery trong UNION ALL
+        # Có 4 subquery, mỗi subquery cần truyền tu_thang = thang_filter
+        # Cộng thêm tham số tu_nam ở ngoài
+        sub_params = []
+        for _ in range(4):
+            sub_params.append(thang_filter)
+        params_sub = sub_params + [nam]
+    else:
+        # Nếu không có thang_filter, không truyền gì cho subquery
+        pass
+
     query_sub = """
     INSERT INTO agg_daily (ngay, nam, thang, ma_buu_cuc, nhom_dich_vu, bk_e, tong_doanh_thu, tong_san_luong, so_kh_phat_sinh)
     SELECT 
@@ -575,13 +609,13 @@ def rebuild_daily(conn, nam: int):
         SUM(t.san_luong) as tong_san_luong,
         0 as so_kh_phat_sinh
     FROM (
-        SELECT ma_buu_cuc, ten_dich_vu, doanh_thu, san_luong, tu_ngay, tu_thang, tu_nam FROM transactions_hcc
+        SELECT ma_buu_cuc, ten_dich_vu, doanh_thu, san_luong, tu_ngay, tu_thang, tu_nam FROM transactions_hcc {sub_thang_cond}
         UNION ALL
-        SELECT ma_buu_cuc, ten_dich_vu, doanh_thu, san_luong, tu_ngay, tu_thang, tu_nam FROM transactions_tcbc
+        SELECT ma_buu_cuc, ten_dich_vu, doanh_thu, san_luong, tu_ngay, tu_thang, tu_nam FROM transactions_tcbc {sub_thang_cond}
         UNION ALL
-        SELECT ma_buu_cuc, ten_dich_vu, doanh_thu, san_luong, tu_ngay, tu_thang, tu_nam FROM transactions_ppbl
+        SELECT ma_buu_cuc, ten_dich_vu, doanh_thu, san_luong, tu_ngay, tu_thang, tu_nam FROM transactions_ppbl {sub_thang_cond}
         UNION ALL
-        SELECT ma_buu_cuc, ten_dich_vu, doanh_thu, san_luong, tu_ngay, tu_thang, tu_nam FROM transactions_phbc
+        SELECT ma_buu_cuc, ten_dich_vu, doanh_thu, san_luong, tu_ngay, tu_thang, tu_nam FROM transactions_phbc {sub_thang_cond}
     ) t
     LEFT JOIN dim_dichvu d ON t.ten_dich_vu = d.ma_dich_vu OR t.ten_dich_vu = d.ten_dich_vu
     WHERE t.tu_nam = ?
@@ -598,11 +632,24 @@ def rebuild_daily(conn, nam: int):
     ON CONFLICT(ngay, ma_buu_cuc, nhom_dich_vu, bk_e) DO UPDATE SET
         tong_doanh_thu = tong_doanh_thu + excluded.tong_doanh_thu,
         tong_san_luong = tong_san_luong + excluded.tong_san_luong
-    """
-    cursor.execute(query_sub, (nam, nam))
+    """.format(sub_thang_cond=sub_thang_cond)
+    
+    # Ở trên ta truyền: ? as nam ở đầu SELECT, và ? ở WHERE t.tu_nam = ?
+    # Do đó, danh sách tham số đầy đủ cho cursor.execute là:
+    # [nam] + params_sub (chứa 4*thang_filter + [nam])
+    # Tổng cộng params cho execute: (nam, params_sub[0], params_sub[1], params_sub[2], params_sub[3], nam)
+    # Hãy chuẩn hóa danh sách execute_params cho rõ ràng:
+    execute_params = []
+    execute_params.append(nam) # ? thứ 1: ? as nam
+    if thang_filter is not None:
+        execute_params.extend([thang_filter, thang_filter, thang_filter, thang_filter]) # 4 dấu ? trong UNION ALL
+    execute_params.append(nam) # ? cuối cùng: WHERE t.tu_nam = ?
+
+    cursor.execute(query_sub, tuple(execute_params))
     rows_sub = cursor.rowcount
     conn.commit()
     logger.info(f"[Aggregator] Đã gộp/UPSERT agg_daily từ 4 bảng phụ: {rows_sub} dòng.")
+
     
     return rows_bccp + rows_sub
 

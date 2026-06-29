@@ -122,10 +122,10 @@ def _auto_aggregate_after_import(db_path, service_type, years_months_pairs):
                     rebuild_monthly_customer(conn, nam, thang_int)
                     
                 # 2. Gộp doanh thu tuần (weekly)
-                rebuild_weekly(conn, nam)
+                rebuild_weekly(conn, nam, thang_filter=thang_int)
                 
                 # 2.5. Gộp doanh thu ngày (daily)
-                rebuild_daily(conn, nam)
+                rebuild_daily(conn, nam, thang_filter=thang_int)
                 
                 # 3. Gộp kế hoạch tuần nếu là nạp Kế hoạch
                 if service_type == 'PLAN':
