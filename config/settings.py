@@ -18,7 +18,6 @@ PROJECT_DIR = _CONFIG_DIR.parent                       # z.Database-TTKD/
 #   DATA_PATH  = Path(r"E:\OneDrive\TTKD - ...\ket-qua-gop-tung-thang")
 
 DATA_DIR   = Path(r"D:\z.Database-TTKD-Data")
-BACKUP_DIR = Path(r"D:\OneDrive\z.back-up-DB")
 DATA_PATH  = Path(r"D:\OneDrive\TTKD - Công việc hàng ngày\0. KHM, tai ban hang thang\chi-tiet-KH-hopdong-loaidichvu\du-lieu-goc-4.2.4-casreport\ket-qua-gop-tung-thang")
 
 # Override bằng local_settings.py nếu tồn tại (không bị Git track)
@@ -31,6 +30,7 @@ except ImportError:
         pass  # Dùng đường dẫn mặc định ở trên
 
 DB_PATH          = DATA_DIR / "dashboard.db"
+BACKUP_DIR       = DATA_DIR / "backups"
 PHAN_QUYEN_PATH  = DATA_DIR / "phan_quyen_url.xlsx"
 
 # File mapping sản phẩm dịch vụ và địa lý

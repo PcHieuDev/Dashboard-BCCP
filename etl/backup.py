@@ -50,8 +50,8 @@ def backup_database(db_path, backup_dir=None):
         dst_conn.close()
         src_conn.close()
         
-        # Don dep cac ban backup cu hon 30 ngay
-        clean_old_backups(backup_dir, keep_days=30)
+        # Chỉ giữ lại 3 bản backup gần nhất
+        clean_old_backups(backup_dir, keep_count=3)
         
         logger.info("[Backup] Sao luu CSDL hoan tat thanh cong.")
         return backup_path
@@ -59,23 +59,31 @@ def backup_database(db_path, backup_dir=None):
         logger.error(f"[Backup] Gap su co khi thuc hien sao luu CSDL: {e}", exc_info=True)
         return False
 
-def clean_old_backups(backup_dir, keep_days=30):
+def clean_old_backups(backup_dir, keep_count=3):
     """
-    Xóa các file backup cũ hơn keep_days ngày để bao ve o dia dung luong.
+    Chỉ giữ lại keep_count bản backup gần nhất, xóa bỏ các bản cũ hơn.
     """
-    import time
-    now = time.time()
-    cutoff = now - (keep_days * 86400)
-    
     try:
+        backups = []
         for filename in os.listdir(backup_dir):
             if filename.startswith("dashboard_backup_") and filename.endswith(".db"):
                 filepath = os.path.join(backup_dir, filename)
                 if os.path.isfile(filepath):
-                    file_mtime = os.path.getmtime(filepath)
-                    if file_mtime < cutoff:
-                        os.remove(filepath)
-                        logger.info(f"[Backup] Da xoa ban backup het han: {filename}")
+                    mtime = os.path.getmtime(filepath)
+                    backups.append((filepath, mtime, filename))
+        
+        # Sắp xếp theo mtime giảm dần (mới nhất lên đầu)
+        backups.sort(key=lambda x: x[1], reverse=True)
+        
+        # Nếu vượt quá keep_count thì xóa
+        if len(backups) > keep_count:
+            to_delete = backups[keep_count:]
+            for filepath, _, filename in to_delete:
+                try:
+                    os.remove(filepath)
+                    logger.info(f"[Backup] Da xoa ban backup cu: {filename}")
+                except Exception as ex:
+                    logger.warning(f"[Backup] Khong the xoa file {filename}: {ex}")
     except Exception as e:
         logger.warning(f"[Backup] Loi khi don dep ban backup cu: {e}")
 
