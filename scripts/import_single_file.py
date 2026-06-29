@@ -43,7 +43,7 @@ from etl.importer import import_any_excel_file
 
 def _get_db_connection(db_path):
     conn = sqlite3.connect(db_path)
-    conn.execute("PRAGMA journal_mode=delete;")
+    conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA busy_timeout=30000;")
     return conn
 

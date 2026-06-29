@@ -276,7 +276,6 @@ def rebuild_weekly(conn, nam: int, thang_filter: int = None):
     
     # Lấy danh sách các tuần trong năm
     weeks = get_week_list(nam)
-    
     # 1. Xóa dữ liệu cũ của các tuần bị ảnh hưởng
     if thang_filter is not None:
         # Lọc ra các tuần giao thoa với tháng đó (bắt đầu hoặc kết thúc trong tháng)
@@ -287,7 +286,6 @@ def rebuild_weekly(conn, nam: int, thang_filter: int = None):
             cursor.execute(f"DELETE FROM agg_weekly WHERE nam = ? AND tuan_so IN ({placeholders})", (nam, *week_nums))
     else:
         cursor.execute("DELETE FROM agg_weekly WHERE nam = ?", (nam,))
-    
     logger.info(f"[Aggregator] Đang rebuild agg_weekly cho năm {nam} ({len(weeks)} tuần)...")
     
     total_inserted = 0
@@ -649,7 +647,5 @@ def rebuild_daily(conn, nam: int, thang_filter: int = None):
     rows_sub = cursor.rowcount
     conn.commit()
     logger.info(f"[Aggregator] Đã gộp/UPSERT agg_daily từ 4 bảng phụ: {rows_sub} dòng.")
-
-    
     return rows_bccp + rows_sub
 

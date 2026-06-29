@@ -34,3 +34,9 @@ scratch/
 # Cau hinh duong dan cuc bo - khong track
 config/local_settings.py
 local_settings.py
+
+# AI conversation files & temp backups
+conversations_summary.md
+data/dim_dichvu_backup_*.csv
+agent_memory.py
+.agent_memory.db
