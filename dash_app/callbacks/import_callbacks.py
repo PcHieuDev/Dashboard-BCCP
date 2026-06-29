@@ -351,6 +351,31 @@ def import_worker():
         finally:
             import_task_queue.task_done()
 
+def clean_stuck_import_logs(db_path):
+    """
+    Dọn dẹp các dòng log import bị kẹt (PENDING, PROCESSING) từ phiên làm việc trước
+    khi khởi động lại app.
+    """
+    if not Path(db_path).exists():
+        return
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE import_log 
+            SET trang_thai = 'FAILED', 
+                ghi_chu = 'Hệ thống bị gián đoạn (restart app) trong quá trình xử lý' 
+            WHERE trang_thai IN ('PENDING', 'PROCESSING')
+        """)
+        conn.commit()
+        conn.close()
+        logger.info("[Cleanup] Da tu dong don dep cac log import bi ket tu phien truoc.")
+    except Exception as e:
+        logger.error(f"[Cleanup] Loi khi don dep log import bi ket: {e}")
+
+# Tự động dọn dẹp log bị kẹt khi khởi động
+clean_stuck_import_logs(str(DB_PATH))
+
 # Khởi chạy Worker
 worker_thread = threading.Thread(target=import_worker, daemon=True)
 worker_thread.start()
